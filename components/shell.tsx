@@ -131,7 +131,7 @@ function Sidebar({ user }: { user: User }) {
   return (
     <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-line bg-card md:flex">
       <div className="flex h-16 items-center gap-2 border-b border-line px-4">
-        <Logo href={homeOf(user.role)} />
+        <Logo href="/" />
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-3">
         {groups.map((g) => {
@@ -233,7 +233,7 @@ function TopBar({ user }: { user: User }) {
   return (
     <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-1.5 border-b border-line bg-card/95 px-2 backdrop-blur sm:h-16 sm:px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
-        <Logo small href={homeOf(user.role)} />
+        <Logo small href="/" />
       </div>
       <div className="hidden flex-1 md:block" />
       <NetworkDot />
