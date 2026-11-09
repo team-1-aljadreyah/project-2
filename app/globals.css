@@ -3,64 +3,65 @@
 /* Dark mode follows the "dark" class on <html> (set by the theme toggle), not only the system setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Design B: navy + amber. Every color on the site comes from these tokens. */
+/* Al-Nahrain colors: deep green (fresh food, trust) + warm orange (the main action), on a warm cream page.
+   Every color on the site comes from these tokens. */
 :root {
-  --bg: #f4f2ec;            /* page background, warm gray */
+  --bg: #f6f4ee;            /* page background, warm cream */
   --card: #ffffff;          /* cards, panels */
-  --card-2: #f8f7f3;        /* inner boxes, table header */
-  --text: #1d1d1b;          /* main text */
-  --muted: #5f5e5a;         /* secondary text */
-  --faint: #8a8984;         /* hints, placeholders */
-  --line: #e3e1d9;          /* borders */
-  --line-strong: #cfccc2;
+  --card-2: #f4f2ea;        /* inner boxes, table header */
+  --text: #17201b;          /* main text */
+  --muted: #56625b;         /* secondary text */
+  --faint: #8a938d;         /* hints, placeholders */
+  --line: #e5e2d8;          /* borders */
+  --line-strong: #cfcdc1;
 
-  --primary: #0c447c;       /* navy */
-  --primary-hover: #0a3864;
-  --primary-soft: #e6f1fb;
-  --primary-ink: #0c447c;   /* navy text on soft navy */
+  --primary: #0e6b4c;       /* deep green */
+  --primary-hover: #0a573d;
+  --primary-soft: #e2f1ea;
+  --primary-ink: #0a573d;   /* green text on soft green */
   --on-primary: #ffffff;
 
-  --action: #ef9f27;        /* amber: the ONE main button per screen */
-  --action-hover: #e08f17;
-  --on-action: #412402;
+  --action: #f28c38;        /* warm orange: the ONE main button per screen */
+  --action-hover: #e67a22;
+  --on-action: #2b1404;
 
   --success: #2f6b10;
   --success-soft: #eaf3de;
-  --warning: #854f0b;
-  --warning-soft: #faeeda;
-  --danger: #a32d2d;
-  --danger-soft: #fcebeb;
+  --warning: #8a4b06;
+  --warning-soft: #fbedd9;
+  --danger: #b42318;
+  --danger-soft: #fdeceb;
 
-  --radius: 12px;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.03);
+  --radius: 14px;
+  --shadow: 0 1px 2px rgb(23 32 27 / 0.05), 0 2px 8px rgb(23 32 27 / 0.04);
 }
 
 .dark {
-  --bg: #121417;
-  --card: #1b1e23;
-  --card-2: #22262c;
-  --text: #ecebe6;
-  --muted: #b1afa8;
-  --faint: #85837c;
-  --line: #2e333a;
-  --line-strong: #3d434b;
+  --bg: #0e1411;
+  --card: #151d19;
+  --card-2: #1b2520;
+  --text: #e7ece9;
+  --muted: #a7b2ab;
+  --faint: #7b867f;
+  --line: #24302a;
+  --line-strong: #324039;
 
-  --primary: #4f8fd1;
-  --primary-hover: #6aa3dd;
-  --primary-soft: #16304d;
-  --primary-ink: #b5d4f4;
-  --on-primary: #08182b;
+  --primary: #3fbf8c;
+  --primary-hover: #5ccf9f;
+  --primary-soft: #133628;
+  --primary-ink: #93e0bf;
+  --on-primary: #032216;
 
-  --action: #f2a93a;
-  --action-hover: #f6b956;
-  --on-action: #2b1700;
+  --action: #f59e52;
+  --action-hover: #f8b170;
+  --on-action: #2b1404;
 
   --success: #97c459;
-  --success-soft: #1f2e14;
+  --success-soft: #1d2d13;
   --warning: #f2b75a;
   --warning-soft: #3a2a10;
-  --danger: #f09595;
-  --danger-soft: #3d1a1a;
+  --danger: #f39a92;
+  --danger-soft: #3d1a18;
 
   --shadow: none;
   color-scheme: dark;
@@ -137,4 +138,44 @@ body {
     box-shadow: none !important;
     border: none !important;
   }
+}
+
+/* Day/night: the new colors spread out in a circle from the button (lib/view-transition.ts). */
+html[data-vt="circle"]::view-transition-old(root),
+html[data-vt="circle"]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* Language: a short cross-fade while the page flips right-to-left / left-to-right. */
+html[data-vt="fade"]::view-transition-old(root),
+html[data-vt="fade"]::view-transition-new(root) {
+  animation-duration: 0.35s;
+}
+
+/* The green brand panel (login and landing page). Always dark green, in both modes. */
+.brand-panel {
+  background:
+    radial-gradient(circle at 25% 20%, rgb(63 191 140 / 0.35), transparent 50%),
+    radial-gradient(circle at 85% 85%, rgb(242 140 56 / 0.28), transparent 45%),
+    linear-gradient(160deg, #0b4a35, #062a1f 55%, #041d16);
+  color: #f3f7f4;
+}
+.brand-grid {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 40%, #000 30%, transparent 80%);
+}
+
+/* Soft "floating" for the boxes on the landing page picture. */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.float { animation: float 6s ease-in-out infinite; }
+.float-slow { animation: float 8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .float, .float-slow { animation: none; }
 }

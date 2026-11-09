@@ -1,32 +1,54 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, Languages, Moon, Sun } from "lucide-react";
+import { motion } from "motion/react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Boxes,
+  Calculator,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  LayoutDashboard,
+  Loader2,
+  Lock,
+  Phone,
+  ShieldCheck,
+  Store,
+  Truck,
+  WifiOff,
+  type LucideIcon,
+} from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { roleName } from "@/components/status";
-import { Button, Field, IconButton, Input, Notice, errorText } from "@/components/ui";
+import { LanguageSwitch, ThemeToggle } from "@/components/switches";
+import { errorText } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Role } from "@/lib/api/types";
 import { homeOf, setSession, useSession } from "@/lib/auth";
 import { USE_MOCK } from "@/lib/config";
-import { useFmt, useToggleLang } from "@/lib/i18n";
-import { setTheme, useTheme } from "@/lib/theme";
+import { useFmt } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 // Demo accounts, so the client can try every role. Shown only while the site runs on fake data.
-const DEMO: { phone: string; role: Role; name: string }[] = [
-  { phone: "07801000001", role: "manager", name: "حيدر الكعبي" },
-  { phone: "07801000002", role: "warehouse", name: "كرار جاسم" },
-  { phone: "07801000004", role: "rep", name: "حسين علي" },
-  { phone: "07801000007", role: "accountant", name: "زينب كاظم" },
-  { phone: "07812345601", role: "shop", name: "أسواق الكوثر" },
+const DEMO: { phone: string; role: Role; name: string; icon: LucideIcon }[] = [
+  { phone: "07801000001", role: "manager", name: "حيدر الكعبي", icon: LayoutDashboard },
+  { phone: "07801000004", role: "rep", name: "حسين علي", icon: Truck },
+  { phone: "07801000002", role: "warehouse", name: "كرار جاسم", icon: Boxes },
+  { phone: "07801000007", role: "accountant", name: "زينب كاظم", icon: Calculator },
+  { phone: "07812345601", role: "shop", name: "أسواق الكوثر", icon: Store },
 ];
 const DEMO_PASSWORD = "123456";
 
+// Children appear one after another (a small "stagger").
+const list = { hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } } };
+const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 260, damping: 24 } } };
+
 export default function LoginPage() {
   const { tr, lang } = useFmt();
-  const toggleLang = useToggleLang();
-  const theme = useTheme();
   const router = useRouter();
   const session = useSession();
   const [phone, setPhone] = useState("");
@@ -34,7 +56,10 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const Back = lang === "ar" ? ArrowRight : ArrowLeft;
+  const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
 
+  // Already logged in: go straight to your own home page.
   useEffect(() => {
     if (session) router.replace(homeOf(session.user.role));
   }, [session, router]);
@@ -46,6 +71,7 @@ export default function LoginPage() {
       const s = await api.login(p, pw);
       setSession(s);
       const next = new URLSearchParams(window.location.search).get("next");
+      // Only go back to a page on this site ("/..."), never to another website ("//evil.com").
       router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : homeOf(s.user.role));
     } catch (e) {
       setError(errorText(e, tr));
@@ -54,86 +80,126 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-[#0c447c] p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <div className="flex items-center gap-3">
-          <LogoMark size={44} />
-          <div>
-            <p className="text-lg font-bold">{tr("شركة النهرين", "Al-Nahrain Co.")}</p>
-            <p className="text-sm opacity-80">{tr("للمواد الغذائية بالجملة - كربلاء", "Wholesale foods - Karbala")}</p>
+    <div className="grid min-h-dvh bg-bg lg:grid-cols-[1.05fr_1fr]">
+      <BrandPanel />
+
+      <main className="relative flex min-h-dvh flex-col">
+        {/* Phone: a green band on top with the logo, the form card sits over its edge. */}
+        <div className="brand-panel absolute inset-x-0 top-0 h-64 lg:hidden" aria-hidden>
+          <div className="brand-grid absolute inset-0" />
+        </div>
+
+        <div className="relative flex items-center justify-between gap-2 p-4 sm:p-6">
+          <Link href="/" className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm font-medium text-white hover:bg-white/10 lg:text-muted lg:hover:bg-card-2 lg:hover:text-text">
+            <Back className="size-4" aria-hidden /> {tr("الصفحة الرئيسية", "Home")}
+          </Link>
+          <div className="flex gap-2">
+            <LanguageSwitch className="max-lg:border-white/20 max-lg:bg-white/10 max-lg:text-white" />
+            <ThemeToggle className="max-lg:border-white/20 max-lg:bg-white/10 max-lg:text-white" />
           </div>
         </div>
-        <div className="max-w-md">
-          <h1 className="text-4xl font-bold leading-snug">{tr("كل البضاعة والديون في مكان واحد", "All your stock and debts in one place")}</h1>
-          <ul className="mt-6 space-y-3 text-base opacity-90">
-            <li>• {tr("الدفعة الأقدم صلاحية تطلع أولاً، والمنتهية ما تنباع", "Oldest expiry leaves first, expired is never sold")}</li>
-            <li>• {tr("المندوب يطلب من جواله حتى بدون إنترنت", "Reps order from their phone, even offline")}</li>
-            <li>• {tr("سقف دين لكل زبون وكشف حساب واضح", "A debt limit and a clear statement for every shop")}</li>
-            <li>• {tr("عمولة المندوب والأرباح بدون حساب باليد", "Rep commission and profit, no hand counting")}</li>
-          </ul>
-        </div>
-        <svg className="pointer-events-none absolute -bottom-10 start-0 w-[140%] opacity-20" viewBox="0 0 600 120" aria-hidden>
-          <path d="M0 60c60-40 120-40 180 0s120 40 180 0 120-40 180 0 60 20 60 20" fill="none" stroke="currentColor" strokeWidth="10" />
-          <path d="M0 100c60-40 120-40 180 0s120 40 180 0 120-40 180 0 60 20 60 20" fill="none" stroke="currentColor" strokeWidth="10" />
-        </svg>
-      </section>
 
-      <section className="flex flex-col">
-        <div className="flex justify-end gap-1 p-3">
-          <IconButton label={lang === "ar" ? "English" : "العربية"} onClick={toggleLang}>
-            <Languages className="size-5" />
-          </IconButton>
-          <IconButton label={tr("تبديل الوضع", "Toggle theme")} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
-          </IconButton>
-        </div>
-        <div className="flex flex-1 items-start justify-center px-4 pb-10 sm:items-center">
-          <div className="w-full max-w-sm">
-            <div className="mb-8 flex flex-col items-center text-center lg:hidden">
-              <LogoMark size={56} />
-              <p className="mt-3 text-xl font-bold">{tr("النهرين للمواد الغذائية", "Al-Nahrain Foods")}</p>
-              <p className="text-sm text-muted">{tr("بالجملة - كربلاء", "Wholesale - Karbala")}</p>
+        <div className="relative flex flex-1 items-start justify-center px-4 pb-10 lg:items-center">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: "easeOut" }} className="w-full max-w-md">
+            <div className="mb-6 flex items-center gap-3 text-white lg:hidden">
+              <LogoMark size={48} />
+              <div>
+                <p className="text-xl font-bold">{tr("النهرين", "Al-Nahrain")}</p>
+                <p className="text-sm opacity-80">{tr("للمواد الغذائية بالجملة · كربلاء", "Wholesale foods · Karbala")}</p>
+              </div>
             </div>
-            <h2 className="text-2xl font-bold">{tr("تسجيل الدخول", "Log in")}</h2>
-            <p className="mt-1 text-sm text-muted">{tr("ادخل برقم هاتفك وكلمة المرور", "Use your phone number and password")}</p>
 
-            <form
-              className="mt-6 space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!phone.trim() || !password) {
-                  setError(tr("اكتب رقم الهاتف وكلمة المرور", "Enter your phone number and password"));
-                  return;
-                }
-                login(phone, password, "form");
-              }}
-            >
-              <Field label={tr("رقم الهاتف", "Phone number")} htmlFor="phone">
-                <Input id="phone" type="tel" inputMode="tel" autoComplete="username" dir="ltr" className="text-start" placeholder="07801234567" value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </Field>
-              <Field label={tr("كلمة المرور", "Password")} htmlFor="password">
-                <div className="relative">
-                  <Input id="password" type={show ? "text" : "password"} autoComplete="current-password" dir="ltr" className="pe-11 text-start" value={password} onChange={(e) => setPassword(e.target.value)} />
-                  <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? tr("إخفاء", "Hide") : tr("إظهار", "Show")} className="absolute inset-y-0 end-0 flex w-11 items-center justify-center text-faint hover:text-text">
-                    {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
-                </div>
-              </Field>
-              {error && <Notice tone="danger">{error}</Notice>}
-              <Button type="submit" variant="action" size="lg" className="w-full" loading={busy === "form"}>
-                {tr("دخول", "Log in")}
-              </Button>
-            </form>
+            <div className="rounded-3xl border border-line bg-card p-6 shadow-[0_20px_60px_-20px_rgb(14_107_76/0.35)] sm:p-8">
+              <h1 className="text-2xl font-bold">{tr("أهلاً بك من جديد", "Welcome back")}</h1>
+              <p className="mt-1 text-sm text-muted">{tr("ادخل برقم هاتفك وكلمة المرور", "Log in with your phone number and password")}</p>
+
+              <form
+                className="mt-6 space-y-4"
+                noValidate
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!phone.trim() || !password) {
+                    setError(tr("اكتب رقم الهاتف وكلمة المرور", "Enter your phone number and password"));
+                    return;
+                  }
+                  login(phone, password, "form");
+                }}
+              >
+                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone">
+                  <input
+                    id="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="username"
+                    dir="ltr"
+                    placeholder="07XX XXX XXXX"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="h-12 w-full bg-transparent pe-3 ps-11 text-base outline-none placeholder:text-faint"
+                  />
+                </IconField>
+                <IconField
+                  icon={Lock}
+                  label={tr("كلمة المرور", "Password")}
+                  htmlFor="password"
+                  end={
+                    <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? tr("إخفاء", "Hide") : tr("إظهار", "Show")} className="flex h-12 w-11 items-center justify-center text-faint hover:text-text">
+                      {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  }
+                >
+                  <input
+                    id="password"
+                    type={show ? "text" : "password"}
+                    autoComplete="current-password"
+                    dir="ltr"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-12 w-full bg-transparent ps-11 text-base outline-none"
+                  />
+                </IconField>
+
+                {error && (
+                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="rounded-xl bg-danger-soft px-3 py-2.5 text-sm font-medium text-danger">
+                    {error}
+                  </motion.p>
+                )}
+
+                <motion.button
+                  type="submit"
+                  whileTap={{ scale: 0.98 }}
+                  disabled={!!busy}
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action transition hover:bg-action-hover disabled:opacity-70"
+                >
+                  {busy === "form" ? <Loader2 className="size-5 animate-spin" /> : null}
+                  {tr("دخول", "Log in")}
+                  {busy !== "form" && <Forward className="size-5" />}
+                </motion.button>
+              </form>
+
+              <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-faint">
+                <ShieldCheck className="size-3.5" /> {tr("كل موظف يشوف بس اللي يخص شغله", "Each person sees only what their job needs")}
+              </p>
+            </div>
 
             {USE_MOCK && (
-              <div className="mt-8">
-                <p className="mb-2 text-xs font-medium text-faint">
-                  {tr("نسخة تجريبية: جرّب كل دور بضغطة", "Demo: try each role with one tap")} · {tr("كلمة المرور", "password")} <span dir="ltr" className="num">{DEMO_PASSWORD}</span>
-                </p>
-                <div className="grid gap-2">
+              <div className="mt-6">
+                <div className="mb-3 flex items-end justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">{tr("جرّب النظام", "Try the system")}</p>
+                    <p className="text-xs text-muted">{tr("ادخل بأي دور بضغطة وحدة", "Enter as any role with one tap")}</p>
+                  </div>
+                  <span className="rounded-lg bg-card-2 px-2 py-1 text-xs text-muted">
+                    {tr("كلمة المرور", "Password")} <b className="num" dir="ltr">{DEMO_PASSWORD}</b>
+                  </span>
+                </div>
+                <motion.div variants={list} initial="hidden" animate="show" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {DEMO.map((d) => (
-                    <button
+                    <motion.button
                       key={d.phone}
+                      variants={item}
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.97 }}
                       type="button"
                       disabled={!!busy}
                       onClick={() => {
@@ -141,23 +207,99 @@ export default function LoginPage() {
                         setPassword(DEMO_PASSWORD);
                         login(d.phone, DEMO_PASSWORD, d.phone);
                       }}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-line bg-card px-3 py-2.5 text-start transition hover:border-primary disabled:opacity-60"
+                      className={cn(
+                        "group flex flex-col items-start gap-2 rounded-2xl border border-line bg-card p-3 text-start transition hover:border-primary hover:shadow-card disabled:opacity-60",
+                        busy === d.phone && "border-primary",
+                      )}
                     >
+                      <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary-ink transition group-hover:bg-primary group-hover:text-on-primary">
+                        {busy === d.phone ? <Loader2 className="size-4 animate-spin" /> : <d.icon className="size-4" />}
+                      </span>
                       <span className="min-w-0">
-                        <span className="block text-sm font-medium">{roleName(d.role, tr)}</span>
+                        <span className="block text-sm font-semibold">{roleName(d.role, tr)}</span>
                         <span className="block truncate text-xs text-muted">{d.name}</span>
                       </span>
-                      <span className="num text-xs text-faint" dir="ltr">
-                        {busy === d.phone ? "…" : d.phone}
-                      </span>
-                    </button>
+                    </motion.button>
                   ))}
-                </div>
+                </motion.div>
               </div>
             )}
+          </motion.div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/** An input with an icon at the start, inside one rounded box. */
+function IconField({ icon: Icon, label, htmlFor, end, children }: { icon: LucideIcon; label: string; htmlFor: string; end?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div>
+      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium">
+        {label}
+      </label>
+      {/* Phone numbers and passwords are typed left to right, so the box is LTR in both languages. */}
+      <div dir="ltr" className="relative flex items-center rounded-xl border border-line-strong bg-card transition focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15">
+        <Icon className="pointer-events-none absolute left-3.5 size-[18px] text-faint" aria-hidden />
+        {children}
+        {end}
+      </div>
+    </div>
+  );
+}
+
+function BrandPanel() {
+  const { tr } = useFmt();
+  const points = [
+    tr("الدفعة الأقدم صلاحية تطلع أولاً، والمنتهية ما تنباع", "Oldest expiry leaves first, expired is never sold"),
+    tr("المندوب يطلب من جواله حتى بدون إنترنت", "Reps order from their phone, even offline"),
+    tr("سقف دين لكل زبون وكشف حساب واضح", "A debt limit and a clear statement for every shop"),
+  ];
+  return (
+    <section className="brand-panel relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between">
+      <div className="brand-grid absolute inset-0" aria-hidden />
+      <div className="relative flex items-center gap-3">
+        <LogoMark size={48} />
+        <div>
+          <p className="text-lg font-bold">{tr("شركة النهرين", "Al-Nahrain Co.")}</p>
+          <p className="text-sm opacity-75">{tr("للمواد الغذائية بالجملة · كربلاء", "Wholesale foods · Karbala")}</p>
+        </div>
+      </div>
+
+      <div className="relative max-w-lg">
+        <motion.h2 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-4xl font-bold leading-snug xl:text-5xl">
+          {tr("المخزون والديون والمندوبين", "Stock, debts and reps")}
+          <span className="block text-[#f8b170]">{tr("بمكان واحد", "in one place")}</span>
+        </motion.h2>
+        <motion.ul variants={list} initial="hidden" animate="show" className="mt-8 space-y-3">
+          {points.map((p) => (
+            <motion.li key={p} variants={item} className="flex items-start gap-3 text-base">
+              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-[#7ee2b8]" aria-hidden />
+              <span className="opacity-90">{p}</span>
+            </motion.li>
+          ))}
+        </motion.ul>
+
+        {/* A small "live" card, to show what the system feels like. */}
+        <div className="float mt-10 max-w-sm rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
+          <div className="flex items-center justify-between text-sm">
+            <span className="opacity-80">{tr("طلب جديد من المندوب", "New order from a rep")}</span>
+            <span className="flex items-center gap-1 rounded-full bg-[#f28c38]/20 px-2 py-0.5 text-xs text-[#f8b170]">
+              <WifiOff className="size-3" /> {tr("انحفظ بدون نت", "Saved offline")}
+            </span>
+          </div>
+          <p className="mt-2 text-lg font-bold">{tr("أسواق الكوثر", "Al-Kawthar Market")}</p>
+          <div className="mt-2 flex items-center justify-between text-sm opacity-85">
+            <span>{tr("3 مواد · 6 كارتون", "3 items · 6 cartons")}</span>
+            <span className="num font-semibold">425,000 {tr("د.ع", "IQD")}</span>
           </div>
         </div>
-      </section>
-    </div>
+      </div>
+
+      <p className="relative flex items-center gap-2 text-sm opacity-70">
+        <ShieldCheck className="size-4" aria-hidden />
+        {tr("التسديدات ما تنحذف، وكل تعديل ينسجل باسم صاحبه", "Payments are never deleted, and every change is logged by name")}
+      </p>
+    </section>
   );
 }

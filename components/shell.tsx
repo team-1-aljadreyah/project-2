@@ -6,19 +6,19 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bell, CloudOff, Languages, LogOut, Menu, Moon, MoreHorizontal, RefreshCw, ShieldAlert, Sun, Wifi, WifiOff, X } from "lucide-react";
+import { Bell, CloudOff, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Wifi, WifiOff, X } from "lucide-react";
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { clearToken, homeOf, updateUser, useSession } from "@/lib/auth";
 import { USE_MOCK } from "@/lib/config";
-import { useFmt, useToggleLang } from "@/lib/i18n";
+import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
-import { setTheme, useTheme } from "@/lib/theme";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
 import { canOpen, GROUPS, NAV } from "./nav";
 import { roleName } from "./status";
+import { LanguageSwitch, ThemeToggle } from "./switches";
 import { Button, Empty, IconButton, Skeleton, Switch, useToast } from "./ui";
 
 interface AppData {
@@ -131,7 +131,7 @@ function Sidebar({ user }: { user: User }) {
   return (
     <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-line bg-card md:flex">
       <div className="flex h-16 items-center gap-2 border-b border-line px-4">
-        <Logo />
+        <Logo href={homeOf(user.role)} />
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-3">
         {groups.map((g) => {
@@ -228,24 +228,18 @@ function BottomBar({ user }: { user: User }) {
 }
 
 function TopBar({ user }: { user: User }) {
-  const { tr, lang } = useFmt();
-  const toggleLang = useToggleLang();
-  const theme = useTheme();
+  const { tr } = useFmt();
   const [menu, setMenu] = useState(false);
   return (
-    <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-1 border-b border-line bg-card/95 px-2 backdrop-blur sm:h-16 sm:px-4">
+    <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-1.5 border-b border-line bg-card/95 px-2 backdrop-blur sm:h-16 sm:px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
-        <Logo small />
+        <Logo small href={homeOf(user.role)} />
       </div>
       <div className="hidden flex-1 md:block" />
       <NetworkDot />
       <Bell2 user={user} />
-      <IconButton label={lang === "ar" ? "English" : "العربية"} onClick={toggleLang}>
-        <Languages className="size-5" />
-      </IconButton>
-      <IconButton label={theme === "dark" ? tr("الوضع النهاري", "Day mode") : tr("الوضع الليلي", "Night mode")} onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-        {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
-      </IconButton>
+      <LanguageSwitch />
+      <ThemeToggle />
       <div className="relative">
         <button type="button" onClick={() => setMenu((m) => !m)} aria-expanded={menu} className="ms-1 flex h-10 items-center gap-2 rounded-xl px-1.5 hover:bg-card-2 sm:px-2">
           <span className="flex size-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-on-primary">{user.name.slice(0, 1)}</span>
