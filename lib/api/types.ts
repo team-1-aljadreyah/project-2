@@ -28,6 +28,8 @@ export interface Warehouse {
   id: number;
   name: string;
   name_en: string;
+  /** How many cartons the warehouse can hold (for the "space used" numbers). */
+  capacity: number;
 }
 
 export interface PriceTier {
