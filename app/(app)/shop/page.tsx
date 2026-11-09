@@ -20,7 +20,7 @@ export default function ShopOrderPage() {
   const id = user.customer_id ?? 0;
   const c = useLoad(() => api.getCustomer(id), [id]);
 
-  if (!user.customer_id) return <Notice tone="danger">{tr("حسابك غير مربوط بمحل، راجع الشركة", "Your account isn't linked to a shop. Contact the company")}</Notice>;
+  if (!user.customer_id) return <Notice tone="danger">{tr("حسابك غير مرتبط بمحل، راجع الشركة", "Your account isn't linked to a shop. Contact the company")}</Notice>;
   if (c.state.status === "loading") return <LoadingRows />;
   if (c.state.status === "error" || !c.data) return <ErrorBox error={c.state.status === "error" ? c.state.error : null} onRetry={c.reload} />;
   if (c.data.pending) return <PendingAccount customer={c.data} />;
@@ -29,13 +29,13 @@ export default function ShopOrderPage() {
       <Card className="mx-auto mt-10 max-w-lg p-8 text-center">
         <XCircle className="mx-auto size-10 text-danger" />
         <h1 className="mt-3 text-xl font-bold">{tr("حسابك موقوف", "Your account is off")}</h1>
-        <p className="mt-2 text-sm text-muted">{tr("ما تقدر تطلب حالياً. تواصل ويا الشركة.", "You can't order right now. Please contact the company.")}</p>
+        <p className="mt-2 text-sm text-muted">{tr("لا يمكنك الطلب حالياً. تواصل مع الشركة.", "You can't order right now. Please contact the company.")}</p>
       </Card>
     );
   }
   return (
     <>
-      <PageHeader title={tr("اطلب بضاعتك", "Order your goods")} subtitle={tr("الأسعار هي أسعارك الخاصة. الطلب يوصل للشركة ولمندوبك.", "These are your own prices. The order reaches the company and your rep.")} />
+      <PageHeader title={tr("اطلب بضاعتك", "Order your goods")} subtitle={tr("هذه أسعارك الخاصة، ويصل الطلب إلى الشركة وإلى مندوبك.", "These are your own prices. The order reaches the company and your rep.")} />
       <OrderBuilder fixedCustomerId={user.customer_id} />
     </>
   );
@@ -48,7 +48,7 @@ function PendingAccount({ customer }: { customer: Customer }) {
   const steps = [
     { done: true, now: false, t: tr("سجّلت محلك", "You registered your shop"), b: tr(`${customer.name} · ${customer.area}`, `${customer.name} · ${customer.area}`) },
     { done: false, now: true, t: tr("الشركة تراجع معلوماتك", "The company checks your details"), b: tr("تحدد أسعارك وسقف الدين ومندوبك", "It sets your prices, debt limit and rep") },
-    { done: false, now: false, t: tr("تطلب بضاعتك من الموقع", "You order your goods here"), b: tr("بأي وقت، من جوالك", "Any time, from your phone") },
+    { done: false, now: false, t: tr("تطلب بضاعتك من الموقع", "You order your goods here"), b: tr("في أي وقت، من جوالك", "Any time, from your phone") },
   ];
   return (
     <div className="mx-auto max-w-xl py-6">
@@ -59,7 +59,7 @@ function PendingAccount({ customer }: { customer: Customer }) {
         </motion.div>
         <h1 className="mt-4 text-center text-2xl font-bold">{tr("حسابك قيد المراجعة", "Your account is being checked")}</h1>
         <p className="mx-auto mt-2 max-w-md text-center text-sm text-muted">
-          {tr("سجّلت بنجاح. شركة النهرين تراجع معلومات محلك وتحدد أسعارك، وبعدها تقدر تطلب مباشرة. هذه الصفحة تتحدث لوحدها.", "You're registered. Al-Nahrain checks your shop's details and sets your prices, then you can order right away. This page updates by itself.")}
+          {tr("تم تسجيلك بنجاح. تراجع شركة النهرين معلومات محلك وتحدد أسعارك، ثم يمكنك الطلب مباشرة. تتحدّث هذه الصفحة تلقائياً.", "You're registered. Al-Nahrain checks your shop's details and sets your prices, then you can order right away. This page updates by itself.")}
         </p>
 
         <ol className="mt-8 space-y-0">

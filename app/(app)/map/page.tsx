@@ -130,7 +130,7 @@ export default function MapPage() {
     <>
       <PageHeader
         title={tr("خريطة المخازن", "Warehouse map")}
-        subtitle={tr("اضغط على المخزن حتى تدخل له، وعلى المنطقة حتى تشوف موادها", "Click a warehouse to go inside, and a zone to see its items")}
+        subtitle={tr("اضغط على المخزن للدخول إليه، وعلى المنطقة لعرض موادها", "Click a warehouse to go inside, and a zone to see its items")}
         actions={
           <>
             <Button href="/orders">
@@ -149,7 +149,7 @@ export default function MapPage() {
       <div className="map-canvas relative isolate overflow-hidden rounded-3xl border border-line">
         {/* Top bar: where you are, and a button to go back up */}
         <div className="relative z-30 flex items-center justify-between gap-3 px-4 pt-4 sm:px-6">
-          <nav aria-label={tr("مكانك بالخريطة", "Where you are")} className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
+          <nav aria-label={tr("موقعك على الخريطة", "Where you are")} className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
             {crumbs.map((c, i) => (
               <span key={i} className="flex items-center gap-1">
                 {i > 0 && <Sep className="size-4 text-faint" />}

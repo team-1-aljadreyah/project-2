@@ -36,7 +36,7 @@ export function MapStats({ n }: { n: MapNumbers }) {
   const used = Math.round(n.used * 100);
   const cells: { icon: typeof Boxes; label: string; value: React.ReactNode; sub?: React.ReactNode; change?: number | null }[] = [
     { icon: Boxes, label: tr("على الرفوف", "On the shelves"), value: <CountUp value={Math.round(n.cartons)} />, sub: tr(`كارتون · محجوز ${Math.round(n.reservedCartons)}`, `cartons · ${Math.round(n.reservedCartons)} held`) },
-    { icon: Users, label: tr("يشتغلون اليوم", "Working today"), value: <CountUp value={n.people} />, sub: tr("مندوبين وموظفين", "reps and staff") },
+    { icon: Users, label: tr("يعملون اليوم", "Working today"), value: <CountUp value={n.people} />, sub: tr("مندوبون وموظفون", "reps and staff") },
     { icon: ClipboardList, label: tr("طلبات اليوم", "Orders today"), value: <CountUp value={n.ordersToday} />, change: n.ordersChange, sub: tr("مقابل أمس", "vs yesterday") },
     { icon: RefreshCw, label: tr("دوران المخزون", "Stock turnover"), value: <CountUp value={n.turnover} decimals={1} suffix="%" />, change: n.turnoverChange, sub: tr("آخر 7 أيام", "last 7 days") },
   ];
@@ -57,7 +57,7 @@ export function MapStats({ n }: { n: MapNumbers }) {
             <CountUp value={used} suffix="%" />
           </motion.div>
           <span className="num flex flex-1 items-center justify-center text-xs font-semibold text-muted">
-            {100 - used}% {tr("فاضي", "free")}
+            {100 - used}% {tr("فارغ", "free")}
           </span>
         </div>
       </div>

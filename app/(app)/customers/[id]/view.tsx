@@ -86,8 +86,8 @@ export default function CustomerView() {
             }
           >
             {user.role === "manager"
-              ? tr("حدد نوع السعر والمندوب وسقف الدين، ثم وافق حتى يقدر يطلب.", "Set the price tier, rep and debt limit, then approve so the shop can order.")
-              : tr("المدير يراجع هذا المحل. ما يقدر يطلب قبل الموافقة.", "The manager is reviewing this shop. It can't order before approval.")}
+              ? tr("حدد نوع السعر والمندوب وسقف الدين، ثم وافق ليتمكن من الطلب.", "Set the price tier, rep and debt limit, then approve so the shop can order.")
+              : tr("يراجع المدير هذا المحل، ولا يستطيع الطلب قبل الموافقة.", "The manager is reviewing this shop. It can't order before approval.")}
           </Notice>
         </div>
       )}
@@ -172,7 +172,7 @@ export default function CustomerView() {
                 setBusy(true);
                 try {
                   await api.rejectCustomer(x.id, reason);
-                  toast("success", tr("انرفض التسجيل وانقفل حساب المحل", "Sign-up refused and the shop's login closed"));
+                  toast("success", tr("رُفض التسجيل وأُغلق حساب المحل", "Sign-up refused and the shop's login closed"));
                   setReject(false);
                   c.reload();
                 } catch (e) {
@@ -188,7 +188,7 @@ export default function CustomerView() {
         }
       >
         <div className="space-y-3">
-          <Notice tone="primary">{tr("المحل ما ينمسح: يبقى موقوف ويبين بالسجل منو رفضه وليش.", "The shop isn't deleted: it stays off, and the log shows who refused it and why.")}</Notice>
+          <Notice tone="primary">{tr("لا يُحذف المحل: يبقى موقوفاً، ويُبيّن السجل من رفضه ولماذا.", "The shop isn't deleted: it stays off, and the log shows who refused it and why.")}</Notice>
           <Field label={tr("السبب", "Reason")}>
             <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("مثلاً: معلومات غير صحيحة", "e.g. wrong details")} />
           </Field>

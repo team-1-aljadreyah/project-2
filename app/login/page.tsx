@@ -77,7 +77,7 @@ export default function LoginPage() {
 
             <div className="rounded-3xl border border-line bg-card p-6 shadow-[0_20px_60px_-20px_rgb(17_19_23/0.22)] sm:p-8">
               <h1 className="text-2xl font-bold">{tr("أهلاً بك من جديد", "Welcome back")}</h1>
-              <p className="mt-1 text-sm text-muted">{tr("ادخل برقم هاتفك وكلمة المرور", "Log in with your phone number and password")}</p>
+              <p className="mt-1 text-sm text-muted">{tr("سجّل الدخول برقم هاتفك وكلمة المرور", "Log in with your phone number and password")}</p>
 
               <form
                 className="mt-6 space-y-4"
@@ -129,7 +129,7 @@ export default function LoginPage() {
               {/* New shops make their own account */}
               <div className="mt-6 flex items-center gap-3 text-xs text-faint">
                 <span className="h-px flex-1 bg-line" />
-                {tr("صاحب محل وما عندك حساب؟", "A shop owner without an account?")}
+                {tr("صاحب محل وليس لديك حساب؟", "A shop owner without an account?")}
                 <span className="h-px flex-1 bg-line" />
               </div>
               <Link
@@ -140,7 +140,7 @@ export default function LoginPage() {
               </Link>
 
               <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-faint">
-                <ShieldCheck className="size-3.5" /> {tr("كل موظف يشوف بس اللي يخص شغله", "Each person sees only what their job needs")}
+                <ShieldCheck className="size-3.5" /> {tr("كل موظف يرى ما يخص عمله فقط", "Each person sees only what their job needs")}
               </p>
             </div>
 
@@ -149,7 +149,7 @@ export default function LoginPage() {
                 <div className="mb-3 flex items-end justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold">{tr("جرّب النظام", "Try the system")}</p>
-                    <p className="text-xs text-muted">{tr("ادخل بأي دور بضغطة وحدة", "Enter as any role with one tap")}</p>
+                    <p className="text-xs text-muted">{tr("ادخل بأي دور بضغطة واحدة", "Enter as any role with one tap")}</p>
                   </div>
                   <span className="rounded-lg bg-card-2 px-2 py-1 text-xs text-muted">
                     {tr("كلمة المرور", "Password")} <b className="num" dir="ltr">{DEMO_PASSWORD}</b>

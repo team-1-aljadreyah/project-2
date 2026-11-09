@@ -100,7 +100,7 @@ export default function RegisterPage() {
 
             <div className="rounded-3xl border border-line bg-card p-6 shadow-[0_20px_60px_-20px_rgb(17_19_23/0.22)] sm:p-8">
               <h1 className="text-2xl font-bold">{tr("حساب جديد لصاحب محل", "New account for a shop owner")}</h1>
-              <p className="mt-1 text-sm text-muted">{tr("املأ معلومات محلك. الشركة تراجعها وتحدد أسعارك، وبعدها تقدر تطلب.", "Fill in your shop's details. The company checks them and sets your prices, then you can order.")}</p>
+              <p className="mt-1 text-sm text-muted">{tr("املأ معلومات محلك، وستراجعها الشركة وتحدد أسعارك، ثم يمكنك الطلب.", "Fill in your shop's details. The company checks them and sets your prices, then you can order.")}</p>
 
               <form
                 className="mt-6 space-y-4"
@@ -119,7 +119,7 @@ export default function RegisterPage() {
                   </IconField>
                 </div>
 
-                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone" error={err.phone} hint={tr("تدخل بيه للموقع، ومندوبك يتصل عليه", "You log in with it, and your rep calls you on it")} ltr>
+                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone" error={err.phone} hint={tr("تسجّل به الدخول، ويتصل بك مندوبك عليه", "You log in with it, and your rep calls you on it")} ltr>
                   <input id="phone" type="tel" inputMode="tel" dir="ltr" autoComplete="tel" placeholder="07XX XXX XXXX" value={f.phone} onChange={(e) => set({ phone: e.target.value })} className={iconInput} />
                 </IconField>
 
@@ -186,9 +186,9 @@ export default function RegisterPage() {
               </form>
 
               <p className="mt-5 text-center text-sm text-muted">
-                {tr("عندك حساب؟", "Have an account?")}{" "}
+                {tr("لديك حساب؟", "Have an account?")}{" "}
                 <Link href="/login" className="font-semibold text-primary-ink underline-offset-4 hover:underline">
-                  {tr("سجّل دخول", "Log in")}
+                  {tr("سجّل الدخول", "Log in")}
                 </Link>
               </p>
             </div>

@@ -18,7 +18,7 @@ export function Bento({ enter }: { enter: string }) {
     <section id="features" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-20">
       <div className="mx-auto max-w-2xl text-center">
         <Eyebrow>{tr("المميزات", "Features")}</Eyebrow>
-        <WordReveal text={tr("كل اللي تحتاجه بمكان واحد", "Everything you need in one place")} className="mt-4 text-3xl font-bold sm:text-5xl" />
+        <WordReveal text={tr("كل ما تحتاجه في مكان واحد", "Everything you need in one place")} className="mt-4 text-3xl font-bold sm:text-5xl" />
       </div>
       <div className="mt-12 grid gap-4 lg:grid-cols-3">
         <ExpiryCard />
@@ -36,15 +36,15 @@ const box = "relative overflow-hidden rounded-[28px] border border-white/10 p-6 
 function ExpiryCard() {
   const { tr } = useFmt();
   const batches = [
-    { d: "2026-11-22", n: tr("دفعة #19 · 12 يوم", "Batch #19 · 12 days"), tone: "bg-[#f2b75a]" },
-    { d: "2027-01-08", n: tr("دفعة #44 · شهرين", "Batch #44 · 2 months"), tone: "bg-white/70" },
+    { d: "2026-11-22", n: tr("دفعة #19 · 12 يوماً", "Batch #19 · 12 days"), tone: "bg-[#f2b75a]" },
+    { d: "2027-01-08", n: tr("دفعة #44 · شهران", "Batch #44 · 2 months"), tone: "bg-white/70" },
     { d: "2027-05-30", n: tr("دفعة #71 · 6 أشهر", "Batch #71 · 6 months"), tone: "bg-white/70" },
   ];
   return (
     <motion.div {...rise()} className={cn(box, "bg-gradient-to-br from-[#2a2f37] to-[#121418] text-white")}>
       <Stars count={22} seed={3} />
-      <h3 className="relative text-2xl font-bold leading-snug sm:text-3xl">{tr("الأقدم صلاحية يطلع أول، تلقائياً", "Oldest expiry leaves first, by itself")}</h3>
-      <p className="relative mt-3 text-sm opacity-80">{tr("أمين المخزن ما يختار. النظام يصرف الأقرب انتهاءً، والمنتهي ما ينباع أبداً.", "The keeper doesn't choose. The system sends the nearest expiry, and expired stock never sells.")}</p>
+      <h3 className="relative text-2xl font-bold leading-snug sm:text-3xl">{tr("الأقدم صلاحيةً يخرج أولاً، تلقائياً", "Oldest expiry leaves first, by itself")}</h3>
+      <p className="relative mt-3 text-sm opacity-80">{tr("أمين المخزن لا يختار؛ فالنظام يصرف الأقرب انتهاءً، ولا يُباع المنتهي أبداً.", "The keeper doesn't choose. The system sends the nearest expiry, and expired stock never sells.")}</p>
       <ol className="relative mt-6 space-y-2">
         <motion.li initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2 text-sm line-through opacity-60">
           <span>{tr("دفعة #7 · منتهية", "Batch #7 · expired")}</span>
@@ -63,7 +63,7 @@ function ExpiryCard() {
               <span className={cn("size-2 rounded-full", b.tone)} />
               {b.n}
             </span>
-            <span className="num text-xs">{i === 0 ? tr("يطلع أول", "goes first") : b.d}</span>
+            <span className="num text-xs">{i === 0 ? tr("يخرج أولاً", "goes first") : b.d}</span>
           </motion.li>
         ))}
       </ol>
@@ -84,7 +84,7 @@ function StatementCard() {
       <div className="grid gap-6 sm:grid-cols-2 sm:items-center">
         <div>
           <h3 className="text-2xl font-bold sm:text-3xl">{tr("سقف دين وكشف حساب واضح", "A debt limit and a clear statement")}</h3>
-          <p className="mt-3 text-sm text-muted">{tr("التسديد يروح على أقدم فاتورة، وإذا وصل المحل سقفه الطلب يتوقف لحد ما يوافق المدير. التسديد ما ينحذف أبداً.", "Payments go to the oldest invoice. At the limit, new orders wait for the manager. Payments are never deleted.")}</p>
+          <p className="mt-3 text-sm text-muted">{tr("يُخصم التسديد من أقدم فاتورة، وإذا بلغ المحل سقفه يتوقف الطلب حتى يوافق المدير. ولا يُحذف التسديد أبداً.", "Payments go to the oldest invoice. At the limit, new orders wait for the manager. Payments are never deleted.")}</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-[#101215] p-4">
           <div className="flex items-center justify-between text-sm">
@@ -154,7 +154,7 @@ function OfflineCard() {
                     <span>{o.who}</span>
                     {o.sent ? (
                       <span className="flex items-center gap-1 text-[#97c459]">
-                        <CheckCircle2 className="size-3.5" /> {tr("انرسل", "Sent")}
+                        <CheckCircle2 className="size-3.5" /> {tr("تم الإرسال", "Sent")}
                       </span>
                     ) : (
                       <span className="flex items-center gap-1 text-[#f2b75a]">
@@ -171,8 +171,8 @@ function OfflineCard() {
           <span className="flex size-11 items-center justify-center rounded-xl bg-[#3a2a10] text-[#f2b75a]">
             <WifiOff className="size-5" />
           </span>
-          <h3 className="mt-4 text-2xl font-bold sm:text-3xl">{tr("الطلب ما يضيع حتى بدون نت", "No order is lost, even offline")}</h3>
-          <p className="mt-3 text-sm text-muted">{tr("المندوب يكمل شغله بمنطقة النت بيها ضعيف. الطلب ينحفظ على الجوال وينرسل لوحده لما يرجع النت، وبدون ما يتكرر.", "Reps keep working where the internet is weak. Orders are saved on the phone and sent by themselves later, never twice.")}</p>
+          <h3 className="mt-4 text-2xl font-bold sm:text-3xl">{tr("الطلب لا يضيع حتى بدون إنترنت", "No order is lost, even offline")}</h3>
+          <p className="mt-3 text-sm text-muted">{tr("يُكمل المندوب عمله في المناطق ضعيفة الإنترنت؛ إذ يُحفظ الطلب على الجوال ويُرسَل تلقائياً عند عودة الإنترنت، دون أن يتكرر.", "Reps keep working where the internet is weak. Orders are saved on the phone and sent by themselves later, never twice.")}</p>
         </div>
       </div>
     </motion.div>
@@ -195,8 +195,8 @@ function CommissionCard({ enter }: { enter: string }) {
   return (
     <motion.div ref={ref} {...rise(0.1)} className={cn(box, "flex flex-col justify-between bg-gradient-to-br from-[#2a1a0b] to-[#120c06]")}>
       <div>
-        <h3 className="text-2xl font-bold sm:text-3xl">{tr("عمولة وأرباح بدون حساب باليد", "Commission and profit, no hand counting")}</h3>
-        <p className="mt-3 text-sm text-muted">{tr("العمولة على الفلوس المدفوعة فعلاً، والربح حسب سعر الدفعة المباعة.", "Commission on money actually paid, profit by the batch sold.")}</p>
+        <h3 className="text-2xl font-bold sm:text-3xl">{tr("عمولات وأرباح بلا حساب يدوي", "Commission and profit, no hand counting")}</h3>
+        <p className="mt-3 text-sm text-muted">{tr("العمولة على المبالغ المدفوعة فعلاً، والربح حسب سعر الدفعة المباعة.", "Commission on money actually paid, profit by the batch sold.")}</p>
       </div>
       <div className="mt-8">
         <p className="text-xs text-muted">{tr("عمولات الشهر", "This month's commission")}</p>
@@ -218,17 +218,17 @@ export function Roles() {
   const roles: { icon: LucideIcon; t: string; b: string; tilt: number; main?: boolean }[] = [
     { icon: Truck, t: tr("المندوب", "Sales rep"), b: tr("طلبات وتسديدات من الجوال", "Orders and payments by phone"), tilt: -6 },
     { icon: Warehouse, t: tr("أمين المخزن", "Warehouse keeper"), b: tr("استلام، صرف، تحويل وجرد", "Receive, issue, transfer, count"), tilt: 4 },
-    { icon: LayoutDashboard, t: tr("المدير", "Manager"), b: tr("يشوف كل شي ويتحكم بالأسعار والديون", "Sees all, controls prices and debts"), tilt: -2, main: true },
+    { icon: LayoutDashboard, t: tr("المدير", "Manager"), b: tr("يرى كل شيء ويتحكم في الأسعار والديون", "Sees all, controls prices and debts"), tilt: -2, main: true },
     { icon: Calculator, t: tr("المحاسب", "Accountant"), b: tr("الفواتير والديون والتسديدات", "Invoices, debts and payments"), tilt: 5 },
-    { icon: Store, t: tr("صاحب المحل", "Shop owner"), b: tr("يطلب بنفسه ويشوف كشف حسابه", "Orders and sees his statement"), tilt: -4 },
+    { icon: Store, t: tr("صاحب المحل", "Shop owner"), b: tr("يطلب بنفسه ويطّلع على كشف حسابه", "Orders and sees his statement"), tilt: -4 },
   ];
   return (
     <section className="mx-auto max-w-6xl px-4 py-20">
       <div className="mx-auto max-w-2xl text-center">
         <Eyebrow>{tr("الصلاحيات", "Roles")}</Eyebrow>
-        <WordReveal text={tr("كل واحد يشوف شغله بس", "Everyone sees only their part")} className="mt-4 text-3xl font-bold sm:text-5xl" />
+        <WordReveal text={tr("كلٌّ يرى عمله فقط", "Everyone sees only their part")} className="mt-4 text-3xl font-bold sm:text-5xl" />
         <motion.p {...rise(0.2)} className="mt-4 text-muted">
-          {tr("المندوب ما يشوف سعر الشراء، وأمين المخزن ما يشوف الديون، وكل تعديل ينسجل باسم صاحبه.", "Reps never see cost, the warehouse never sees debts, and every change is logged by name.")}
+          {tr("المندوب لا يرى سعر الشراء، وأمين المخزن لا يرى الديون، وكل تعديل يُسجَّل باسم صاحبه.", "Reps never see cost, the warehouse never sees debts, and every change is logged by name.")}
         </motion.p>
       </div>
       <div className="mt-14 flex flex-wrap justify-center gap-4">

@@ -78,7 +78,7 @@ export default function CustomersPage() {
         <Stat label={tr("مجموع الديون", "Total debt")} value={<Money value={total} />} />
         <Stat label={tr("عدد الزبائن", "Customers")} value={all.length} />
         <Stat label={tr("قريب من السقف", "Near the limit")} value={all.filter((c) => pass(c, "near")).length} tone="warning" icon={<AlertTriangle className="size-4" />} />
-        <Stat label={tr("واصل السقف أو تجاوزه", "At or over limit")} value={all.filter((c) => pass(c, "over")).length} tone="danger" icon={<AlertTriangle className="size-4" />} />
+        <Stat label={tr("بلغ السقف أو تجاوزه", "At or over limit")} value={all.filter((c) => pass(c, "over")).length} tone="danger" icon={<AlertTriangle className="size-4" />} />
       </div>
       <Card>
         <div className="flex flex-col gap-3 border-b border-line p-3 xl:flex-row xl:items-center xl:justify-between">
@@ -89,7 +89,7 @@ export default function CustomersPage() {
               { value: "all", label: tr("الكل", "All"), count: all.length },
               { value: "debt", label: tr("عليهم دين", "Owe money"), count: all.filter((c) => pass(c, "debt")).length },
               { value: "near", label: tr("قريب من السقف", "Near limit"), count: all.filter((c) => pass(c, "near")).length },
-              { value: "over", label: tr("واصل السقف", "At limit"), count: all.filter((c) => pass(c, "over")).length },
+              { value: "over", label: tr("بلغ السقف", "At limit"), count: all.filter((c) => pass(c, "over")).length },
               // New shops that signed up online: shown only while there are some.
               ...(waiting ? [{ value: "pending" as F, label: tr("تنتظر الموافقة", "Waiting approval"), count: waiting }] : []),
             ]}

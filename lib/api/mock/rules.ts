@@ -250,7 +250,7 @@ export function sweep(db: Db, now: Date) {
         action: "cancel",
         entity: "order",
         entity_id: o.id,
-        summary: `انتهى حجز الطلب ${o.number} ورجعت الكمية للمخزون`,
+        summary: `انتهى حجز الطلب ${o.number} وعادت الكمية إلى المخزون`,
         summary_en: `Reservation of ${o.number} ended, stock released`,
       });
     }
@@ -387,7 +387,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   if (actor.role === "rep" && customer.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذا الزبون ليس من زبائنك", "This customer isn't yours");
   if (actor.role === "shop" && actor.customer_id !== customer.id) fail(403, "FORBIDDEN", "لا تستطيع الطلب لمحل آخر", "You can't order for another shop");
   if (!customer.active) {
-    if (customer.pending) fail(409, "BAD_STATE", "الحساب ينتظر موافقة الشركة، تقدر تطلب بعد الموافقة", "This account is waiting for approval. You can order after it is approved");
+    if (customer.pending) fail(409, "BAD_STATE", "الحساب بانتظار موافقة الشركة، ويمكنك الطلب بعد الموافقة", "This account is waiting for approval. You can order after it is approved");
     fail(409, "BAD_STATE", "حساب هذا الزبون موقوف", "This customer is not active");
   }
 
@@ -985,7 +985,7 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
   if (input.owner_name.trim().length < 3) errors.owner_name = msg("اكتب اسمك الكامل", "Enter your full name");
   if (!/^07\d{9}$/.test(phone)) errors.phone = msg("رقم عراقي من 11 رقم يبدأ بـ 07", "An 11-digit Iraqi number starting with 07");
   else if (db.users.some((u) => u.phone === phone) || db.customers.some((c) => c.phone === phone)) {
-    errors.phone = msg("هذا الرقم مسجل من قبل، سجّل دخول", "This number already has an account. Log in instead");
+    errors.phone = msg("هذا الرقم مسجّل من قبل، سجّل الدخول", "This number already has an account. Log in instead");
   }
   if (!input.area.trim()) errors.area = msg("اختر المنطقة", "Choose the area");
   if (input.password.length < 6) errors.password = msg("6 أحرف على الأقل", "At least 6 characters");
@@ -1042,7 +1042,7 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
         type: "new_shop",
         roles: ["rep"],
         user_id: rep.id,
-        title: `محل جديد بمنطقتك: ${customer.name}`,
+        title: `محل جديد في منطقتك: ${customer.name}`,
         title_en: `New shop in your area: ${customer.name}`,
         body: `سجّل من الموقع وينتظر موافقة المدير · ${phone}`,
         body_en: `Signed up online, waiting for the manager · ${phone}`,
@@ -1069,7 +1069,7 @@ export function approveShop(db: Db, actor: DbUser, customer: DbCustomer, now: Da
         user_id: owner.id,
         title: "تمت الموافقة على حسابك",
         title_en: "Your account is approved",
-        body: "تقدر تطلب بضاعتك الآن من الموقع",
+        body: "يمكنك الآن طلب بضاعتك من الموقع",
         body_en: "You can order your goods on the website now",
         link: "/shop",
       },

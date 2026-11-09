@@ -44,7 +44,7 @@ export default function UsersPage() {
     <>
       <PageHeader
         title={tr("المستخدمون والصلاحيات", "Users and roles")}
-        subtitle={tr("كل واحد يشوف بس اللي يخصه: المندوب ما يشوف سعر الشراء، وأمين المخزن ما يشوف الديون", "Each person sees only their part: reps never see cost, the warehouse never sees debts")}
+        subtitle={tr("كلٌّ يرى ما يخصه فقط: المندوب لا يرى سعر الشراء، وأمين المخزن لا يرى الديون", "Each person sees only their part: reps never see cost, the warehouse never sees debts")}
         actions={
           <Button variant="primary" onClick={() => setEdit("new")}>
             <Plus className="size-4" /> {tr("مستخدم جديد", "New user")}
@@ -112,7 +112,7 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
               setErr({});
               try {
                 await api.saveUser(user?.id ?? null, { ...f, password: f.password || undefined });
-                toast("success", tr("انحفظ المستخدم", "User saved"));
+                toast("success", tr("تم حفظ المستخدم", "User saved"));
                 onSaved();
                 onClose();
               } catch (e) {

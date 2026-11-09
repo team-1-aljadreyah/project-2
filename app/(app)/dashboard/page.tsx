@@ -72,7 +72,7 @@ export default function DashboardPage() {
             <Stat label={tr("طلبات بانتظار التثبيت", "Orders waiting")} value={x.pending_orders} icon={<ClipboardList className="size-4" />} href="/orders" />
             <Stat label={tr("مواد تحت الحد الأدنى", "Items below minimum")} value={x.low_stock} tone={x.low_stock ? "danger" : undefined} icon={<Boxes className="size-4" />} href="/stock" />
             <Stat label={tr("دفعات قريبة الانتهاء", "Batches expiring soon")} value={x.near_expiry} tone={x.near_expiry ? "warning" : undefined} icon={<AlertTriangle className="size-4" />} href="/stock" />
-            <Stat label={tr("دفعات منتهية بالمخزن", "Expired batches")} value={x.expired_batches} tone={x.expired_batches ? "danger" : undefined} icon={<PackageX className="size-4" />} href="/stock" />
+            <Stat label={tr("دفعات منتهية في المخزن", "Expired batches")} value={x.expired_batches} tone={x.expired_batches ? "danger" : undefined} icon={<PackageX className="size-4" />} href="/stock" />
           </>
         )}
       </div>

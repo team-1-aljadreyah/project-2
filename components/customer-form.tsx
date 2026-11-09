@@ -34,7 +34,7 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
     setErr({});
     try {
       const c = await api.saveCustomer(customer?.id ?? null, { ...f, debt_limit: f.debt_limit === "" ? -1 : f.debt_limit });
-      toast("success", tr("انحفظ الزبون", "Customer saved"));
+      toast("success", tr("تم حفظ الزبون", "Customer saved"));
       onSaved?.(c);
       onClose();
     } catch (e) {
@@ -62,7 +62,7 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
       {customer?.pending && (
         <div className="mb-4">
           <Notice tone="warning" title={tr("هذا المحل سجّل من الموقع وينتظر موافقتك", "This shop signed up online and waits for your approval")}>
-            {tr("تأكد من المعلومات، اختر نوع السعر والمندوب وسقف الدين، ثم اضغط موافقة. صاحب المحل يوصله إشعار ويقدر يطلب مباشرة.", "Check the details, choose the price tier, rep and debt limit, then approve. The owner gets a notification and can order at once.")}
+            {tr("تأكد من المعلومات، واختر نوع السعر والمندوب وسقف الدين، ثم اضغط موافقة. سيصل إشعار إلى صاحب المحل ويستطيع الطلب مباشرة.", "Check the details, choose the price tier, rep and debt limit, then approve. The owner gets a notification and can order at once.")}
           </Notice>
         </div>
       )}
@@ -100,11 +100,11 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
             ))}
           </Select>
         </Field>
-        <Field label={tr("سقف الدين", "Debt limit")} error={err.debt_limit} hint={tr("إذا وصله، الطلب الجديد يحتاج موافقتك", "At this limit, new orders need your approval")} className="sm:col-span-2">
+        <Field label={tr("سقف الدين", "Debt limit")} error={err.debt_limit} hint={tr("إذا بلغه، يحتاج الطلب الجديد إلى موافقتك", "At this limit, new orders need your approval")} className="sm:col-span-2">
           <NumberInput value={f.debt_limit} onChange={(v) => set({ debt_limit: v })} suffix={tr("د.ع", "IQD")} invalid={!!err.debt_limit} />
         </Field>
         <div className="sm:col-span-2">
-          <Switch checked={f.active} onChange={(v) => set({ active: v })} label={tr("الحساب فعّال (يقدر يطلب)", "Active (can order)")} />
+          <Switch checked={f.active} onChange={(v) => set({ active: v })} label={tr("الحساب فعّال (يستطيع الطلب)", "Active (can order)")} />
         </div>
       </div>
     </Dialog>

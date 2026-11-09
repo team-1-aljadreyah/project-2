@@ -89,7 +89,7 @@ export default function ItemView() {
         </Card>
       </div>
       <Card>
-        <CardHeader title={tr("الدفعات (الأقدم صلاحية أولاً)", "Batches (oldest expiry first)")} subtitle={tr("هذا هو الترتيب الذي تطلع به البضاعة عند البيع. المنتهية لا تُباع.", "Goods leave in this order when sold. Expired batches are never sold.")} />
+        <CardHeader title={tr("الدفعات (الأقدم صلاحية أولاً)", "Batches (oldest expiry first)")} subtitle={tr("هذا هو الترتيب الذي تخرج به البضاعة عند البيع. المنتهية لا تُباع.", "Goods leave in this order when sold. Expired batches are never sold.")} />
         {batches.state.status === "loading" ? (
           <LoadingRows rows={3} />
         ) : (
@@ -111,7 +111,7 @@ export default function ItemView() {
                 </div>
               </div>
             )}
-            empty={<Empty title={tr("لا توجد دفعات بالمخزن", "No batches in stock")} />}
+            empty={<Empty title={tr("لا توجد دفعات في المخزن", "No batches in stock")} />}
           />
         )}
       </Card>

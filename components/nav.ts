@@ -63,7 +63,7 @@ export const NAV: NavItem[] = [
 export const GROUPS: Record<NavItem["group"], [string, string]> = {
   main: ["", ""],
   sales: ["البيع", "Sales"],
-  money: ["الفلوس", "Money"],
+  money: ["الأموال", "Money"],
   stock: ["المخزون", "Stock"],
   admin: ["الإدارة", "Admin"],
 };

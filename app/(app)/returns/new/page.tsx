@@ -65,7 +65,7 @@ export default function NewReturnPage() {
     setErr({});
     try {
       const r = await api.createReturn({ client_ref: ref, invoice_id: inv.id, lines: chosen, note: note || undefined });
-      toast("success", tr(`انحفظ المرتجع ${money(r.amount)}`, `Return saved: ${money(r.amount)}`));
+      toast("success", tr(`تم حفظ المرتجع ${money(r.amount)}`, `Return saved: ${money(r.amount)}`));
       router.push(`/returns/${r.id}`);
     } catch (e) {
       if (e instanceof ApiError && e.errors) setErr(e.errors);
@@ -98,7 +98,7 @@ export default function NewReturnPage() {
                 ))}
               </Select>
             </Field>
-            <Field label={tr("الفاتورة", "Invoice")} hint={tr("المرتجع دائماً على فاتورة، حتى ما يرجع أكثر من المباع", "A return is always on an invoice, so no one returns more than was sold")}>
+            <Field label={tr("الفاتورة", "Invoice")} hint={tr("المرتجع دائماً على فاتورة، كي لا يُرجَع أكثر من المباع", "A return is always on an invoice, so no one returns more than was sold")}>
               <Select
                 value={invoiceId}
                 onChange={(e) => {
@@ -119,7 +119,7 @@ export default function NewReturnPage() {
 
           {inv && (
             <Card>
-              <CardHeader title={tr("ماذا رجع؟", "What came back?")} subtitle={tr("اختر الكمية وحالة البضاعة لكل مادة", "Choose quantity and condition for each item")} />
+              <CardHeader title={tr("ماذا أُرجع؟", "What came back?")} subtitle={tr("اختر الكمية وحالة البضاعة لكل مادة", "Choose quantity and condition for each item")} />
               <ul className="divide-y divide-line">
                 {rows.map((r) => {
                   const it = itemById.get(r.item_id);
@@ -134,7 +134,7 @@ export default function NewReturnPage() {
                         <div>
                           <p className="font-medium">{name(it)}</p>
                           <p className="text-xs text-muted">
-                            {tr("يقدر يرجع حتى", "Can return up to")} {it && fmtQty(r.can, it.pieces_per_carton)} · {money(Math.round(r.perPiece))} / {tr("قطعة", "pc")}
+                            {tr("يمكن إرجاع حتى", "Can return up to")} {it && fmtQty(r.can, it.pieces_per_carton)} · {money(Math.round(r.perPiece))} / {tr("قطعة", "pc")}
                           </p>
                         </div>
                         {p > 0 && <Money value={Math.round(r.perPiece * p)} className="font-semibold" />}
@@ -160,9 +160,9 @@ export default function NewReturnPage() {
                           />
                         </div>
                       ) : (
-                        <p className="text-xs text-faint">{tr("رجعت كل الكمية من قبل", "Everything was already returned")}</p>
+                        <p className="text-xs text-faint">{tr("أُرجعت الكمية كلها من قبل", "Everything was already returned")}</p>
                       )}
-                      {(over || serverErr) && <p className="text-xs font-medium text-danger">{serverErr ?? tr("أكثر من الذي انباع على هذه الفاتورة", "More than was sold on this invoice")}</p>}
+                      {(over || serverErr) && <p className="text-xs font-medium text-danger">{serverErr ?? tr("أكثر مما بيع في هذه الفاتورة", "More than was sold on this invoice")}</p>}
                     </li>
                   );
                 })}
@@ -184,15 +184,15 @@ export default function NewReturnPage() {
             ))}
           </div>
           <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
-            <span className="text-sm text-muted">{tr("ينقص من دين الزبون", "Taken off the debt")}</span>
+            <span className="text-sm text-muted">{tr("يُخصم من دين الزبون", "Taken off the debt")}</span>
             <Money value={amount} className="text-xl font-bold" />
           </div>
           <Field label={tr("السبب / ملاحظة", "Reason / note")} className="mt-3">
-            <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={tr("مثلاً: تالف بالنقل", "e.g. damaged in transport")} />
+            <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={tr("مثلاً: تالف أثناء النقل", "e.g. damaged in transport")} />
           </Field>
           {chosen.some((l) => l.condition === "damaged") && (
             <div className="mt-3">
-              <Notice tone="warning">{tr("التالف ما يرجع للبيع، ينسجل بسجل التالف.", "Damaged goods won't be sold again; they go to the damaged log.")}</Notice>
+              <Notice tone="warning">{tr("التالف لا يعود إلى البيع، بل يُسجَّل في سجل التالف.", "Damaged goods won't be sold again; they go to the damaged log.")}</Notice>
             </div>
           )}
           <Button

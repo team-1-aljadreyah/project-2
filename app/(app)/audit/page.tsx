@@ -58,7 +58,7 @@ export default function AuditPage() {
 
   return (
     <>
-      <PageHeader title={tr("سجل التعديلات", "Activity log")} subtitle={tr("كل عملية بالنظام: منو سواها، شنو، ومتى. السجل ما ينعدل وما ينمسح.", "Every action in the system: who, what and when. The log can't be edited or deleted.")} />
+      <PageHeader title={tr("سجل التعديلات", "Activity log")} subtitle={tr("كل عملية في النظام: من قام بها، وما هي، ومتى. لا يُعدَّل السجل ولا يُحذف.", "Every action in the system: who, what and when. The log can't be edited or deleted.")} />
       <Card>
         <div className="flex flex-col gap-2 border-b border-line p-3 lg:flex-row lg:items-center">
           <SearchBox value={q} onChange={setQ} placeholder={tr("ابحث بالاسم أو الرقم", "Search by name or number")} className="lg:w-72" />

@@ -148,7 +148,7 @@ function Sales() {
           <Stat label={tr("الهامش", "Margin")} value={`${sum("sales") - sum("returns") > 0 ? Math.round((sum("profit") / (sum("sales") - sum("returns"))) * 100) : 0}%`} />
         </div>
       )}
-      {rows.state.status === "loading" ? <LoadingRows /> : <DataTable rows={data} columns={columns} rowKey={(r) => r.key} empty={<Empty title={tr("لا توجد مبيعات بهذه الفترة", "No sales in this period")} />} />}
+      {rows.state.status === "loading" ? <LoadingRows /> : <DataTable rows={data} columns={columns} rowKey={(r) => r.key} empty={<Empty title={tr("لا توجد مبيعات في هذه الفترة", "No sales in this period")} />} />}
     </Card>
   );
 }
@@ -162,7 +162,7 @@ function Slow() {
     <Card>
       <CardHeader
         title={tr("المواد الراكدة", "Slow-moving items")}
-        subtitle={tr("مواد عندها مخزون وما انباعت من مدة", "Items in stock that haven't sold for a while")}
+        subtitle={tr("مواد لديها مخزون ولم تُبع منذ مدة", "Items in stock that haven't sold for a while")}
         action={
           <Segmented
             value={String(days)}

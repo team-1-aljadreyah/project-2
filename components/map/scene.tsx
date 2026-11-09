@@ -355,7 +355,7 @@ export function SiteScene({
                   </span>
                 </div>
                 <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary-ink">
-                  {tr("اضغط حتى تدخل", "Click to go inside")} <Forward className="size-3.5" />
+                  {tr("اضغط للدخول", "Click to go inside")} <Forward className="size-3.5" />
                 </p>
               </motion.div>
             );

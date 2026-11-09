@@ -91,7 +91,7 @@ export default function OrderView() {
               </Button>
             )}
             {canApprove && (
-              <Button variant="action" loading={busy === "approve"} onClick={() => act("approve", () => api.approveOrder(o.id), tr("تمت الموافقة، والطلب صار بانتظار التثبيت", "Approved. The order now waits to be confirmed"))}>
+              <Button variant="action" loading={busy === "approve"} onClick={() => act("approve", () => api.approveOrder(o.id), tr("تمت الموافقة، وأصبح الطلب بانتظار التثبيت", "Approved. The order now waits to be confirmed"))}>
                 <ShieldCheck className="size-4" /> {tr("موافقة على تجاوز السقف", "Approve over limit")}
               </Button>
             )}
@@ -114,19 +114,19 @@ export default function OrderView() {
         <div className="space-y-4">
           {o.status === "needs_approval" && (
             <Notice tone="warning" title={tr("هذا الطلب يتجاوز سقف دين الزبون", "This order passes the customer's debt limit")}>
-              {user.role === "manager" ? tr("وافق عليه إذا تثق بالزبون، أو ألغه.", "Approve it if you trust the customer, or cancel it.") : tr("ينتظر موافقة المدير. الكمية محجوزة لحد ذاك الوقت.", "Waiting for the manager. The stock stays held until then.")}
+              {user.role === "manager" ? tr("وافق عليه إذا كنت تثق بالزبون، أو ألغِه.", "Approve it if you trust the customer, or cancel it.") : tr("ينتظر موافقة المدير، والكمية محجوزة حتى ذلك الحين.", "Waiting for the manager. The stock stays held until then.")}
             </Notice>
           )}
           {o.status === "expired" && (
             <Notice tone="danger" title={tr("انتهى وقت الحجز", "The hold time ended")}>
-              {tr("رجعت الكمية للمخزون. تقدر تثبّته إذا البضاعة بعدها موجودة.", "The stock was released. You can still confirm if the goods are available.")}
+              {tr("عادت الكمية إلى المخزون. يمكنك تثبيته إذا كانت البضاعة لا تزال موجودة.", "The stock was released. You can still confirm if the goods are available.")}
             </Notice>
           )}
           {o.status === "cancelled" && <Notice tone="danger" title={tr("الطلب ملغي", "Cancelled")}>{o.cancel_reason}</Notice>}
           {open && o.reserved_until && <Countdown until={o.reserved_until} />}
 
           <Card>
-            <CardHeader title={tr("المواد", "Items")} subtitle={`${tr("يطلع من", "From")} ${name(wh)}`} />
+            <CardHeader title={tr("المواد", "Items")} subtitle={`${tr("يخرج من", "From")} ${name(wh)}`} />
             <ul className="divide-y divide-line">
               {plan.map(({ line: l, use, short }) => {
                 const it = itemById.get(l.item_id);
@@ -149,7 +149,7 @@ export default function OrderView() {
                             {tr("دفعة", "Batch")} #{b.id} · {tr("صلاحية", "exp")} <span className="num">{b.expiry_date}</span> · {it && qty(n, it.pieces_per_carton)}
                           </Badge>
                         ))}
-                        {short && <Badge tone="danger">{tr("الكمية غير كافية بالمخزن", "Not enough on the shelf")}</Badge>}
+                        {short && <Badge tone="danger">{tr("الكمية غير كافية في المخزن", "Not enough on the shelf")}</Badge>}
                       </div>
                     )}
                   </li>
@@ -222,7 +222,7 @@ export default function OrderView() {
               loading={busy === "cancel"}
               disabled={!reason.trim()}
               onClick={() =>
-                act("cancel", () => api.cancelOrder(o.id, reason), tr("أُلغي الطلب ورجعت الكمية للمخزون", "Cancelled. Stock released"), () => {
+                act("cancel", () => api.cancelOrder(o.id, reason), tr("أُلغي الطلب وعادت الكمية إلى المخزون", "Cancelled. Stock released"), () => {
                   setCancel(false);
                   setReason("");
                 })
@@ -258,7 +258,7 @@ function Countdown({ until }: { until: string }) {
     <div className="flex items-center gap-3 rounded-xl border border-line bg-card p-3 text-sm">
       <Clock className="size-5 text-primary-ink" />
       <span>
-        {tr("الكمية محجوزة لهذا الطلب لحد", "Stock is held for this order until")} <b className="num">{time(until)}</b> ·{" "}
+        {tr("الكمية محجوزة لهذا الطلب حتى", "Stock is held for this order until")} <b className="num">{time(until)}</b> ·{" "}
         <span className="num font-semibold text-primary-ink" dir="ltr">
           {h}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
         </span>
