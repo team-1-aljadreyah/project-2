@@ -1,29 +1,44 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { ToastProvider } from "@/components/ui";
+import { bootScript } from "@/lib/boot";
+import { LangSync } from "@/lib/i18n";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+// One font for Arabic and English, clear on small phone screens.
+const plex = IBM_Plex_Sans_Arabic({
+  variable: "--font-plex",
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Project 2",
-  description: "Project 2",
+  title: { default: "النهرين للمواد الغذائية", template: "%s · النهرين" },
+  description: "منصة شركة النهرين للمواد الغذائية بالجملة: المخزون، البيع، الديون والتسديد",
+  applicationName: "Al-Nahrain",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#0c447c" },
+    { media: "(prefers-color-scheme: dark)", color: "#121417" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="ar" dir="rtl" className={plex.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: bootScript }} />
+      </head>
+      <body className="min-h-dvh antialiased">
+        <LangSync />
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }
