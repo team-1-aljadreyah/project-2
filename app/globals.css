@@ -179,3 +179,50 @@ html[data-vt="fade"]::view-transition-new(root) {
 @media (prefers-reduced-motion: reduce) {
   .float, .float-slow { animation: none; }
 }
+
+/* ---------- Animated landing page (app/page.tsx) ---------- */
+
+/* The beam of light that slowly sweeps across the hero. */
+@keyframes beam {
+  0%, 100% { transform: rotate(-28deg) translateX(-8%); opacity: 0.55; }
+  50% { transform: rotate(-22deg) translateX(6%); opacity: 0.9; }
+}
+.hero-beam {
+  background: linear-gradient(90deg, transparent, rgb(63 191 140 / 0.35) 45%, rgb(242 140 56 / 0.25) 55%, transparent);
+  filter: blur(40px);
+  animation: beam 9s ease-in-out infinite;
+}
+
+/* Small stars that blink. */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+.twinkle { animation: twinkle 3s ease-in-out infinite; }
+
+/* The strip that slides forever. Two copies of the list sit side by side; moving by half = a seamless loop. */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+[dir="rtl"] .marquee-track { animation-direction: reverse; }
+.marquee-track { animation: marquee 30s linear infinite; }
+.marquee:hover .marquee-track { animation-play-state: paused; }
+
+/* Light running along the lines into the chip. */
+@keyframes pulse-run {
+  from { stroke-dashoffset: 240; }
+  to { stroke-dashoffset: 0; }
+}
+.pulse-line { stroke-dasharray: 24 216; animation: pulse-run 2.6s linear infinite; }
+
+/* The chip breathes. */
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 40px rgb(63 191 140 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.15) inset; }
+  50% { box-shadow: 0 0 80px rgb(63 191 140 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.25) inset; }
+}
+.chip-glow { animation: glow 3.2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-beam, .twinkle, .marquee-track, .pulse-line, .chip-glow { animation: none; }
+}
