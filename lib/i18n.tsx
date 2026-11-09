@@ -2,7 +2,7 @@
 
 // Arabic first, English second. Texts are written next to each other in the code: tr("المواد", "Items"),
 // so a screen can never miss a translation, and you read both while you work.
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { LOCALE_KEY } from "./boot";
 
 export type Lang = "ar" | "en";
@@ -115,9 +115,4 @@ export function LangSync() {
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
   }, [lang]);
   return null;
-}
-
-export function useToggleLang() {
-  const { lang } = useFmt();
-  return useCallback(() => setLang(lang === "ar" ? "en" : "ar"), [lang]);
 }

@@ -15,10 +15,10 @@ export function LogoMark({ size = 36 }: { size?: number }) {
   );
 }
 
-export function Logo({ small }: { small?: boolean }) {
+export function Logo({ small, href = "/" }: { small?: boolean; href?: string }) {
   const { tr } = useFmt();
   return (
-    <Link href="/" className="flex min-w-0 items-center gap-2.5">
+    <Link href={href} className="flex min-w-0 items-center gap-2.5">
       <LogoMark size={small ? 32 : 36} />
       <span className="min-w-0 leading-tight">
         <span className="block truncate font-bold text-text">{tr("النهرين", "Al-Nahrain")}</span>
