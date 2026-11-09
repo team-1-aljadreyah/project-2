@@ -78,7 +78,7 @@ function buildScene() {
 
   const truck = (x: number, y: number): Shape[] => [
     ...solid(x, y, 0.05, 1.5, 0.7, 0.75),
-    ...solid(x + 1.5, y + 0.02, 0.05, 0.55, 0.66, 0.6, { top: "#f8b170", left: ACTION, right: "#d9752a" }),
+    ...solid(x + 1.5, y + 0.02, 0.05, 0.55, 0.66, 0.6, { top: "#f5b48a", left: ACTION, right: "#b8521c" }),
   ];
 
   // Ground and roads
@@ -157,7 +157,7 @@ function buildScene() {
   objs.sort((a, b) => a.depth - b.depth);
 
   // The moving van is drawn around (0, 0) and then moved along the roads.
-  const van = solid(-0.45, -0.35, 0.05, 0.9, 0.7, 0.65, { top: "#f8b170", left: ACTION, right: "#d9752a" });
+  const van = solid(-0.45, -0.35, 0.05, 0.9, 0.7, 0.65, { top: "#f5b48a", left: ACTION, right: "#b8521c" });
   const route: P3[] = [
     [16.2, 2.2, 0],
     [16.2, 9.6, 0],
@@ -250,7 +250,7 @@ export function SiteScene({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.2 + (o.wh === 2 ? 0.25 : 0) + i * 0.01, ease: [0.22, 1, 0.36, 1] }}
               className="cursor-pointer outline-none"
-              style={{ filter: hover === o.wh ? "drop-shadow(0 0 14px rgb(63 191 140 / 0.7))" : undefined, transition: "filter .25s" }}
+              style={{ filter: hover === o.wh ? "drop-shadow(0 0 14px rgb(225 105 43 / 0.7))" : undefined, transition: "filter .25s" }}
               onMouseEnter={() => setHover(o.wh ?? null)}
               onMouseLeave={() => setHover(null)}
               onClick={() => enter(w.wh.id)}

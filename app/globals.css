@@ -3,65 +3,66 @@
 /* Dark mode follows the "dark" class on <html> (set by the theme toggle), not only the system setting. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Al-Nahrain colors: deep green (fresh food, trust) + warm orange (the main action), on a warm cream page.
-   Every color on the site comes from these tokens. */
+/* Al-Nahrain colors: a warehouse look, after the "Warehouse management" design Yasser chose.
+   Graphite (steel, machines) + safety orange (the orange of warehouse signs and forklifts) on light steel gray,
+   and the design's red for danger. Every color on the site comes from these tokens. */
 :root {
-  --bg: #f6f4ee;            /* page background, warm cream */
+  --bg: #eef0f3;            /* page background, light steel gray */
   --card: #ffffff;          /* cards, panels */
-  --card-2: #f4f2ea;        /* inner boxes, table header */
-  --text: #17201b;          /* main text */
-  --muted: #56625b;         /* secondary text */
-  --faint: #8a938d;         /* hints, placeholders */
-  --line: #e5e2d8;          /* borders */
-  --line-strong: #cfcdc1;
+  --card-2: #f4f5f7;        /* inner boxes, table header */
+  --text: #111317;          /* main text, almost black */
+  --muted: #5b616b;         /* secondary text */
+  --faint: #8d939c;         /* hints, placeholders */
+  --line: #e1e4e9;          /* borders */
+  --line-strong: #cbd0d7;
 
-  --primary: #0e6b4c;       /* deep green */
-  --primary-hover: #0a573d;
-  --primary-soft: #e2f1ea;
-  --primary-ink: #0a573d;   /* green text on soft green */
+  --primary: #1d2127;       /* graphite */
+  --primary-hover: #2e333b;
+  --primary-soft: #e8eaee;
+  --primary-ink: #1d2127;   /* graphite text on soft gray */
   --on-primary: #ffffff;
 
-  --action: #f28c38;        /* warm orange: the ONE main button per screen */
-  --action-hover: #e67a22;
-  --on-action: #2b1404;
+  --action: #e1692b;        /* safety orange: the ONE main button per screen */
+  --action-hover: #cc5a1f;
+  --on-action: #1a0b03;     /* almost black on orange: easy to read, like warehouse signs */
 
-  --success: #2f6b10;
-  --success-soft: #eaf3de;
-  --warning: #8a4b06;
-  --warning-soft: #fbedd9;
-  --danger: #b42318;
-  --danger-soft: #fdeceb;
+  --success: #2e7d32;
+  --success-soft: #e7f3e8;
+  --warning: #9a5200;
+  --warning-soft: #fdf0dc;
+  --danger: #b71d08;        /* the design's red */
+  --danger-soft: #fdecea;
 
   --radius: 14px;
-  --shadow: 0 1px 2px rgb(23 32 27 / 0.05), 0 2px 8px rgb(23 32 27 / 0.04);
+  --shadow: 0 1px 2px rgb(17 19 23 / 0.05), 0 2px 8px rgb(17 19 23 / 0.04);
 }
 
 .dark {
-  --bg: #0e1411;
-  --card: #151d19;
-  --card-2: #1b2520;
-  --text: #e7ece9;
-  --muted: #a7b2ab;
-  --faint: #7b867f;
-  --line: #24302a;
-  --line-strong: #324039;
+  --bg: #0e1013;
+  --card: #16191e;
+  --card-2: #1c2026;
+  --text: #e9ebee;
+  --muted: #a3a9b2;
+  --faint: #7a808a;
+  --line: #262a31;
+  --line-strong: #343a43;
 
-  --primary: #3fbf8c;
-  --primary-hover: #5ccf9f;
-  --primary-soft: #133628;
-  --primary-ink: #93e0bf;
-  --on-primary: #032216;
+  --primary: #e6e8eb;       /* in the dark, the strong color is light steel */
+  --primary-hover: #ffffff;
+  --primary-soft: #252a31;
+  --primary-ink: #e6e8eb;
+  --on-primary: #111317;
 
-  --action: #f59e52;
-  --action-hover: #f8b170;
-  --on-action: #2b1404;
+  --action: #f07a3a;
+  --action-hover: #f48e55;
+  --on-action: #1a0b03;
 
-  --success: #97c459;
-  --success-soft: #1d2d13;
-  --warning: #f2b75a;
-  --warning-soft: #3a2a10;
-  --danger: #f39a92;
-  --danger-soft: #3d1a18;
+  --success: #7cc47f;
+  --success-soft: #17271a;
+  --warning: #f0b35a;
+  --warning-soft: #33260f;
+  --danger: #f2938a;
+  --danger-soft: #3a1714;
 
   --shadow: none;
   color-scheme: dark;
@@ -152,13 +153,18 @@ html[data-vt="fade"]::view-transition-new(root) {
   animation-duration: 0.35s;
 }
 
-/* The green brand panel (login and landing page). Always dark green, in both modes. */
+/* The dark brand panel (login and landing page): graphite with an orange glow, in both modes. */
 .brand-panel {
   background:
-    radial-gradient(circle at 25% 20%, rgb(63 191 140 / 0.35), transparent 50%),
-    radial-gradient(circle at 85% 85%, rgb(242 140 56 / 0.28), transparent 45%),
-    linear-gradient(160deg, #0b4a35, #062a1f 55%, #041d16);
-  color: #f3f7f4;
+    radial-gradient(circle at 25% 20%, rgb(225 105 43 / 0.3), transparent 50%),
+    radial-gradient(circle at 85% 85%, rgb(255 255 255 / 0.07), transparent 45%),
+    linear-gradient(160deg, #2a2f37, #16191e 55%, #0e1013);
+  color: #f3f4f6;
+}
+
+/* Black and orange stripes, like the safety tape on a warehouse floor. */
+.hazard {
+  background-image: repeating-linear-gradient(-45deg, #e1692b 0 12px, #1d2127 12px 24px);
 }
 .brand-grid {
   background-image:
@@ -188,7 +194,7 @@ html[data-vt="fade"]::view-transition-new(root) {
   50% { transform: rotate(-22deg) translateX(6%); opacity: 0.9; }
 }
 .hero-beam {
-  background: linear-gradient(90deg, transparent, rgb(63 191 140 / 0.35) 45%, rgb(242 140 56 / 0.25) 55%, transparent);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.16) 45%, rgb(225 105 43 / 0.32) 55%, transparent);
   filter: blur(40px);
   animation: beam 9s ease-in-out infinite;
 }
@@ -218,8 +224,8 @@ html[data-vt="fade"]::view-transition-new(root) {
 
 /* The chip breathes. */
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 40px rgb(63 191 140 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.15) inset; }
-  50% { box-shadow: 0 0 80px rgb(63 191 140 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.25) inset; }
+  0%, 100% { box-shadow: 0 0 40px rgb(225 105 43 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.15) inset; }
+  50% { box-shadow: 0 0 80px rgb(225 105 43 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.25) inset; }
 }
 .chip-glow { animation: glow 3.2s ease-in-out infinite; }
 
@@ -232,34 +238,34 @@ html[data-vt="fade"]::view-transition-new(root) {
 /* Colors of the 3D drawing: the three sides of every box, glass, ground, roads and trees. */
 :root {
   --iso-top: #ffffff;
-  --iso-left: #e8ece9;
-  --iso-right: #d3dad5;
-  --iso-glass: #a7dcc5;
-  --iso-glass-2: #6cc49f;
-  --iso-ground: #eef1ed;
-  --iso-ground-side: #dde3de;
-  --iso-road: #dde2de;
+  --iso-left: #e7e9ed;
+  --iso-right: #d2d6dd;
+  --iso-glass: #b9cde3;
+  --iso-glass-2: #8fb0d3;
+  --iso-ground: #f1f2f5;
+  --iso-ground-side: #dcdfe5;
+  --iso-road: #dde0e6;
   --iso-road-line: #ffffff;
-  --iso-tree: #5dbb8f;
-  --iso-tree-2: #3e9b70;
-  --iso-trunk: #a08a6a;
-  --map-canvas: #eef0ec;
-  --map-dot: rgb(23 32 27 / 0.08);
+  --iso-tree: #9cc3a6;
+  --iso-tree-2: #7aa686;
+  --iso-trunk: #9a8b7a;
+  --map-canvas: #eceef1;
+  --map-dot: rgb(17 19 23 / 0.07);
 }
 .dark {
-  --iso-top: #2b3631;
-  --iso-left: #212b26;
-  --iso-right: #19221e;
-  --iso-glass: #2c7356;
-  --iso-glass-2: #3fbf8c;
-  --iso-ground: #141c18;
-  --iso-ground-side: #0f1512;
-  --iso-road: #1d2722;
-  --iso-road-line: #2e3a34;
-  --iso-tree: #2f8d63;
-  --iso-tree-2: #22704d;
-  --iso-trunk: #6b5a44;
-  --map-canvas: #101613;
+  --iso-top: #2b3038;
+  --iso-left: #20242b;
+  --iso-right: #181b21;
+  --iso-glass: #34506f;
+  --iso-glass-2: #5a82ad;
+  --iso-ground: #14171b;
+  --iso-ground-side: #0d0f12;
+  --iso-road: #1c2026;
+  --iso-road-line: #2d333b;
+  --iso-tree: #4d7a5a;
+  --iso-tree-2: #3a6047;
+  --iso-trunk: #5e5246;
+  --map-canvas: #0f1114;
   --map-dot: rgb(255 255 255 / 0.05);
 }
 
@@ -277,7 +283,7 @@ html[data-vt="fade"]::view-transition-new(root) {
 }
 .iso-hover:hover,
 .iso-hover:focus-visible {
-  filter: drop-shadow(0 0 14px rgb(63 191 140 / 0.65));
+  filter: drop-shadow(0 0 14px rgb(225 105 43 / 0.6));
   outline: none;
 }
 

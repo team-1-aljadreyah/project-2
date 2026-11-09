@@ -109,6 +109,8 @@ export interface Customer {
   debt_limit?: number;
   balance?: number;
   active: boolean;
+  /** Signed up on the website and waiting for the manager to approve it. */
+  pending?: boolean;
   last_order_at?: string;
 }
 
@@ -334,7 +336,7 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed";
+export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved";
 
 export interface AppNotification {
   id: number;
@@ -478,6 +480,16 @@ export interface CustomerInput {
   rep_id: number;
   debt_limit: number;
   active: boolean;
+}
+
+/** A shop owner signing up on the website. */
+export interface RegisterInput {
+  shop_name: string;
+  owner_name: string;
+  phone: string;
+  area: string;
+  address?: string;
+  password: string;
 }
 
 export interface UserInput {

@@ -23,6 +23,7 @@ import type {
   Order,
   Payment,
   PriceTier,
+  RegisterInput,
   Receipt,
   Return,
   SalesRow,
@@ -63,6 +64,7 @@ const save = <T>(base: string, id: number | null, body: unknown) => (id ? patch<
 // The real backend. One function for each endpoint. The fake one (mock.ts) must have the same functions.
 export const httpApi = {
   login: (phone: string, password: string) => post<Session>("/auth/login", { phone, password }),
+  register: (input: RegisterInput) => post<Session>("/auth/register", input),
   logout: () => post<void>("/auth/logout"),
   me: () => get<User>("/me"),
   lookups: () => get<Lookups>("/lookups"),
@@ -96,6 +98,7 @@ export const httpApi = {
   listCustomers: () => get<Customer[]>("/customers"),
   getCustomer: (id: number) => get<Customer>(`/customers/${id}`),
   saveCustomer: (id: number | null, input: CustomerInput) => save<Customer>("/customers", id, input),
+  rejectCustomer: (id: number, reason: string) => post<Customer>(`/customers/${id}/reject`, { reason }),
   statement: (customerId: number, from?: string, to?: string) => get<Statement>(`/customers/${customerId}/statement`, { from, to }),
 
   listOrders: () => get<Order[]>("/orders"),

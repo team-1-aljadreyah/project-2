@@ -14,6 +14,7 @@ import {
   createTransfer,
   customerBalance,
   dayOf,
+  registerShop,
   sellableQty,
   sweep,
 } from "./rules";
@@ -351,6 +352,15 @@ export function makeSeed(now = new Date()): Db {
   }
   const shopUser = users.find((u) => u.id === 8) as DbUser;
   safe(() => createOrder(db, shopUser, { client_ref: cref(), customer_id: 1, warehouse_id: 1, lines: [{ item_id: 2, unit: "carton", qty: 4 }, { item_id: 15, unit: "carton", qty: 1 }, { item_id: 7, unit: "carton", qty: 2 }] }, t(0, 10)));
+
+  // 8) A shop signed up on the website an hour ago and waits for the manager to approve it.
+  safe(() =>
+    registerShop(
+      db,
+      { shop_name: "ماركت النخيل", owner_name: "علي جواد", phone: "07812345615", area: "حي الغدير", address: "قرب جامع الغدير", password: DEMO_PASSWORD },
+      t(1, 5),
+    ),
+  );
 
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);

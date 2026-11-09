@@ -5,7 +5,7 @@ import { clearToken, getToken } from "../auth";
 import { ApiError, NETWORK_ERROR, type ErrorCode } from "./errors";
 
 // Calls to these paths never get the login token.
-const PUBLIC_PATHS = ["/auth/login", "/auth/refresh"];
+const PUBLIC_PATHS = ["/auth/login", "/auth/register", "/auth/refresh"];
 
 interface Envelope {
   success: boolean;

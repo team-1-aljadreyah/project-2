@@ -6,7 +6,7 @@ import { CustomerForm } from "@/components/customer-form";
 import { useApp } from "@/components/shell";
 import { OrderStatusBadge } from "@/components/status";
 import { StatementView } from "@/components/statement-view";
-import { Badge, Button, Card, CardHeader, ErrorBox, KV, LimitBar, LoadingRows, Money, Notice, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -20,6 +20,10 @@ export default function CustomerView() {
   const c = useLoad(() => api.getCustomer(id), [id]);
   const orders = useLoad(() => api.listOrders(), [id]);
   const [edit, setEdit] = useState(false);
+  const [reject, setReject] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   if (c.state.status === "loading") return <LoadingRows />;
   if (c.state.status === "error" || !c.data) return <ErrorBox error={c.state.status === "error" ? c.state.error : null} onRetry={c.reload} />;
@@ -36,7 +40,7 @@ export default function CustomerView() {
         back="/customers"
         title={
           <span className="flex flex-wrap items-center gap-2">
-            {x.name} {!x.active && <Badge>{tr("موقوف", "Inactive")}</Badge>}
+            {x.name} {x.pending ? <Badge tone="warning">{tr("ينتظر الموافقة", "Waiting approval")}</Badge> : !x.active && <Badge>{tr("موقوف", "Inactive")}</Badge>}
           </span>
         }
         subtitle={`${x.owner_name} · ${x.area}`}
@@ -63,6 +67,30 @@ export default function CustomerView() {
           </>
         }
       />
+      {x.pending && (
+        <div className="mb-4">
+          <Notice
+            tone="warning"
+            title={tr("سجّل من الموقع وينتظر الموافقة", "Signed up online, waiting for approval")}
+            action={
+              user.role === "manager" && (
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button size="sm" variant="danger" onClick={() => setReject(true)}>
+                    {tr("رفض", "Refuse")}
+                  </Button>
+                  <Button size="sm" variant="action" onClick={() => setEdit(true)}>
+                    {tr("مراجعة وموافقة", "Review and approve")}
+                  </Button>
+                </div>
+              )
+            }
+          >
+            {user.role === "manager"
+              ? tr("حدد نوع السعر والمندوب وسقف الدين، ثم وافق حتى يقدر يطلب.", "Set the price tier, rep and debt limit, then approve so the shop can order.")
+              : tr("المدير يراجع هذا المحل. ما يقدر يطلب قبل الموافقة.", "The manager is reviewing this shop. It can't order before approval.")}
+          </Notice>
+        </div>
+      )}
       <div className="mb-4 grid gap-4 lg:grid-cols-3">
         <Card className="p-4 lg:col-span-2">
           <div className="grid gap-4 sm:grid-cols-3">
@@ -129,6 +157,43 @@ export default function CustomerView() {
         </Card>
       </div>
       {edit && <CustomerForm open customer={x} onClose={() => setEdit(false)} onSaved={() => c.reload()} />}
+      <Dialog
+        open={reject}
+        onClose={() => setReject(false)}
+        title={tr("رفض تسجيل المحل", "Refuse the sign-up")}
+        footer={
+          <>
+            <Button onClick={() => setReject(false)}>{tr("رجوع", "Back")}</Button>
+            <Button
+              variant="danger"
+              loading={busy}
+              disabled={!reason.trim()}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await api.rejectCustomer(x.id, reason);
+                  toast("success", tr("انرفض التسجيل وانقفل حساب المحل", "Sign-up refused and the shop's login closed"));
+                  setReject(false);
+                  c.reload();
+                } catch (e) {
+                  toast("danger", errorText(e, tr));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {tr("تأكيد الرفض", "Confirm refusal")}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Notice tone="primary">{tr("المحل ما ينمسح: يبقى موقوف ويبين بالسجل منو رفضه وليش.", "The shop isn't deleted: it stays off, and the log shows who refused it and why.")}</Notice>
+          <Field label={tr("السبب", "Reason")}>
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("مثلاً: معلومات غير صحيحة", "e.g. wrong details")} />
+          </Field>
+        </div>
+      </Dialog>
     </>
   );
 }

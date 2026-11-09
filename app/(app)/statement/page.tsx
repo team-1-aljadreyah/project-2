@@ -2,7 +2,7 @@
 
 import { useApp } from "@/components/shell";
 import { StatementView } from "@/components/statement-view";
-import { Card, LimitBar, Money, PageHeader } from "@/components/ui";
+import { Card, LimitBar, Money, Notice, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -16,6 +16,13 @@ export default function MyStatementPage() {
   return (
     <>
       <PageHeader title={tr("كشف حسابي", "My statement")} subtitle={c.data?.name} />
+      {c.data?.pending && (
+        <div className="mb-4">
+          <Notice tone="warning" title={tr("حسابك قيد المراجعة", "Your account is being checked")}>
+            {tr("كشف حسابك يبدأ بعد موافقة الشركة وأول طلب.", "Your statement starts after the company approves you and your first order.")}
+          </Notice>
+        </div>
+      )}
       {c.data && (
         <Card className="mb-4 p-4">
           <div className="flex flex-wrap items-end justify-between gap-4">

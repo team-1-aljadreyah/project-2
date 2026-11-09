@@ -31,7 +31,7 @@ export function CategoryStrip() {
       <div className="marquee-track flex w-max gap-12 pe-12">
         {row.map(([Icon, label], i) => (
           <span key={i} className="flex items-center gap-2.5 text-lg font-semibold text-muted transition hover:text-text" aria-hidden={i >= items.length}>
-            <Icon className="size-6 text-primary-ink" />
+            <Icon className="size-6 text-action" />
             {label}
           </span>
         ))}
@@ -56,7 +56,7 @@ export function Problems() {
     <section className="mx-auto max-w-6xl px-4 py-20">
       <motion.div
         {...rise()}
-        className="relative grid overflow-hidden rounded-[32px] border border-white/10 bg-[radial-gradient(120%_120%_at_0%_100%,rgb(63_191_140/0.18),transparent_55%),linear-gradient(135deg,#132019,#0c1310)] p-8 sm:p-12 lg:grid-cols-[1fr_1.1fr] lg:items-center"
+        className="relative grid overflow-hidden rounded-[32px] border border-white/10 bg-[radial-gradient(120%_120%_at_0%_100%,rgb(225_105_43/0.18),transparent_55%),linear-gradient(135deg,#16191e,#101215)] p-8 sm:p-12 lg:grid-cols-[1fr_1.1fr] lg:items-center"
       >
         <Stars count={18} seed={21} />
         <div className="relative">
@@ -86,12 +86,12 @@ export function Problems() {
                 animate={reduce ? undefined : { rotate: [-3, 3, -3] }}
                 transition={{ duration: 3.5 + i * 0.6, repeat: Infinity, ease: "easeInOut" }}
               >
-                <span className="size-2 rounded-full bg-primary-ink shadow-[0_0_12px_3px_rgb(63_191_140/0.7)]" />
+                <span className="size-2 rounded-full bg-primary-ink shadow-[0_0_12px_3px_rgb(225_105_43/0.7)]" />
                 <span className="w-px bg-gradient-to-b from-primary-ink/80 to-white/10" style={{ height: l.line }} />
                 <span
                   className={cn(
                     "whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-semibold backdrop-blur sm:text-sm",
-                    l.main ? "border-transparent bg-action text-on-action shadow-[0_0_40px_rgb(242_140_56/0.5)]" : "border-white/10 bg-[#18241e] text-text shadow-lg",
+                    l.main ? "border-transparent bg-action text-on-action shadow-[0_0_40px_rgb(225_105_43/0.5)]" : "border-white/10 bg-[#1b1f25] text-text shadow-lg",
                   )}
                 >
                   {l.t}
@@ -145,7 +145,7 @@ export function Platform() {
           {lines.map((d, i) => (
             <g key={i}>
               <path d={d} fill="none" stroke="rgb(255 255 255 / 0.1)" strokeWidth="2" />
-              <path d={d} fill="none" stroke="#3fbf8c" strokeWidth="2.5" strokeLinecap="round" className="pulse-line" style={{ animationDelay: `${i * 0.55}s` }} />
+              <path d={d} fill="none" stroke="#e1692b" strokeWidth="2.5" strokeLinecap="round" className="pulse-line" style={{ animationDelay: `${i * 0.55}s` }} />
             </g>
           ))}
           {/* little "pins" around the chip */}
@@ -154,7 +154,7 @@ export function Platform() {
             const a = (i / 10) * Math.PI * 2;
             // Rounded, so the server and the browser get exactly the same numbers.
             const r = (v: number) => Math.round(v * 10) / 10;
-            return <line key={i} x1={r(cx + Math.cos(a) * 95)} y1={r(180 + Math.sin(a) * 95)} x2={r(cx + Math.cos(a) * 125)} y2={r(180 + Math.sin(a) * 125)} stroke="rgb(63 191 140 / 0.35)" strokeWidth="1.5" strokeLinecap="round" />;
+            return <line key={i} x1={r(cx + Math.cos(a) * 95)} y1={r(180 + Math.sin(a) * 95)} x2={r(cx + Math.cos(a) * 125)} y2={r(180 + Math.sin(a) * 125)} stroke="rgb(225 105 43 / 0.35)" strokeWidth="1.5" strokeLinecap="round" />;
           })}
         </svg>
         {cards.map((c, i) => (
@@ -178,7 +178,7 @@ export function Platform() {
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, delay: 0.3, type: "spring" }}
-          className="chip-glow absolute flex size-[150px] -translate-y-1/2 items-center justify-center rounded-[34px] bg-gradient-to-br from-[#16805a] to-[#0a4a34]"
+          className="chip-glow absolute flex size-[150px] -translate-y-1/2 items-center justify-center rounded-[34px] bg-gradient-to-br from-[#2a2f37] to-[#121418]"
           style={{ top: "50%", insetInlineStart: `${((640 - 0) / W) * 100}%` }}
         >
           <LogoMark size={92} />
@@ -199,7 +199,7 @@ export function Platform() {
           </motion.div>
         ))}
         <div className="flex justify-center pt-4">
-          <div className="chip-glow flex size-28 items-center justify-center rounded-[28px] bg-gradient-to-br from-[#16805a] to-[#0a4a34]">
+          <div className="chip-glow flex size-28 items-center justify-center rounded-[28px] bg-gradient-to-br from-[#2a2f37] to-[#121418]">
             <LogoMark size={68} />
           </div>
         </div>

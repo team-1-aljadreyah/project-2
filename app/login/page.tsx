@@ -4,27 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Boxes,
-  Calculator,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  LayoutDashboard,
-  Loader2,
-  Lock,
-  Phone,
-  ShieldCheck,
-  Store,
-  Truck,
-  WifiOff,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Calculator, Eye, EyeOff, LayoutDashboard, Loader2, Lock, Phone, ShieldCheck, Store, Truck, UserPlus, type LucideIcon } from "lucide-react";
+import { AuthTopBar, BrandPanel, IconField, PhoneBand, iconInput, rise, stagger } from "@/components/auth";
 import { LogoMark } from "@/components/logo";
 import { roleName } from "@/components/status";
-import { LanguageSwitch, ThemeToggle } from "@/components/switches";
 import { errorText } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Role } from "@/lib/api/types";
@@ -43,10 +26,6 @@ const DEMO: { phone: string; role: Role; name: string; icon: LucideIcon }[] = [
 ];
 const DEMO_PASSWORD = "123456";
 
-// Children appear one after another (a small "stagger").
-const list = { hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } } };
-const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 260, damping: 24 } } };
-
 export default function LoginPage() {
   const { tr, lang } = useFmt();
   const router = useRouter();
@@ -56,7 +35,6 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const Back = lang === "ar" ? ArrowRight : ArrowLeft;
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
 
   // Already logged in: go straight to your own home page.
@@ -81,23 +59,11 @@ export default function LoginPage() {
 
   return (
     <div className="grid min-h-dvh bg-bg lg:grid-cols-[1.05fr_1fr]">
-      <BrandPanel />
+      <BrandPanel variant="login" />
 
       <main className="relative flex min-h-dvh flex-col">
-        {/* Phone: a green band on top with the logo, the form card sits over its edge. */}
-        <div className="brand-panel absolute inset-x-0 top-0 h-64 lg:hidden" aria-hidden>
-          <div className="brand-grid absolute inset-0" />
-        </div>
-
-        <div className="relative flex items-center justify-between gap-2 p-4 sm:p-6">
-          <Link href="/" className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm font-medium text-white hover:bg-white/10 lg:text-muted lg:hover:bg-card-2 lg:hover:text-text">
-            <Back className="size-4" aria-hidden /> {tr("الصفحة الرئيسية", "Home")}
-          </Link>
-          <div className="flex gap-2">
-            <LanguageSwitch className="max-lg:border-white/20 max-lg:bg-white/10 max-lg:text-white" />
-            <ThemeToggle className="max-lg:border-white/20 max-lg:bg-white/10 max-lg:text-white" />
-          </div>
-        </div>
+        <PhoneBand />
+        <AuthTopBar />
 
         <div className="relative flex flex-1 items-start justify-center px-4 pb-10 lg:items-center">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: "easeOut" }} className="w-full max-w-md">
@@ -109,7 +75,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-line bg-card p-6 shadow-[0_20px_60px_-20px_rgb(14_107_76/0.35)] sm:p-8">
+            <div className="rounded-3xl border border-line bg-card p-6 shadow-[0_20px_60px_-20px_rgb(17_19_23/0.22)] sm:p-8">
               <h1 className="text-2xl font-bold">{tr("أهلاً بك من جديد", "Welcome back")}</h1>
               <p className="mt-1 text-sm text-muted">{tr("ادخل برقم هاتفك وكلمة المرور", "Log in with your phone number and password")}</p>
 
@@ -125,38 +91,21 @@ export default function LoginPage() {
                   login(phone, password, "form");
                 }}
               >
-                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone">
-                  <input
-                    id="phone"
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="username"
-                    dir="ltr"
-                    placeholder="07XX XXX XXXX"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="h-12 w-full bg-transparent pe-3 ps-11 text-base outline-none placeholder:text-faint"
-                  />
+                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone" ltr>
+                  <input id="phone" type="tel" inputMode="tel" autoComplete="username" dir="ltr" placeholder="07XX XXX XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} className={iconInput} />
                 </IconField>
                 <IconField
                   icon={Lock}
                   label={tr("كلمة المرور", "Password")}
                   htmlFor="password"
+                  ltr
                   end={
-                    <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? tr("إخفاء", "Hide") : tr("إظهار", "Show")} className="flex h-12 w-11 items-center justify-center text-faint hover:text-text">
+                    <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? tr("إخفاء", "Hide") : tr("إظهار", "Show")} className="flex h-12 w-11 shrink-0 items-center justify-center text-faint hover:text-text">
                       {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   }
                 >
-                  <input
-                    id="password"
-                    type={show ? "text" : "password"}
-                    autoComplete="current-password"
-                    dir="ltr"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 w-full bg-transparent ps-11 text-base outline-none"
-                  />
+                  <input id="password" type={show ? "text" : "password"} autoComplete="current-password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} className={cn(iconInput, "pe-0")} />
                 </IconField>
 
                 {error && (
@@ -177,6 +126,19 @@ export default function LoginPage() {
                 </motion.button>
               </form>
 
+              {/* New shops make their own account */}
+              <div className="mt-6 flex items-center gap-3 text-xs text-faint">
+                <span className="h-px flex-1 bg-line" />
+                {tr("صاحب محل وما عندك حساب؟", "A shop owner without an account?")}
+                <span className="h-px flex-1 bg-line" />
+              </div>
+              <Link
+                href="/register"
+                className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-primary text-base font-bold text-primary-ink transition hover:bg-primary hover:text-on-primary"
+              >
+                <UserPlus className="size-5" /> {tr("سجّل محلك", "Register your shop")}
+              </Link>
+
               <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-faint">
                 <ShieldCheck className="size-3.5" /> {tr("كل موظف يشوف بس اللي يخص شغله", "Each person sees only what their job needs")}
               </p>
@@ -193,11 +155,11 @@ export default function LoginPage() {
                     {tr("كلمة المرور", "Password")} <b className="num" dir="ltr">{DEMO_PASSWORD}</b>
                   </span>
                 </div>
-                <motion.div variants={list} initial="hidden" animate="show" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {DEMO.map((d) => (
                     <motion.button
                       key={d.phone}
-                      variants={item}
+                      variants={rise}
                       whileHover={{ y: -2 }}
                       whileTap={{ scale: 0.97 }}
                       type="button"
@@ -208,11 +170,11 @@ export default function LoginPage() {
                         login(d.phone, DEMO_PASSWORD, d.phone);
                       }}
                       className={cn(
-                        "group flex flex-col items-start gap-2 rounded-2xl border border-line bg-card p-3 text-start transition hover:border-primary hover:shadow-card disabled:opacity-60",
-                        busy === d.phone && "border-primary",
+                        "group flex flex-col items-start gap-2 rounded-2xl border border-line bg-card p-3 text-start transition hover:border-action hover:shadow-card disabled:opacity-60",
+                        busy === d.phone && "border-action",
                       )}
                     >
-                      <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary-ink transition group-hover:bg-primary group-hover:text-on-primary">
+                      <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary-ink transition group-hover:bg-action group-hover:text-on-action">
                         {busy === d.phone ? <Loader2 className="size-4 animate-spin" /> : <d.icon className="size-4" />}
                       </span>
                       <span className="min-w-0">
@@ -228,78 +190,5 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
-  );
-}
-
-/** An input with an icon at the start, inside one rounded box. */
-function IconField({ icon: Icon, label, htmlFor, end, children }: { icon: LucideIcon; label: string; htmlFor: string; end?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium">
-        {label}
-      </label>
-      {/* Phone numbers and passwords are typed left to right, so the box is LTR in both languages. */}
-      <div dir="ltr" className="relative flex items-center rounded-xl border border-line-strong bg-card transition focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/15">
-        <Icon className="pointer-events-none absolute left-3.5 size-[18px] text-faint" aria-hidden />
-        {children}
-        {end}
-      </div>
-    </div>
-  );
-}
-
-function BrandPanel() {
-  const { tr } = useFmt();
-  const points = [
-    tr("الدفعة الأقدم صلاحية تطلع أولاً، والمنتهية ما تنباع", "Oldest expiry leaves first, expired is never sold"),
-    tr("المندوب يطلب من جواله حتى بدون إنترنت", "Reps order from their phone, even offline"),
-    tr("سقف دين لكل زبون وكشف حساب واضح", "A debt limit and a clear statement for every shop"),
-  ];
-  return (
-    <section className="brand-panel relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between">
-      <div className="brand-grid absolute inset-0" aria-hidden />
-      <div className="relative flex items-center gap-3">
-        <LogoMark size={48} />
-        <div>
-          <p className="text-lg font-bold">{tr("شركة النهرين", "Al-Nahrain Co.")}</p>
-          <p className="text-sm opacity-75">{tr("للمواد الغذائية بالجملة · كربلاء", "Wholesale foods · Karbala")}</p>
-        </div>
-      </div>
-
-      <div className="relative max-w-lg">
-        <motion.h2 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-4xl font-bold leading-snug xl:text-5xl">
-          {tr("المخزون والديون والمندوبين", "Stock, debts and reps")}
-          <span className="block text-[#f8b170]">{tr("بمكان واحد", "in one place")}</span>
-        </motion.h2>
-        <motion.ul variants={list} initial="hidden" animate="show" className="mt-8 space-y-3">
-          {points.map((p) => (
-            <motion.li key={p} variants={item} className="flex items-start gap-3 text-base">
-              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-[#7ee2b8]" aria-hidden />
-              <span className="opacity-90">{p}</span>
-            </motion.li>
-          ))}
-        </motion.ul>
-
-        {/* A small "live" card, to show what the system feels like. */}
-        <div className="float mt-10 max-w-sm rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-md">
-          <div className="flex items-center justify-between text-sm">
-            <span className="opacity-80">{tr("طلب جديد من المندوب", "New order from a rep")}</span>
-            <span className="flex items-center gap-1 rounded-full bg-[#f28c38]/20 px-2 py-0.5 text-xs text-[#f8b170]">
-              <WifiOff className="size-3" /> {tr("انحفظ بدون نت", "Saved offline")}
-            </span>
-          </div>
-          <p className="mt-2 text-lg font-bold">{tr("أسواق الكوثر", "Al-Kawthar Market")}</p>
-          <div className="mt-2 flex items-center justify-between text-sm opacity-85">
-            <span>{tr("3 مواد · 6 كارتون", "3 items · 6 cartons")}</span>
-            <span className="num font-semibold">425,000 {tr("د.ع", "IQD")}</span>
-          </div>
-        </div>
-      </div>
-
-      <p className="relative flex items-center gap-2 text-sm opacity-70">
-        <ShieldCheck className="size-4" aria-hidden />
-        {tr("التسديدات ما تنحذف، وكل تعديل ينسجل باسم صاحبه", "Payments are never deleted, and every change is logged by name")}
-      </p>
-    </section>
   );
 }

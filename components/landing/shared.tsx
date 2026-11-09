@@ -72,7 +72,7 @@ export function Stars({ count = 40, seed = 7, className }: { count?: number; see
 export function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-line bg-card/60 px-3 py-1 text-xs font-medium text-primary-ink backdrop-blur">
-      <span className="size-1.5 rounded-full bg-primary" />
+      <span className="size-1.5 rounded-full bg-action" />
       {children}
     </span>
   );
