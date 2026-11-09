@@ -37,11 +37,11 @@ function ExpiryCard() {
   const { tr } = useFmt();
   const batches = [
     { d: "2026-11-22", n: tr("دفعة #19 · 12 يوم", "Batch #19 · 12 days"), tone: "bg-[#f2b75a]" },
-    { d: "2027-01-08", n: tr("دفعة #44 · شهرين", "Batch #44 · 2 months"), tone: "bg-[#7ee2b8]" },
-    { d: "2027-05-30", n: tr("دفعة #71 · 6 أشهر", "Batch #71 · 6 months"), tone: "bg-[#7ee2b8]" },
+    { d: "2027-01-08", n: tr("دفعة #44 · شهرين", "Batch #44 · 2 months"), tone: "bg-white/70" },
+    { d: "2027-05-30", n: tr("دفعة #71 · 6 أشهر", "Batch #71 · 6 months"), tone: "bg-white/70" },
   ];
   return (
-    <motion.div {...rise()} className={cn(box, "bg-gradient-to-br from-[#16805a] to-[#0a4a34] text-white")}>
+    <motion.div {...rise()} className={cn(box, "bg-gradient-to-br from-[#2a2f37] to-[#121418] text-white")}>
       <Stars count={22} seed={3} />
       <h3 className="relative text-2xl font-bold leading-snug sm:text-3xl">{tr("الأقدم صلاحية يطلع أول، تلقائياً", "Oldest expiry leaves first, by itself")}</h3>
       <p className="relative mt-3 text-sm opacity-80">{tr("أمين المخزن ما يختار. النظام يصرف الأقرب انتهاءً، والمنتهي ما ينباع أبداً.", "The keeper doesn't choose. The system sends the nearest expiry, and expired stock never sells.")}</p>
@@ -57,7 +57,7 @@ function ExpiryCard() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2 + i * 0.12 }}
-            className={cn("flex items-center justify-between rounded-xl px-3 py-2 text-sm", i === 0 ? "bg-white text-[#0a573d] font-bold" : "bg-white/10")}
+            className={cn("flex items-center justify-between rounded-xl px-3 py-2 text-sm", i === 0 ? "bg-action text-on-action font-bold" : "bg-white/10")}
           >
             <span className="flex items-center gap-2">
               <span className={cn("size-2 rounded-full", b.tone)} />
@@ -86,13 +86,13 @@ function StatementCard() {
           <h3 className="text-2xl font-bold sm:text-3xl">{tr("سقف دين وكشف حساب واضح", "A debt limit and a clear statement")}</h3>
           <p className="mt-3 text-sm text-muted">{tr("التسديد يروح على أقدم فاتورة، وإذا وصل المحل سقفه الطلب يتوقف لحد ما يوافق المدير. التسديد ما ينحذف أبداً.", "Payments go to the oldest invoice. At the limit, new orders wait for the manager. Payments are never deleted.")}</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-[#0c1310] p-4">
+        <div className="rounded-2xl border border-white/10 bg-[#101215] p-4">
           <div className="flex items-center justify-between text-sm">
             <span className="font-semibold">{tr("أسواق الكوثر", "Al-Kawthar Market")}</span>
             <span className="num text-muted">3,200,000 / 5,000,000</span>
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-            <motion.div initial={{ width: 0 }} whileInView={{ width: "64%" }} viewport={{ once: true }} transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }} className="h-full rounded-full bg-gradient-to-l from-[#f28c38] to-[#3fbf8c]" />
+            <motion.div initial={{ width: 0 }} whileInView={{ width: "64%" }} viewport={{ once: true }} transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }} className="h-full rounded-full bg-gradient-to-l from-[#e1692b] to-[#f5b48a]" />
           </div>
           <ul className="mt-4 space-y-2 text-sm">
             {rows.map((r, i) => (
@@ -143,7 +143,7 @@ function OfflineCard() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 40, scale: 0.95 }}
                   transition={{ type: "spring", stiffness: 200, damping: 24 }}
-                  className="absolute inset-x-0 rounded-2xl border border-white/10 bg-[#0c1310] p-3"
+                  className="absolute inset-x-0 rounded-2xl border border-white/10 bg-[#101215] p-3"
                   style={{ top: i * 72 }}
                 >
                   <div className="flex items-center justify-between text-sm">
@@ -200,7 +200,7 @@ function CommissionCard({ enter }: { enter: string }) {
       </div>
       <div className="mt-8">
         <p className="text-xs text-muted">{tr("عمولات الشهر", "This month's commission")}</p>
-        <p className="num text-4xl font-bold text-[#f8b170]">
+        <p className="num text-4xl font-bold text-[#f5b48a]">
           <motion.span>{text}</motion.span> <span className="text-base">{tr("د.ع", "IQD")}</span>
         </p>
         <Link href={enter} className="mt-6 inline-flex h-11 items-center gap-2 rounded-full bg-action px-5 text-sm font-bold text-on-action transition hover:bg-action-hover">
@@ -242,10 +242,10 @@ export function Roles() {
             transition={{ type: "spring", stiffness: 140, damping: 16, delay: i * 0.08 }}
             className={cn(
               "flex w-[200px] flex-col items-center rounded-3xl border p-6 text-center",
-              r.main ? "border-transparent bg-gradient-to-br from-[#16805a] to-[#0a4a34] text-white shadow-[0_20px_60px_-20px_rgb(63_191_140/0.6)]" : "border-white/10 bg-white/[0.04]",
+              r.main ? "border-transparent bg-gradient-to-br from-[#e1692b] to-[#b8521c] text-[#1a0b03] shadow-[0_20px_60px_-20px_rgb(225_105_43/0.6)]" : "border-white/10 bg-white/[0.04]",
             )}
           >
-            <span className={cn("flex size-14 items-center justify-center rounded-2xl", r.main ? "bg-white/15" : "bg-primary-soft text-primary-ink")}>
+            <span className={cn("flex size-14 items-center justify-center rounded-2xl", r.main ? "bg-black/10" : "bg-primary-soft text-primary-ink")}>
               <r.icon className="size-7" />
             </span>
             <p className="mt-4 font-bold">{r.t}</p>

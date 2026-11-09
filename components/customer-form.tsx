@@ -6,7 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import type { Customer, CustomerInput } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useApp } from "./shell";
-import { Button, Dialog, Field, Input, NumberInput, Select, Switch, errorText, useToast } from "./ui";
+import { Button, Dialog, Field, Input, Notice, NumberInput, Select, Switch, errorText, useToast } from "./ui";
 
 export function CustomerForm({ open, onClose, customer, onSaved }: { open: boolean; onClose: () => void; customer?: Customer; onSaved?: (c: Customer) => void }) {
   const { tr, name } = useFmt();
@@ -20,8 +20,10 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
     address: customer?.address ?? "",
     tier_id: customer?.tier_id ?? lookups.tiers[1]?.id ?? lookups.tiers[0].id,
     rep_id: customer?.rep_id ?? lookups.reps[0]?.id ?? 0,
-    debt_limit: customer?.debt_limit ?? 2_000_000,
-    active: customer?.active ?? true,
+    // A shop that signed up online starts with no credit; suggest a first limit for the manager to adjust.
+    debt_limit: customer?.pending && !customer.debt_limit ? 1_000_000 : (customer?.debt_limit ?? 2_000_000),
+    // Approving = saving it as active, so the switch starts on.
+    active: customer?.pending ? true : (customer?.active ?? true),
   }));
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -47,16 +49,23 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
     <Dialog
       open={open}
       onClose={onClose}
-      title={customer ? tr("تعديل الزبون", "Edit customer") : tr("زبون جديد", "New customer")}
+      title={customer?.pending ? tr("مراجعة محل جديد", "Review a new shop") : customer ? tr("تعديل الزبون", "Edit customer") : tr("زبون جديد", "New customer")}
       footer={
         <>
           <Button onClick={onClose}>{tr("إلغاء", "Cancel")}</Button>
           <Button variant="primary" loading={busy} onClick={save}>
-            {tr("حفظ", "Save")}
+            {customer?.pending && f.active ? tr("موافقة وتفعيل", "Approve and activate") : tr("حفظ", "Save")}
           </Button>
         </>
       }
     >
+      {customer?.pending && (
+        <div className="mb-4">
+          <Notice tone="warning" title={tr("هذا المحل سجّل من الموقع وينتظر موافقتك", "This shop signed up online and waits for your approval")}>
+            {tr("تأكد من المعلومات، اختر نوع السعر والمندوب وسقف الدين، ثم اضغط موافقة. صاحب المحل يوصله إشعار ويقدر يطلب مباشرة.", "Check the details, choose the price tier, rep and debt limit, then approve. The owner gets a notification and can order at once.")}
+          </Notice>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={tr("اسم المحل", "Shop name")} error={err.name}>
           <Input value={f.name} onChange={(e) => set({ name: e.target.value })} invalid={!!err.name} />

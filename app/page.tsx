@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
-import { ArrowLeft, ArrowRight, MapPin, Phone, Warehouse } from "lucide-react";
+import { ArrowLeft, ArrowRight, MapPin, Phone, UserPlus, Warehouse } from "lucide-react";
 import { Bento, Roles } from "@/components/landing/features";
 import { Hero } from "@/components/landing/hero";
 import { CategoryStrip, Platform, Problems } from "@/components/landing/sections";
@@ -27,7 +27,7 @@ export default function LandingPage() {
   // so the page/overscroll color is set here and put back when you leave.
   useEffect(() => {
     const prev = document.body.style.background;
-    document.body.style.background = "#0b100d";
+    document.body.style.background = "#0b0c0e";
     return () => {
       document.body.style.background = prev;
     };
@@ -35,7 +35,7 @@ export default function LandingPage() {
 
   return (
     // "dark" here switches all the color tokens to night colors inside this page only.
-    <div className="dark min-h-dvh bg-[#0b100d] text-text">
+    <div className="dark min-h-dvh bg-[#0b0c0e] text-text">
       <Header enter={enter} enterLabel={enterLabel} />
       <main>
         <Hero enter={enter} enterLabel={enterLabel} />
@@ -47,15 +47,30 @@ export default function LandingPage() {
 
         {/* Last call */}
         <section id="contact" className="scroll-mt-24 px-4 pb-16 pt-10">
-          <motion.div {...rise()} className="relative mx-auto max-w-6xl overflow-hidden rounded-[36px] border border-white/10 bg-[radial-gradient(80%_120%_at_50%_0%,rgb(63_191_140/0.25),transparent_60%),linear-gradient(180deg,#132019,#0b100d)] px-6 py-16 text-center sm:px-12">
+          <motion.div {...rise()} className="relative mx-auto max-w-6xl overflow-hidden rounded-[36px] border border-white/10 bg-[radial-gradient(80%_120%_at_50%_0%,rgb(225_105_43/0.25),transparent_60%),linear-gradient(180deg,#16191e,#0b0c0e)] px-6 py-16 text-center sm:px-12">
             <div className="hero-beam pointer-events-none absolute -top-1/2 left-[30%] h-[200%] w-[40%]" aria-hidden />
             <Stars count={30} seed={11} />
             <div className="relative">
               <WordReveal text={tr("جاهز تودّع الدفاتر؟", "Ready to say goodbye to notebooks?")} className="text-3xl font-bold sm:text-5xl" />
               <p className="mx-auto mt-4 max-w-xl text-muted">{tr("صاحب محل؟ ادخل بحسابك، شوف أسعارك الخاصة، اطلب، وتابع كشف حسابك بأي وقت.", "A shop owner? Log in, see your own prices, order, and follow your statement any time.")}</p>
-              <Link href={enter} className="mt-8 inline-flex h-12 items-center gap-2 rounded-full bg-action px-7 font-bold text-on-action shadow-[0_0_40px_rgb(242_140_56/0.45)] transition hover:bg-action-hover">
-                {enterLabel} <Forward className="size-5" />
-              </Link>
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                {/* New shops register by themselves; the company approves them before the first order. */}
+                {!session && (
+                  <Link href="/register" className="inline-flex h-12 items-center gap-2 rounded-full bg-action px-7 font-bold text-on-action shadow-[0_0_40px_rgb(225_105_43/0.45)] transition hover:bg-action-hover">
+                    <UserPlus className="size-5" /> {tr("سجّل محلك", "Register your shop")}
+                  </Link>
+                )}
+                <Link
+                  href={enter}
+                  className={
+                    session
+                      ? "inline-flex h-12 items-center gap-2 rounded-full bg-action px-7 font-bold text-on-action shadow-[0_0_40px_rgb(225_105_43/0.45)] transition hover:bg-action-hover"
+                      : "inline-flex h-12 items-center gap-2 rounded-full border border-white/20 bg-white/5 px-7 font-bold transition hover:bg-white/10"
+                  }
+                >
+                  {enterLabel} <Forward className="size-5" />
+                </Link>
+              </div>
               <div className="mt-10 flex flex-wrap justify-center gap-3 text-sm text-muted">
                 <span className="flex items-center gap-2 rounded-full border border-white/10 px-4 py-2">
                   <MapPin className="size-4 text-primary-ink" /> {tr("كربلاء - الصناعة (المخزن الرئيسي)", "Karbala - Al-Sinaa (main warehouse)")}
@@ -97,7 +112,7 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
       <nav
         className={cn(
           "mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full px-3 py-2 transition-all duration-300 sm:px-4",
-          scrolled ? "border border-white/10 bg-[#0b100d]/70 shadow-lg backdrop-blur-xl" : "border border-transparent",
+          scrolled ? "border border-white/10 bg-[#0b0c0e]/70 shadow-lg backdrop-blur-xl" : "border border-transparent",
         )}
       >
         <Link href="/" className="flex items-center gap-2">
@@ -117,7 +132,7 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
         </div>
         <div className="flex items-center gap-2">
           <LanguageSwitch onBrand />
-          <Link href={enter} className="flex h-10 items-center rounded-full bg-white px-4 text-sm font-bold text-[#0b100d] transition hover:bg-white/90">
+          <Link href={enter} className="flex h-10 items-center rounded-full bg-white px-4 text-sm font-bold text-[#0b0c0e] transition hover:bg-white/90">
             {enterLabel}
           </Link>
         </div>

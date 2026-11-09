@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Banknote, Boxes, ClipboardList, PackageX, ShieldAlert, TrendingUp, Wallet } from "lucide-react";
+import { AlertTriangle, Banknote, Boxes, ClipboardList, PackageX, ShieldAlert, TrendingUp, UserPlus, Wallet } from "lucide-react";
 import { RankBars, SalesBars } from "@/components/charts";
 import { useApp } from "@/components/shell";
 import { OrderStatusBadge } from "@/components/status";
@@ -30,6 +30,16 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader title={`${hello}${tr("، ", ", ")}${user.name.split(" ")[0]}`} subtitle={date(new Date().toISOString())} actions={<Button href="/reports">{tr("كل التقارير", "All reports")}</Button>} />
+
+      {(customers.data ?? []).some((c) => c.pending) && user.role === "manager" && (
+        <Link href="/customers" className="mb-4 flex items-center gap-3 rounded-xl border border-action/30 bg-action/10 p-3 text-text">
+          <UserPlus className="size-5 shrink-0 text-action" />
+          <span className="flex-1 text-sm font-medium">
+            {tr(`${(customers.data ?? []).filter((c) => c.pending).length} محل جديد سجّل من الموقع وينتظر موافقتك`, `${(customers.data ?? []).filter((c) => c.pending).length} new shop(s) signed up online and wait for your approval`)}
+          </span>
+          <span className="text-sm underline">{tr("مراجعة", "Review")}</span>
+        </Link>
+      )}
 
       {x && x.needs_approval > 0 && user.role === "manager" && (
         <Link href="/orders" className="mb-4 flex items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3 text-warning">

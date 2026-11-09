@@ -63,7 +63,7 @@ export interface Db {
   notified_low: number[];
 }
 
-export const DB_VERSION = 6;
+export const DB_VERSION = 7;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

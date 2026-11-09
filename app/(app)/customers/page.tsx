@@ -11,7 +11,7 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { matches } from "@/lib/utils";
 
-type F = "all" | "debt" | "near" | "over";
+type F = "all" | "debt" | "near" | "over" | "pending";
 
 export default function CustomersPage() {
   const { tr, name, ago, money } = useFmt();
@@ -23,7 +23,9 @@ export default function CustomersPage() {
   const [add, setAdd] = useState(false);
   const all = list.data ?? [];
   const pct = (c: Customer) => (c.debt_limit ? (c.balance ?? 0) / c.debt_limit : 0);
-  const pass = (c: Customer, x: F) => (x === "all" ? true : x === "debt" ? (c.balance ?? 0) > 0 : x === "near" ? pct(c) >= 0.8 && pct(c) < 1 : pct(c) >= 1);
+  const pass = (c: Customer, x: F) =>
+    x === "pending" ? !!c.pending : x === "all" ? true : x === "debt" ? (c.balance ?? 0) > 0 : x === "near" ? pct(c) >= 0.8 && pct(c) < 1 : pct(c) >= 1;
+  const waiting = all.filter((c) => c.pending).length;
   const rows = all
     .filter((c) => pass(c, f) && (!rep || c.rep_id === rep) && matches(q, c.name, c.owner_name, c.area, c.phone))
     .sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
@@ -36,7 +38,7 @@ export default function CustomersPage() {
       head: tr("المحل", "Shop"),
       cell: (c) => (
         <span>
-          {c.name} {!c.active && <Badge>{tr("موقوف", "Inactive")}</Badge>}
+          {c.name} {c.pending ? <Badge tone="warning">{tr("ينتظر الموافقة", "Waiting approval")}</Badge> : !c.active && <Badge>{tr("موقوف", "Inactive")}</Badge>}
         </span>
       ),
     },
@@ -88,6 +90,8 @@ export default function CustomersPage() {
               { value: "debt", label: tr("عليهم دين", "Owe money"), count: all.filter((c) => pass(c, "debt")).length },
               { value: "near", label: tr("قريب من السقف", "Near limit"), count: all.filter((c) => pass(c, "near")).length },
               { value: "over", label: tr("واصل السقف", "At limit"), count: all.filter((c) => pass(c, "over")).length },
+              // New shops that signed up online: shown only while there are some.
+              ...(waiting ? [{ value: "pending" as F, label: tr("تنتظر الموافقة", "Waiting approval"), count: waiting }] : []),
             ]}
           />
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -117,7 +121,9 @@ export default function CustomersPage() {
             mobile={(c) => (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">{c.name}</span>
+                  <span className="font-semibold">
+                    {c.name} {c.pending && <Badge tone="warning">{tr("جديد", "New")}</Badge>}
+                  </span>
                   <Money value={c.balance} className="font-semibold" />
                 </div>
                 <p className="text-xs text-muted">

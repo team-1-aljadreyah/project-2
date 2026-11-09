@@ -5,6 +5,7 @@ import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
 import type {
   AppNotification,
+  RegisterInput,
   AuditAction,
   AuditEntity,
   BatchStatus,
@@ -26,7 +27,7 @@ import type {
   Transfer,
   Unit,
 } from "../types";
-import { nextId, type Db, type DbBatch, type DbBatchUse, type DbInvoice, type DbItem, type DbReturn, type DbUser } from "./db";
+import { nextId, type Db, type DbBatch, type DbBatchUse, type DbCustomer, type DbInvoice, type DbItem, type DbReturn, type DbUser } from "./db";
 
 // ---------- small helpers ----------
 
@@ -385,7 +386,10 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   const customer = db.customers.find((c) => c.id === input.customer_id) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
   if (actor.role === "rep" && customer.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذا الزبون ليس من زبائنك", "This customer isn't yours");
   if (actor.role === "shop" && actor.customer_id !== customer.id) fail(403, "FORBIDDEN", "لا تستطيع الطلب لمحل آخر", "You can't order for another shop");
-  if (!customer.active) fail(409, "BAD_STATE", "حساب هذا الزبون موقوف", "This customer is not active");
+  if (!customer.active) {
+    if (customer.pending) fail(409, "BAD_STATE", "الحساب ينتظر موافقة الشركة، تقدر تطلب بعد الموافقة", "This account is waiting for approval. You can order after it is approved");
+    fail(409, "BAD_STATE", "حساب هذا الزبون موقوف", "This customer is not active");
+  }
 
   const warehouseId = input.warehouse_id ?? db.warehouses[0].id;
   const lines = orderLines(db, customer.tier_id, input.lines);
@@ -965,6 +969,126 @@ export function closeMonth(db: Db, actor: DbUser, month: string, now: Date) {
   db.closed_months[month] = rows;
   audit(db, actor, "close", "commission", 0, `إغلاق عمولات شهر ${month}`, `Closed commissions for ${month}`, now);
   return rows;
+}
+
+// ---------- shop owners signing up on the website ----------
+
+/**
+ * A shop owner makes an account by himself. The shop is saved as "waiting for approval": he can log in
+ * and see that his account is being checked, but he can't order until the manager sets his price tier,
+ * rep and debt limit and approves him. A wholesale company sells on credit, so nobody orders before that.
+ */
+export function registerShop(db: Db, input: RegisterInput, now: Date) {
+  const phone = input.phone.replace(/\s/g, "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  const errors: Record<string, string> = {};
+  if (input.shop_name.trim().length < 3) errors.shop_name = msg("اكتب اسم المحل", "Enter the shop name");
+  if (input.owner_name.trim().length < 3) errors.owner_name = msg("اكتب اسمك الكامل", "Enter your full name");
+  if (!/^07\d{9}$/.test(phone)) errors.phone = msg("رقم عراقي من 11 رقم يبدأ بـ 07", "An 11-digit Iraqi number starting with 07");
+  else if (db.users.some((u) => u.phone === phone) || db.customers.some((c) => c.phone === phone)) {
+    errors.phone = msg("هذا الرقم مسجل من قبل، سجّل دخول", "This number already has an account. Log in instead");
+  }
+  if (!input.area.trim()) errors.area = msg("اختر المنطقة", "Choose the area");
+  if (input.password.length < 6) errors.password = msg("6 أحرف على الأقل", "At least 6 characters");
+  if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول المؤشرة", "Check the marked fields", errors);
+
+  // The new shop goes to the rep who already serves that area (or the rep with the fewest shops).
+  const area = input.area.trim();
+  const reps = db.users.filter((u) => u.role === "rep" && u.active);
+  const ranked = reps
+    .map((r) => ({
+      r,
+      same: db.customers.filter((c) => c.rep_id === r.id && c.area === area).length,
+      all: db.customers.filter((c) => c.rep_id === r.id).length,
+    }))
+    .sort((a, b) => b.same - a.same || a.all - b.all);
+  const rep = ranked[0]?.r;
+  // The careful start: small-shop prices and no credit, until the manager decides.
+  const tier = db.tiers.find((t) => t.id === 3) ?? db.tiers[db.tiers.length - 1];
+
+  const customer: DbCustomer = {
+    id: nextId(db, "customer"),
+    name: input.shop_name.trim(),
+    owner_name: input.owner_name.trim(),
+    phone,
+    area,
+    address: input.address?.trim() || `كربلاء - ${area}`,
+    tier_id: tier.id,
+    rep_id: rep?.id ?? 0,
+    debt_limit: 0,
+    active: false,
+    pending: true,
+  };
+  const user: DbUser = { id: nextId(db, "user"), name: customer.owner_name, phone, role: "shop", customer_id: customer.id, active: true, password: input.password };
+  db.customers.push(customer);
+  db.users.push(user);
+  audit(db, user, "create", "customer", customer.id, `تسجيل محل جديد من الموقع: ${customer.name} (${area})`, `New shop signed up online: ${customer.name} (${area})`, now);
+  notify(
+    db,
+    {
+      type: "new_shop",
+      roles: ["manager"],
+      title: `محل جديد سجّل من الموقع: ${customer.name}`,
+      title_en: `New shop signed up: ${customer.name}`,
+      body: `${customer.owner_name} · ${area}. حدد نوع السعر وسقف الدين ووافق عليه`,
+      body_en: `${customer.owner_name} · ${area}. Set the price tier and debt limit, then approve`,
+      link: `/customers/${customer.id}`,
+    },
+    now,
+  );
+  if (rep) {
+    notify(
+      db,
+      {
+        type: "new_shop",
+        roles: ["rep"],
+        user_id: rep.id,
+        title: `محل جديد بمنطقتك: ${customer.name}`,
+        title_en: `New shop in your area: ${customer.name}`,
+        body: `سجّل من الموقع وينتظر موافقة المدير · ${phone}`,
+        body_en: `Signed up online, waiting for the manager · ${phone}`,
+        link: `/customers/${customer.id}`,
+      },
+      now,
+    );
+  }
+  return { user, customer };
+}
+
+/** The manager approved the shop (from the customer form, with its tier, rep and limit). */
+export function approveShop(db: Db, actor: DbUser, customer: DbCustomer, now: Date) {
+  customer.pending = false;
+  customer.active = true;
+  audit(db, actor, "approve", "customer", customer.id, `موافقة على المحل ${customer.name} وتفعيل حسابه`, `Approved shop ${customer.name}`, now);
+  const owner = db.users.find((u) => u.role === "shop" && u.customer_id === customer.id);
+  if (owner) {
+    notify(
+      db,
+      {
+        type: "account_approved",
+        roles: ["shop"],
+        user_id: owner.id,
+        title: "تمت الموافقة على حسابك",
+        title_en: "Your account is approved",
+        body: "تقدر تطلب بضاعتك الآن من الموقع",
+        body_en: "You can order your goods on the website now",
+        link: "/shop",
+      },
+      now,
+    );
+  }
+}
+
+/** The manager refused the sign-up: the shop stays off and its login is closed. Nothing is deleted. */
+export function rejectShop(db: Db, actor: DbUser, id: number, reason: string, now: Date) {
+  need(actor, ["manager"]);
+  const c = db.customers.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
+  if (!c.pending) fail(409, "BAD_STATE", "هذا المحل ليس بانتظار الموافقة", "This shop isn't waiting for approval");
+  if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب الرفض", "Write the reason", { reason: msg("السبب مطلوب", "Reason is required") });
+  c.pending = false;
+  c.active = false;
+  for (const u of db.users) if (u.role === "shop" && u.customer_id === c.id) u.active = false;
+  audit(db, actor, "cancel", "customer", c.id, `رفض تسجيل المحل ${c.name}: ${reason.trim()}`, `Refused sign-up of ${c.name}: ${reason.trim()}`, now);
+  return c;
 }
 
 // ---------- reading helpers used by mock.ts ----------

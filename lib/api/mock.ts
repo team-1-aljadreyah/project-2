@@ -26,6 +26,7 @@ import type {
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
 import {
   approveOrder,
+  approveShop,
   allocate,
   audit,
   batchStatus,
@@ -48,6 +49,8 @@ import {
   msg,
   need,
   physicalQty,
+  registerShop,
+  rejectShop,
   reversePayment,
   saveStocktake,
   sellableQty,
@@ -260,6 +263,16 @@ export const mockApi: Api = {
         const { password: _p, ...user } = u;
         void _p;
         return { token: `mock.${u.id}`, user };
+      },
+      { anonymous: true },
+    ),
+  register: (input) =>
+    write(
+      (db, _a, now): Session => {
+        const { user } = registerShop(db, input, now);
+        const { password: _p, ...rest } = user;
+        void _p;
+        return { token: `mock.${user.id}`, user: rest };
       },
       { anonymous: true },
     ),
@@ -503,12 +516,15 @@ export const mockApi: Api = {
       const clean = { ...input, phone, name: input.name.trim(), owner_name: input.owner_name.trim(), area: input.area.trim(), address: input.address.trim() };
       if (id) {
         const c = db.customers.find((x) => x.id === id) ?? notFound();
+        const wasPending = !!c.pending;
         const parts: string[] = [];
         if (c.debt_limit !== clean.debt_limit) parts.push(`سقف الدين ${c.debt_limit.toLocaleString("en")} ← ${clean.debt_limit.toLocaleString("en")}`);
         if (c.tier_id !== clean.tier_id) parts.push("نوع السعر");
         if (c.rep_id !== clean.rep_id) parts.push("المندوب");
         Object.assign(c, clean);
         audit(db, a, "update", "customer", c.id, `تعديل الزبون ${c.name}${parts.length ? ` (${parts.join("، ")})` : ""}`, `Updated customer ${c.name}`, now);
+        // A shop that signed up online: saving it as active is the approval.
+        if (wasPending && c.active) approveShop(db, a, c, now);
         return customerView(db, c, a);
       }
       const c: DbCustomer = { id: nextId(db, "customer"), ...clean };
@@ -516,6 +532,7 @@ export const mockApi: Api = {
       audit(db, a, "create", "customer", c.id, `إضافة الزبون ${c.name}`, `Added customer ${c.name}`, now);
       return customerView(db, c, a);
     }),
+  rejectCustomer: (id, reason) => write((db, a, now) => customerView(db, rejectShop(db, a, id, reason, now), a)),
   statement: (customerId, from, to) =>
     read((db, a): Statement => {
       const c = db.customers.find((x) => x.id === customerId);

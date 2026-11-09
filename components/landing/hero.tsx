@@ -27,7 +27,7 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
       {/* light */}
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         <div className="hero-beam absolute -top-1/3 left-[20%] h-[120%] w-[55%]" />
-        <div className="absolute left-1/2 top-[-20%] h-[60%] w-[80%] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(63_191_140/0.18),transparent)]" />
+        <div className="absolute left-1/2 top-[-20%] h-[60%] w-[80%] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgb(225_105_43/0.18),transparent)]" />
       </div>
       <Stars count={50} />
 
@@ -39,7 +39,7 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
           className="text-4xl font-bold leading-[1.2] sm:text-6xl lg:text-7xl"
         >
           {tr("جملة المواد الغذائية", "Food wholesale,")}
-          <span className="mt-2 block bg-gradient-to-l from-[#f8b170] via-[#f28c38] to-[#3fbf8c] bg-clip-text pb-2 text-transparent">
+          <span className="mt-2 block bg-gradient-to-l from-[#ffffff] via-[#f5b48a] to-[#e1692b] bg-clip-text pb-2 text-transparent">
             {tr("بدون ضياع ولا دفاتر", "without losses or notebooks")}
           </span>
         </motion.h1>
@@ -55,7 +55,7 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
           )}
         </motion.p>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.35 }} className="mt-9 flex flex-wrap justify-center gap-3">
-          <Link href={enter} className="group flex h-12 items-center gap-2 rounded-full bg-action px-7 text-base font-bold text-on-action shadow-[0_0_40px_rgb(242_140_56/0.45)] transition hover:bg-action-hover">
+          <Link href={enter} className="group flex h-12 items-center gap-2 rounded-full bg-action px-7 text-base font-bold text-on-action shadow-[0_0_40px_rgb(225_105_43/0.45)] transition hover:bg-action-hover">
             {enterLabel}
             <Forward className="size-5 transition group-hover:-translate-x-1 ltr:group-hover:translate-x-1" />
           </Link>
@@ -68,7 +68,7 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
       {/* The dashboard in 3D */}
       <div ref={ref} className="relative mx-auto mt-16 max-w-5xl px-4 [perspective:1400px]">
         <motion.div style={{ rotateX, scale, y, transformOrigin: "50% 0%" }} className="will-change-transform">
-          <div className="pointer-events-none absolute -inset-x-10 -top-10 bottom-0 rounded-[40px] bg-[radial-gradient(closest-side,rgb(63_191_140/0.25),transparent)] blur-2xl" aria-hidden />
+          <div className="pointer-events-none absolute -inset-x-10 -top-10 bottom-0 rounded-[40px] bg-[radial-gradient(closest-side,rgb(225_105_43/0.25),transparent)] blur-2xl" aria-hidden />
           <DashboardMock />
         </motion.div>
       </div>
@@ -81,7 +81,7 @@ function DashboardMock() {
   const { tr } = useFmt();
   const bars = [42, 58, 35, 70, 52, 88, 64];
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#111915]/95 p-3 shadow-[0_40px_120px_-30px_rgb(0_0_0/0.8)] sm:p-5" aria-hidden>
+    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#121418]/95 p-3 shadow-[0_40px_120px_-30px_rgb(0_0_0/0.8)] sm:p-5" aria-hidden>
       {/* top bar */}
       <div className="flex items-center justify-between gap-3 border-b border-white/5 pb-3">
         <div className="flex items-center gap-2">
@@ -113,7 +113,7 @@ function DashboardMock() {
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {[
               { l: tr("مبيعات اليوم", "Sales today"), v: "1,146,250", icon: TrendingUp, c: "text-primary-ink" },
-              { l: tr("المقبوض", "Collected"), v: "405,000", icon: Wallet, c: "text-[#f8b170]" },
+              { l: tr("المقبوض", "Collected"), v: "405,000", icon: Wallet, c: "text-[#f5b48a]" },
               { l: tr("الديون", "Debts"), v: "8,996,392", icon: ShieldAlert, c: "text-[#f39a92]" },
             ].map((s) => (
               <div key={s.l} className="rounded-2xl border border-white/5 bg-white/[0.03] p-2.5 text-start sm:p-3">
