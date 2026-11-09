@@ -125,8 +125,8 @@ export function makeSeed(now = new Date()): Db {
     seq: { user: users.length, item: items.length, customer: CUSTOMERS.length },
     users,
     warehouses: [
-      { id: 1, name: "المخزن الرئيسي - الصناعة", name_en: "Main warehouse - Al-Sinaa" },
-      { id: 2, name: "مخزن الحر", name_en: "Al-Hur warehouse" },
+      { id: 1, name: "المخزن الرئيسي - الصناعة", name_en: "Main warehouse - Al-Sinaa", capacity: 3500 },
+      { id: 2, name: "مخزن الحر", name_en: "Al-Hur warehouse", capacity: 900 },
     ],
     tiers: [
       { id: 1, name: "جملة كبيرة", name_en: "Big wholesale" },

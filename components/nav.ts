@@ -9,6 +9,7 @@ import {
   History,
   Home,
   LayoutDashboard,
+  Map as MapIcon,
   Package,
   PackagePlus,
   Percent,
@@ -37,6 +38,7 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { href: "/dashboard", ar: "لوحة التحكم", en: "Dashboard", icon: LayoutDashboard, roles: ["manager", "accountant"], group: "main", mobile: ["manager", "accountant"] },
+  { href: "/map", ar: "خريطة المخازن", en: "Warehouse map", icon: MapIcon, roles: ["manager", "warehouse", "accountant"], group: "main", mobile: ["warehouse"] },
   { href: "/rep", ar: "الرئيسية", en: "Home", icon: Home, roles: ["rep"], group: "main", mobile: ["rep"] },
   { href: "/shop", ar: "اطلب الآن", en: "Order now", icon: Store, roles: ["shop"], group: "main", mobile: ["shop"] },
   { href: "/orders/new", ar: "طلب جديد", en: "New order", icon: ShoppingCart, roles: ["rep", "manager"], group: "sales", mobile: ["rep"] },
