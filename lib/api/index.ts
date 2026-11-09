@@ -6,4 +6,5 @@ import { mockApi } from "./mock";
 export const api = USE_MOCK ? mockApi : httpApi;
 
 export { ApiError } from "./errors";
+export type { Lookups, ShelfRow, SalesGroup } from "./http";
 export type * from "./types";

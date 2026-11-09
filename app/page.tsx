@@ -1,12 +1,16 @@
-import { USE_MOCK } from "@/lib/config";
+"use client";
 
-// Temporary start page. It will be replaced when the project design is ready.
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { homeOf, useSession } from "@/lib/auth";
+
+// The start address sends each person to their own home page, or to login.
 export default function Home() {
-  return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <h1 className="text-3xl font-semibold">Project 2</h1>
-      <p className="text-foreground/70">The setup is ready. Pages come next.</p>
-      <p className="text-sm text-foreground/50">Data: {USE_MOCK ? "mock (fake)" : "real API"}</p>
-    </main>
-  );
+  const session = useSession();
+  const router = useRouter();
+  useEffect(() => {
+    if (session === undefined) return;
+    router.replace(session ? homeOf(session.user.role) : "/login");
+  }, [session, router]);
+  return null;
 }

@@ -1,9 +1,23 @@
 // One error type for every failed API call, so pages can show a clear message.
+export type ErrorCode =
+  | "VALIDATION"
+  | "UNAUTHENTICATED"
+  | "FORBIDDEN"
+  | "NOT_FOUND"
+  | "OUT_OF_STOCK"
+  | "DEBT_LIMIT"
+  | "RETURN_TOO_MUCH"
+  | "ALREADY_REVERSED"
+  | "MONTH_CLOSED"
+  | "BAD_STATE"
+  | "NETWORK";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
-    public errors?: Record<string, unknown>,
+    public errors?: Record<string, string>,
+    public code?: ErrorCode,
   ) {
     super(message);
     this.name = "ApiError";

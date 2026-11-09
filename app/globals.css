@@ -1,26 +1,140 @@
 @import "tailwindcss";
 
+/* Dark mode follows the "dark" class on <html> (set by the theme toggle), not only the system setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design B: navy + amber. Every color on the site comes from these tokens. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f4f2ec;            /* page background, warm gray */
+  --card: #ffffff;          /* cards, panels */
+  --card-2: #f8f7f3;        /* inner boxes, table header */
+  --text: #1d1d1b;          /* main text */
+  --muted: #5f5e5a;         /* secondary text */
+  --faint: #8a8984;         /* hints, placeholders */
+  --line: #e3e1d9;          /* borders */
+  --line-strong: #cfccc2;
+
+  --primary: #0c447c;       /* navy */
+  --primary-hover: #0a3864;
+  --primary-soft: #e6f1fb;
+  --primary-ink: #0c447c;   /* navy text on soft navy */
+  --on-primary: #ffffff;
+
+  --action: #ef9f27;        /* amber: the ONE main button per screen */
+  --action-hover: #e08f17;
+  --on-action: #412402;
+
+  --success: #2f6b10;
+  --success-soft: #eaf3de;
+  --warning: #854f0b;
+  --warning-soft: #faeeda;
+  --danger: #a32d2d;
+  --danger-soft: #fcebeb;
+
+  --radius: 12px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.03);
+}
+
+.dark {
+  --bg: #121417;
+  --card: #1b1e23;
+  --card-2: #22262c;
+  --text: #ecebe6;
+  --muted: #b1afa8;
+  --faint: #85837c;
+  --line: #2e333a;
+  --line-strong: #3d434b;
+
+  --primary: #4f8fd1;
+  --primary-hover: #6aa3dd;
+  --primary-soft: #16304d;
+  --primary-ink: #b5d4f4;
+  --on-primary: #08182b;
+
+  --action: #f2a93a;
+  --action-hover: #f6b956;
+  --on-action: #2b1700;
+
+  --success: #97c459;
+  --success-soft: #1f2e14;
+  --warning: #f2b75a;
+  --warning-soft: #3a2a10;
+  --danger: #f09595;
+  --danger-soft: #3d1a1a;
+
+  --shadow: none;
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
+  --color-on-primary: var(--on-primary);
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-on-action: var(--on-action);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: var(--font-plex), system-ui, sans-serif;
+  --radius-card: var(--radius);
+  --shadow-card: var(--shadow);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Numbers line up in tables and totals. */
+.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Thin scrollbars on desktop. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* Printing an invoice: hide the app around it. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+  }
 }
