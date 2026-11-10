@@ -1,7 +1,8 @@
 // The shapes of the data. The real backend will send the same shapes.
 // Money = whole Iraqi dinars. Quantity = pieces (cartons are converted with pieces_per_carton).
 
-export type Role = "manager" | "warehouse" | "rep" | "accountant" | "shop";
+/** staff = warehouse staff (موظف المخزن): works in one warehouse, sees it read-only, and answers the support chat. */
+export type Role = "manager" | "warehouse" | "staff" | "rep" | "accountant" | "shop";
 export type Unit = "carton" | "piece";
 
 export interface Person {
@@ -406,7 +407,7 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked";
+export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply";
 
 export interface AppNotification {
   id: number;
@@ -570,4 +571,36 @@ export interface UserInput {
   customer_id?: number;
   active: boolean;
   password?: string;
+}
+
+// ---------- Support chat (shop owner ↔ warehouse staff / manager) ----------
+export interface ChatMessage {
+  id: number;
+  customer_id: number;
+  /** Who wrote it: the shop, or the company (staff or manager). */
+  from: "shop" | "staff";
+  by: Person & { role: Role };
+  text: string;
+  at: string;
+}
+
+/** One shop's conversation, as the staff's inbox lists it. */
+export interface ChatThread {
+  customer_id: number;
+  customer: string;
+  area: string;
+  last: ChatMessage;
+  /** The shop wrote last: it waits for an answer. */
+  waiting: boolean;
+  /** Messages from the shop the company hasn't opened yet. */
+  unread: number;
+  /** The last company person who answered (shown to the shop as "talking with you"). */
+  answered_by?: Person;
+}
+
+/** The shop owner's own conversation. */
+export interface MyChat {
+  messages: ChatMessage[];
+  /** Answers from the company he hasn't seen yet (the red dot on the chat circle). */
+  unread: number;
 }

@@ -30,7 +30,7 @@ export default function ItemView() {
     { key: "s", head: tr("الحالة", "Status"), cell: (b) => <BatchStatusBadge status={b.status} days={daysUntil(b.expiry_date)} /> },
     { key: "q", head: tr("الباقي", "Left"), cell: (b) => qty(b.qty_left, it.pieces_per_carton) },
     { key: "r", head: tr("المستلم", "Received"), cell: (b) => <span className="text-muted">{qty(b.qty_received, it.pieces_per_carton)}</span> },
-    ...(user.role !== "rep" ? [{ key: "p", head: tr("سعر الشراء/قطعة", "Cost/pc"), cell: (b: Batch) => <Money value={b.purchase_price} />, align: "end" as const }] : []),
+    ...(user.role !== "rep" && user.role !== "staff" ? [{ key: "p", head: tr("سعر الشراء/قطعة", "Cost/pc"), cell: (b: Batch) => <Money value={b.purchase_price} />, align: "end" as const }] : []),
     { key: "d", head: tr("تاريخ الاستلام", "Received on"), cell: (b) => <span className="text-muted">{date(b.received_at)}</span> },
   ];
 

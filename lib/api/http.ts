@@ -40,6 +40,9 @@ import type {
   OnlinePayment,
   StartOnlinePayment,
   DeliverInput,
+  ChatMessage,
+  ChatThread,
+  MyChat,
 } from "./types";
 
 export interface Lookups {
@@ -106,6 +109,13 @@ export const httpApi = {
 
   listOrders: () => get<Order[]>("/orders"),
   getOrder: (id: number) => get<Order>(`/orders/${id}`),
+  // Support chat. The page asks again every few seconds (later the backend can push with WebSockets).
+  myChat: () => get<MyChat>("/chat/me"),
+  sendChat: (text: string) => post<ChatMessage>("/chat/me", { text }),
+  chatThreads: () => get<ChatThread[]>("/chat"),
+  getChat: (customerId: number) => get<ChatMessage[]>(`/chat/${customerId}`),
+  replyChat: (customerId: number, text: string) => post<ChatMessage>(`/chat/${customerId}`, { text }),
+  markChatRead: (customerId: number) => post<void>(`/chat/${customerId}/read`),
   // Delivery proof. The backend keeps the PIN and only sends it to the order's shop owner.
   /** The delivery rep scanned the shipment's QR at the warehouse. */
   dispatchDelivery: (code: string) => post<Order>("/deliveries/dispatch", { code }),

@@ -14,6 +14,9 @@ import type {
   InvoiceStatus,
   NewOrder,
   NewPayment,
+  ChatMessage,
+  ChatThread,
+  MyChat,
   DeliverInput,
   Delivery,
   OnlinePayment,
@@ -1329,4 +1332,112 @@ export function orderView(o: Order, actor: DbUser): Order {
   const { pin: _hidden, ...d } = o.delivery;
   void _hidden;
   return { ...o, delivery: d };
+}
+
+// ---------- Support chat ----------
+// The shop owner writes from the chat circle; the warehouse staff (and the manager) answer from the inbox.
+
+const MAX_CHAT = 1000;
+
+function chatText(text: string) {
+  const t = (text ?? "").trim();
+  if (!t) fail(422, "VALIDATION", "اكتب رسالة", "Write a message", { text: msg("الرسالة فارغة", "The message is empty") });
+  if (t.length > MAX_CHAT) fail(422, "VALIDATION", "الرسالة طويلة جداً", "The message is too long", { text: msg(`حتى ${MAX_CHAT} حرف`, `Up to ${MAX_CHAT} characters`) });
+  return t;
+}
+
+function readsOf(db: Db, customerId: number) {
+  db.chat_reads ??= {};
+  return (db.chat_reads[customerId] ??= { shop: 0, staff: 0 });
+}
+
+function addChat(db: Db, actor: DbUser, customerId: number, from: "shop" | "staff", text: string, now: Date): ChatMessage {
+  db.chat ??= [];
+  const before = db.chat.filter((m) => m.customer_id === customerId).pop();
+  const m: ChatMessage = { id: nextId(db, "chat"), customer_id: customerId, from, by: { ...person(actor), role: actor.role }, text: chatText(text), at: now.toISOString() };
+  db.chat.push(m);
+  // You have seen your own message.
+  readsOf(db, customerId)[from] = m.id;
+  const customer = db.customers.find((c) => c.id === customerId);
+  // One notification when a conversation starts waiting (not one per message, that would flood the bell).
+  if (from === "shop" && (!before || before.from === "staff")) {
+    notify(
+      db,
+      {
+        type: "support_message",
+        roles: ["staff", "manager"],
+        title: `رسالة دعم من ${customer?.name ?? ""}`,
+        title_en: `Support message from ${customer?.name ?? ""}`,
+        body: m.text.slice(0, 120),
+        body_en: m.text.slice(0, 120),
+        link: `/support?shop=${customerId}`,
+      },
+      now,
+    );
+  }
+  if (from === "staff" && before?.from === "shop") {
+    const shopUser = db.users.find((u) => u.role === "shop" && u.customer_id === customerId);
+    if (shopUser) {
+      notify(db, { type: "support_reply", roles: ["shop"], user_id: shopUser.id, title: `ردّ الدعم: ${actor.name}`, title_en: `Support replied: ${actor.name}`, body: m.text.slice(0, 120), body_en: m.text.slice(0, 120) }, now);
+    }
+  }
+  return m;
+}
+
+/** The shop owner sends a message. */
+export function sendChat(db: Db, actor: DbUser, text: string, now: Date): ChatMessage {
+  need(actor, ["shop"]);
+  if (!actor.customer_id) fail(403, "FORBIDDEN", "حسابك غير مرتبط بمحل", "Your account isn't linked to a shop");
+  return addChat(db, actor, actor.customer_id, "shop", text, now);
+}
+
+/** The staff or the manager answers a shop. */
+export function replyChat(db: Db, actor: DbUser, customerId: number, text: string, now: Date): ChatMessage {
+  need(actor, ["staff", "manager"]);
+  if (!db.customers.some((c) => c.id === customerId)) fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
+  return addChat(db, actor, customerId, "staff", text, now);
+}
+
+export function myChat(db: Db, actor: DbUser): MyChat {
+  need(actor, ["shop"]);
+  const messages = (db.chat ?? []).filter((m) => m.customer_id === actor.customer_id);
+  const seen = readsOf(db, actor.customer_id ?? 0).shop;
+  return { messages, unread: messages.filter((m) => m.from === "staff" && m.id > seen).length };
+}
+
+export function chatThreads(db: Db, actor: DbUser): ChatThread[] {
+  need(actor, ["staff", "manager"]);
+  const ids = [...new Set((db.chat ?? []).map((m) => m.customer_id))];
+  return ids
+    .map((cid): ChatThread => {
+      const list = db.chat.filter((m) => m.customer_id === cid);
+      const last = list[list.length - 1];
+      const c = db.customers.find((x) => x.id === cid);
+      const seen = readsOf(db, cid).staff;
+      const answer = [...list].reverse().find((m) => m.from === "staff");
+      return {
+        customer_id: cid,
+        customer: c?.name ?? `#${cid}`,
+        area: c?.area ?? "",
+        last,
+        waiting: last.from === "shop",
+        unread: list.filter((m) => m.from === "shop" && m.id > seen).length,
+        answered_by: answer ? { id: answer.by.id, name: answer.by.name } : undefined,
+      };
+    })
+    .sort((a, b) => Number(b.waiting) - Number(a.waiting) || b.last.at.localeCompare(a.last.at));
+}
+
+export function chatOf(db: Db, actor: DbUser, customerId: number): ChatMessage[] {
+  need(actor, ["staff", "manager"]);
+  return (db.chat ?? []).filter((m) => m.customer_id === customerId);
+}
+
+/** Someone opened the conversation: everything in it counts as seen for their side. */
+export function markChatRead(db: Db, actor: DbUser, customerId: number) {
+  const side = actor.role === "shop" ? "shop" : "staff";
+  if (side === "shop" && actor.customer_id !== customerId) fail(403, "FORBIDDEN", "لا تستطيع", "Not allowed");
+  if (side === "staff") need(actor, ["staff", "manager"]);
+  const last = (db.chat ?? []).filter((m) => m.customer_id === customerId).pop();
+  if (last) readsOf(db, customerId)[side] = last.id;
 }

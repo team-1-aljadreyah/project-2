@@ -198,7 +198,7 @@ export default function OrderView() {
                 </>
               )}
             </div>
-            {c && user.role !== "shop" && user.role !== "warehouse" && (
+            {c && user.role !== "shop" && user.role !== "warehouse" && user.role !== "staff" && (
               <Button className="mt-3 w-full" href={`/customers/${c.id}`}>
                 {tr("ملف الزبون", "Customer file")}
               </Button>

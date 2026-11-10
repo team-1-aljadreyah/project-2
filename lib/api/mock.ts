@@ -50,6 +50,12 @@ import {
   msg,
   need,
   onlineView,
+  sendChat,
+  replyChat,
+  myChat,
+  chatThreads,
+  chatOf,
+  markChatRead,
   orderView,
   dispatchDelivery,
   deliverOrder,
@@ -72,7 +78,8 @@ const COST_ROLES: Role[] = ["manager", "accountant", "warehouse"];
 const PROFIT_ROLES: Role[] = ["manager", "accountant"];
 const seesCost = (u: DbUser) => COST_ROLES.includes(u.role);
 const seesProfit = (u: DbUser) => PROFIT_ROLES.includes(u.role);
-const seesDebt = (u: DbUser) => u.role !== "warehouse";
+// The warehouse people never see debts (keeper and staff).
+const seesDebt = (u: DbUser) => u.role !== "warehouse" && u.role !== "staff";
 
 function actorOf(db: Db): DbUser {
   const s = getSession();
@@ -154,7 +161,7 @@ function canSeeCustomer(actor: DbUser, c: { id: number; rep_id: number }) {
 function canSeeOrder(actor: DbUser, o: { customer_id: number; rep_id: number; warehouse_id: number }) {
   if (actor.role === "rep") return o.rep_id === actor.id;
   if (actor.role === "shop") return o.customer_id === actor.customer_id;
-  if (actor.role === "warehouse") return !actor.warehouse_id || actor.warehouse_id === o.warehouse_id;
+  if (actor.role === "warehouse" || actor.role === "staff") return !actor.warehouse_id || actor.warehouse_id === o.warehouse_id;
   return true;
 }
 
@@ -322,7 +329,7 @@ export const mockApi: Api = {
       if (!/^07\d{9}$/.test(phone)) errors.phone = msg("رقم عراقي من 11 رقم يبدأ بـ 07", "An 11-digit Iraqi number starting with 07");
       else if (db.users.some((u) => u.phone === phone && u.id !== id)) errors.phone = msg("هذا الرقم مستخدم", "This number is already used");
       if (!id && (!input.password || input.password.length < 6)) errors.password = msg("6 أحرف على الأقل", "At least 6 characters");
-      if (input.role === "warehouse" && !input.warehouse_id) errors.warehouse_id = msg("اختر المخزن", "Choose the warehouse");
+      if ((input.role === "warehouse" || input.role === "staff") && !input.warehouse_id) errors.warehouse_id = msg("اختر المخزن", "Choose the warehouse");
       if (input.role === "shop" && !input.customer_id) errors.customer_id = msg("اختر المحل", "Choose the shop");
       if (id === a.id && (!input.active || input.role !== "manager")) errors.role = msg("لا تستطيع إيقاف حسابك أو تغيير دورك", "You can't disable yourself or change your own role");
       if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
@@ -330,7 +337,7 @@ export const mockApi: Api = {
         name: input.name.trim(),
         phone,
         role: input.role,
-        warehouse_id: input.role === "warehouse" ? input.warehouse_id : undefined,
+        warehouse_id: input.role === "warehouse" || input.role === "staff" ? input.warehouse_id : undefined,
         customer_id: input.role === "shop" ? input.customer_id : undefined,
         active: input.active,
       };
@@ -426,7 +433,7 @@ export const mockApi: Api = {
     }),
   itemBatches: (itemId) =>
     read((db, a, now) => {
-      need(a, ["manager", "warehouse", "accountant"]);
+      need(a, ["manager", "warehouse", "accountant", "staff"]);
       return db.batches
         .filter((b) => b.item_id === itemId && (b.qty_left > 0 || b.qty_received > 0))
         .sort((x, y) => x.expiry_date.localeCompare(y.expiry_date))
@@ -434,7 +441,7 @@ export const mockApi: Api = {
     }),
   listBatches: (warehouseId) =>
     read((db, a, now) => {
-      need(a, ["manager", "warehouse", "accountant"]);
+      need(a, ["manager", "warehouse", "accountant", "staff"]);
       return db.batches
         .filter((b) => b.qty_left > 0 && (!warehouseId || b.warehouse_id === warehouseId))
         .sort((x, y) => x.expiry_date.localeCompare(y.expiry_date))
@@ -442,7 +449,7 @@ export const mockApi: Api = {
     }),
   shelfStock: () =>
     read((db, a, now) => {
-      need(a, ["manager", "warehouse", "accountant"]);
+      need(a, ["manager", "warehouse", "accountant", "staff"]);
       const today = dayOf(now);
       return db.items.map((it) => ({
         item_id: it.id,
@@ -460,7 +467,7 @@ export const mockApi: Api = {
   // Receipts
   listReceipts: () =>
     read((db, a) => {
-      need(a, ["manager", "warehouse", "accountant"]);
+      need(a, ["manager", "warehouse", "accountant", "staff"]);
       return db.receipts
         .filter((r) => a.role !== "warehouse" || !a.warehouse_id || r.warehouse_id === a.warehouse_id)
         .map((r) => receiptView(r, a))
@@ -468,7 +475,7 @@ export const mockApi: Api = {
     }),
   getReceipt: (id) =>
     read((db, a) => {
-      need(a, ["manager", "warehouse", "accountant"]);
+      need(a, ["manager", "warehouse", "accountant", "staff"]);
       return receiptView(db.receipts.find((r) => r.id === id) ?? notFound(), a);
     }),
   createReceipt: (input) => write((db, a, now) => receiptView(createReceipt(db, a, input, now), a)),
@@ -476,7 +483,7 @@ export const mockApi: Api = {
   // Transfers
   listTransfers: () =>
     read((db, a) => {
-      need(a, ["manager", "warehouse", "accountant"]);
+      need(a, ["manager", "warehouse", "accountant", "staff"]);
       return [...db.transfers].reverse();
     }),
   createTransfer: (input) => write((db, a, now) => createTransfer(db, a, input, now)),
@@ -594,6 +601,14 @@ export const mockApi: Api = {
       if (!o || !canSeeOrder(a, o)) notFound();
       return orderView(o, a);
     }),
+
+  // Support chat
+  myChat: () => read((db, a) => myChat(db, a)),
+  sendChat: (text) => write((db, a, now) => sendChat(db, a, text, now)),
+  chatThreads: () => read((db, a) => chatThreads(db, a)),
+  getChat: (customerId) => read((db, a) => chatOf(db, a, customerId)),
+  replyChat: (customerId, text) => write((db, a, now) => replyChat(db, a, customerId, text, now)),
+  markChatRead: (customerId) => write((db, a) => markChatRead(db, a, customerId)),
 
   // Delivery proof
   dispatchDelivery: (code) => write((db, a, now) => orderView(dispatchDelivery(db, a, code, now), a)),
@@ -790,7 +805,7 @@ export const mockApi: Api = {
     }),
   nearExpiry: (days) =>
     read((db, a, now): NearExpiryRow[] => {
-      need(a, ["manager", "warehouse", "accountant"]);
+      need(a, ["manager", "warehouse", "accountant", "staff"]);
       const today = dayOf(now);
       return db.batches
         .filter((b) => b.qty_left > 0 && daysBetween(today, b.expiry_date) <= days)

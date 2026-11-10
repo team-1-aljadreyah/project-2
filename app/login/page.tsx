@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Boxes, Calculator, Eye, EyeOff, Info, LayoutDashboard, Loader2, Lock, Phone, Store, Truck, UserPlus, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Calculator, Headset, Eye, EyeOff, Info, LayoutDashboard, Loader2, Lock, Phone, Store, Truck, UserPlus, type LucideIcon } from "lucide-react";
 import { rise, stagger } from "@/components/auth";
 import { LoginArt } from "@/components/login-art";
 import { LogoMark } from "@/components/logo";
@@ -27,6 +27,7 @@ const DEMO: { phone: string; role: Role; name: string; icon: LucideIcon }[] = [
   { phone: "07801000001", role: "manager", name: "حيدر الكعبي", icon: LayoutDashboard },
   { phone: "07801000004", role: "rep", name: "حسين علي", icon: Truck },
   { phone: "07801000002", role: "warehouse", name: "كرار جاسم", icon: Boxes },
+  { phone: "07801000010", role: "staff", name: "سجاد كامل", icon: Headset },
   { phone: "07801000007", role: "accountant", name: "زينب كاظم", icon: Calculator },
   { phone: "07812345601", role: "shop", name: "أسواق الكوثر", icon: Store },
 ];
