@@ -5,7 +5,7 @@
 // ("Hello, welcome back", underline fields, one big button, sign-up link). Made in our warehouse colors.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Boxes, Calculator, Eye, EyeOff, Info, LayoutDashboard, Loader2, Lock, Phone, Store, Truck, UserPlus, type LucideIcon } from "lucide-react";
 import { rise, stagger } from "@/components/auth";
@@ -16,7 +16,7 @@ import { LanguageSwitch, ThemeToggle } from "@/components/switches";
 import { errorText } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Role } from "@/lib/api/types";
-import { homeOf, setSession, useSession } from "@/lib/auth";
+import { homeOf, setSession, takeNext, useSession } from "@/lib/auth";
 import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -44,9 +44,26 @@ export default function LoginPage() {
   const Back = lang === "ar" ? ArrowRight : ArrowLeft;
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
 
-  // Already logged in: go straight to your own home page.
+  // The browser's back arrow on the login page goes to the website's home page.
+  // Without this, "back" walked through the pages you had opened before (they all need a login),
+  // so you landed on the login page again and again.
+  // How: add one copy of this page to the history; pressing back uses that copy up, and we move to "/".
   useEffect(() => {
-    if (session) router.replace(homeOf(session.user.role));
+    if (!(history.state as { loginGuard?: boolean } | null)?.loginGuard) {
+      // Keep Next's own data in the history entry (it needs it), and add our mark.
+      history.pushState({ ...(history.state as object | null), loginGuard: true }, "", location.href);
+    }
+    const onBack = () => router.replace("/");
+    window.addEventListener("popstate", onBack);
+    return () => window.removeEventListener("popstate", onBack);
+  }, [router]);
+
+  // Already logged in (you opened /login while logged in): go straight to your own home page.
+  // Not right after pressing "login": then login() below decides where to go (maybe the page you wanted),
+  // and this would race it and always win with the home page.
+  const loggingIn = useRef(false);
+  useEffect(() => {
+    if (session && !loggingIn.current) router.replace(homeOf(session.user.role));
   }, [session, router]);
 
   async function login(p: string, pw: string, key: string) {
@@ -54,10 +71,10 @@ export default function LoginPage() {
     setError(null);
     try {
       const s = await api.login(p, pw);
+      loggingIn.current = true;
       setSession(s);
-      const next = new URLSearchParams(window.location.search).get("next");
-      // Only go back to a page on this site ("/..."), never to another website ("//evil.com").
-      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : homeOf(s.user.role));
+      // Back to the page you wanted before logging in (only pages of this site), or your home page.
+      router.replace(takeNext() ?? homeOf(s.user.role));
     } catch (e) {
       setError(errorText(e, tr));
       setBusy(null);

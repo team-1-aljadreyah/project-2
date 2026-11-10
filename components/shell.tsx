@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { Bell, CloudOff, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Wifi, WifiOff, X } from "lucide-react";
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
-import { clearToken, homeOf, updateUser, useSession } from "@/lib/auth";
+import { clearToken, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
 import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
@@ -43,8 +43,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const path = usePathname();
 
+  // Not logged in: go to the login page. The page you wanted is remembered in this tab (not in the
+  // address), so the login address stays a clean "/login" and you still come back here after logging in.
   useEffect(() => {
-    if (session === null) router.replace(`/login?next=${encodeURIComponent(path)}`);
+    if (session !== null) return;
+    rememberNext(path);
+    router.replace("/login");
   }, [session, router, path]);
 
   if (!session) {
