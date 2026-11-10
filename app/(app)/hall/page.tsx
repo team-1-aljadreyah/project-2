@@ -21,6 +21,8 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn, dayOfIso, today } from "@/lib/utils";
 
+const INTRO_KEY = "nahrain.hall-intro";
+
 export default function HallPage() {
   const { tr, name, num } = useFmt();
   const { user, lookups, items } = useApp();
@@ -34,14 +36,27 @@ export default function HallPage() {
   const customers = useLoad(() => api.listCustomers(), []);
 
   const [picked, setPicked] = useState<number | null>(null);
-  const [threeD, setThreeD] = useState(true);
-  const [zoom, setZoom] = useState(1);
-
   // Like the design: the hall shows in 3D for a moment, then lies down into the flat plan.
+  // Only the first time in a session (the keeper opens this page many times a day, and waiting for
+  // the same show every time slows the work), and never for people who turned animations off.
+  const [threeD, setThreeD] = useState(() => {
+    try {
+      return !sessionStorage.getItem(INTRO_KEY) && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch {
+      return false;
+    }
+  });
+  const [zoom, setZoom] = useState(1);
+  const [intro] = useState(threeD);
+
   useEffect(() => {
-    const t = setTimeout(() => setThreeD(false), 1500);
+    if (!intro) return;
+    try {
+      sessionStorage.setItem(INTRO_KEY, "1");
+    } catch {}
+    const t = setTimeout(() => setThreeD(false), 900);
     return () => clearTimeout(t);
-  }, []);
+  }, [intro]);
 
   const whId = user.warehouse_id ?? lookups.warehouses[0]?.id;
   const view = useMemo(() => {
@@ -99,7 +114,7 @@ export default function HallPage() {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
         {/* Missions panel */}
         <Card className="p-3 lg:sticky lg:top-20 lg:self-start">
           <div className="mb-3 flex items-center gap-2 px-1">
@@ -145,7 +160,7 @@ export default function HallPage() {
                 <motion.div
                   initial={false}
                   animate={threeD ? { rotateX: 50, rotateZ: -28, scale: 0.78, y: -20 } : { rotateX: 0, rotateZ: 0, scale: 1, y: 0 }}
-                  transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
                   style={{ transformStyle: "preserve-3d" }}
                   className={cn(threeD && "drop-shadow-[0_30px_30px_rgb(0_0_0/0.25)]")}
                 >

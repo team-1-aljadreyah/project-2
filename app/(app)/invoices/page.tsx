@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Download, ReceiptText } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { InvoiceStatusBadge } from "@/components/status";
@@ -18,7 +18,9 @@ export default function InvoicesPage() {
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
   const [status, setStatus] = useState<InvoiceStatus | "all" | "unpaid">("all");
   const [q, setQ] = useState("");
-  const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
+  // A Map finds a name in one step, instead of searching the whole customer list for every row.
+  const names = useMemo(() => new Map((customers.data ?? []).map((c) => [c.id, c.name])), [customers.data]);
+  const cName = (id: number) => names.get(id) ?? `#${id}`;
   const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
   const all = invoices.data ?? [];
   const pass = (i: Invoice, s: typeof status) => s === "all" || (s === "unpaid" ? i.status !== "paid" : i.status === s);

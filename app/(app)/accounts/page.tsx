@@ -96,12 +96,12 @@ export default function AccountsPage() {
       </motion.div>
 
       {loading || !c ? (
-        <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
           <Skeleton className="h-[520px]" />
           <Skeleton className="h-[520px]" />
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
           {/* Side: profile card + details */}
           <div className="space-y-4">
             <motion.div variants={rise} key={`p${c.id}`}>

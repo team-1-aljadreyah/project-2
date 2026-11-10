@@ -218,7 +218,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
   );
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
       <div className="min-w-0 space-y-3">
         {/* Customer and warehouse */}
         <Card className="p-3">

@@ -76,7 +76,6 @@ export const GROUPS: Record<NavItem["group"], [string, string]> = {
 const EXTRA: { prefix: string; roles: Role[] }[] = [
   { prefix: "/payments/", roles: ["manager", "accountant", "rep"] },
   { prefix: "/notifications", roles: ["manager", "warehouse", "rep", "accountant", "shop"] },
-  { prefix: "/account", roles: ["manager", "warehouse", "rep", "accountant", "shop"] },
   { prefix: "/invoices/", roles: ["manager", "accountant", "rep", "shop", "warehouse"] },
   { prefix: "/returns/", roles: ["manager", "accountant", "rep", "warehouse", "shop"] },
 ];

@@ -110,7 +110,7 @@ export default function OrderView() {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
           {o.status === "needs_approval" && (
             <Notice tone="warning" title={tr("هذا الطلب يتجاوز سقف دين الزبون", "This order passes the customer's debt limit")}>

@@ -81,7 +81,7 @@ function NewPaymentForm({ pre }: { pre?: number }) {
   return (
     <>
       <PageHeader title={tr("استلام تسديد", "Take a payment")} back="/payments" />
-      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_380px]">
         <Card className="space-y-4 p-4">
           <Field label={tr("الزبون", "Customer")}>
             <Select
