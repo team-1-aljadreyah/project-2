@@ -77,7 +77,7 @@ export function homeOf(role: Role) {
     case "shop":
       return "/shop";
     case "warehouse":
-      return "/map";
+      return "/hall";
     default:
       return "/dashboard";
   }
