@@ -10,6 +10,7 @@ import { Bell, CloudOff, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, W
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
+import { ChatWidget } from "@/components/support/chat-widget";
 import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
@@ -102,7 +103,11 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
               action={<Button href={homeOf(user.role)}>{tr("الرجوع للرئيسية", "Go home")}</Button>}
             />
           ) : value ? (
-            <Ctx.Provider value={value}>{children}</Ctx.Provider>
+            <Ctx.Provider value={value}>
+              {children}
+              {/* The shop owner's help circle: FAQ + live support chat */}
+              {user.role === "shop" && <ChatWidget />}
+            </Ctx.Provider>
           ) : (
             <div className="space-y-3">
               <Skeleton className="h-8 w-48" />

@@ -10,7 +10,7 @@ import type { Role, User, UserInput } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 
-const ROLES: Role[] = ["manager", "warehouse", "rep", "accountant", "shop"];
+const ROLES: Role[] = ["manager", "warehouse", "staff", "rep", "accountant", "shop"];
 
 export default function UsersPage() {
   const { tr, name } = useFmt();
@@ -26,7 +26,7 @@ export default function UsersPage() {
       key: "x",
       head: tr("مرتبط بـ", "Linked to"),
       cell: (u) =>
-        u.role === "warehouse" ? name(lookups.warehouses.find((w) => w.id === u.warehouse_id)) : u.role === "shop" ? customers.data?.find((c) => c.id === u.customer_id)?.name ?? "-" : "-",
+        (u.role === "warehouse" || u.role === "staff") ? name(lookups.warehouses.find((w) => w.id === u.warehouse_id)) : u.role === "shop" ? customers.data?.find((c) => c.id === u.customer_id)?.name ?? "-" : "-",
     },
     { key: "s", head: tr("الحالة", "Status"), cell: (u) => (u.active ? <Badge tone="success">{tr("فعّال", "Active")}</Badge> : <Badge>{tr("موقوف", "Disabled")}</Badge>) },
     {
@@ -144,7 +144,7 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
             ))}
           </Select>
         </Field>
-        {f.role === "warehouse" && (
+        {(f.role === "warehouse" || f.role === "staff") && (
           <Field label={tr("المخزن", "Warehouse")} error={err.warehouse_id}>
             <Select value={f.warehouse_id} onChange={(e) => set({ warehouse_id: Number(e.target.value) })}>
               {lookups.warehouses.map((w) => (

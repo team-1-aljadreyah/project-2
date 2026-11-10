@@ -9,6 +9,7 @@ import type {
   Invoice,
   InvoiceBatchUse,
   InvoiceLine,
+  ChatMessage,
   Item,
   OnlinePayment,
   OnlineStatus,
@@ -67,6 +68,10 @@ export interface Db {
   online_payments: DbOnline[];
   /** Delivery photos, kept apart from the orders because they are big (order id → JPEG data URL). */
   delivery_photos: Record<number, string>;
+  /** Support chat messages, all shops together. */
+  chat: ChatMessage[];
+  /** The last message id each side has seen, per shop: { "<customer id>": { shop, staff } }. */
+  chat_reads: Record<number, { shop: number; staff: number }>;
 }
 
 export type DbOnline = Omit<OnlinePayment, "form_url"> & {
@@ -77,7 +82,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 10;
+export const DB_VERSION = 13;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

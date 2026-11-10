@@ -119,10 +119,12 @@ body {
   outline-offset: 2px;
 }
 
-/* Thin scrollbars on desktop. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
+/* Thin scrollbars on desktop. In the base layer, so a class like [scrollbar-width:none] can still hide one. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
 }
 
 /* Printing an invoice: hide the app around it. */

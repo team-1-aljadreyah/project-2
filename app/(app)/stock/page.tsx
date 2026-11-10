@@ -17,7 +17,7 @@ export default function StockPage() {
   const { tr, name, qty, dateTime } = useFmt();
   const { user, lookups, itemById } = useApp();
   const [tab, setTab] = useState<Tab>("stock");
-  const [wh, setWh] = useState<number | "">(user.role === "warehouse" ? (user.warehouse_id ?? "") : "");
+  const [wh, setWh] = useState<number | "">(user.role === "warehouse" || user.role === "staff" ? (user.warehouse_id ?? "") : "");
   const [q, setQ] = useState("");
   const [onlyLow, setOnlyLow] = useState(false);
   const shelf = useLoad(() => api.shelfStock(), []);
@@ -76,9 +76,9 @@ export default function StockPage() {
     <>
       <PageHeader
         title={tr("المخزون", "Stock")}
-        subtitle={user.role === "warehouse" ? name(lookups.warehouses.find((w) => w.id === user.warehouse_id)) : tr("المخزنين: الصناعة والحر", "Both warehouses: Al-Sinaa and Al-Hur")}
+        subtitle={user.role === "warehouse" || user.role === "staff" ? name(lookups.warehouses.find((w) => w.id === user.warehouse_id)) : tr("المخزنين: الصناعة والحر", "Both warehouses: Al-Sinaa and Al-Hur")}
         actions={
-          user.role !== "accountant" && (
+          user.role !== "accountant" && user.role !== "staff" && (
             <>
               <Button href="/stocktakes">
                 <ClipboardCheck className="size-4" /> {tr("جرد", "Count")}

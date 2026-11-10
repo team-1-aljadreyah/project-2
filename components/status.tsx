@@ -11,6 +11,8 @@ export function roleName(role: Role, tr: Tr) {
       return tr("المدير", "Manager");
     case "warehouse":
       return tr("أمين المخزن", "Warehouse keeper");
+    case "staff":
+      return tr("موظف المخزن", "Warehouse staff");
     case "rep":
       return tr("مندوب التوصيل", "Delivery");
     case "accountant":

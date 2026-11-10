@@ -98,6 +98,7 @@ export function makeSeed(now = new Date()): Db {
     { id: 7, name: "زينب كاظم", phone: "07801000007", role: "accountant", active: true, password: DEMO_PASSWORD },
     { id: 8, name: "علي الموسوي", phone: "07812345601", role: "shop", customer_id: 1, active: true, password: DEMO_PASSWORD },
     { id: 9, name: "أحمد جبار", phone: "07812345602", role: "shop", customer_id: 2, active: true, password: DEMO_PASSWORD },
+    { id: 10, name: "سجاد كامل", phone: "07801000010", role: "staff", warehouse_id: 1, active: true, password: DEMO_PASSWORD },
   ];
 
   const items: DbItem[] = ITEMS.map(([name, name_en, category, ppc, carton, , , commission], i) => {
@@ -165,6 +166,8 @@ export function makeSeed(now = new Date()): Db {
     notified_low: [],
     online_payments: [],
     delivery_photos: {},
+    chat: [],
+    chat_reads: {},
   };
 
   const manager = users[0];
@@ -393,6 +396,23 @@ export function makeSeed(now = new Date()): Db {
     const rep = db.users.find((u) => u.id === firstToday.rep_id);
     Object.assign(firstToday.delivery!, { status: "out", out_at: addDays(now, 0).toISOString(), out_by: rep && { id: rep.id, name: rep.name } });
   }
+
+  // Support chat: one finished conversation (أسواق الكوثر) and one waiting for an answer (the second shop).
+  const staffUser = db.users.find((u) => u.role === "staff")!;
+  const shop1 = db.users.find((u) => u.role === "shop" && u.customer_id === 1)!;
+  const shop2 = db.users.find((u) => u.role === "shop" && u.customer_id === 2)!;
+  const say = (u: DbUser, customerId: number, from: "shop" | "staff", text: string, minutesAgo: number) => {
+    const id = (db.seq.chat = (db.seq.chat ?? 0) + 1);
+    db.chat.push({ id, customer_id: customerId, from, by: { id: u.id, name: u.name, role: u.role }, text, at: new Date(now.getTime() - minutesAgo * 60_000).toISOString() });
+    return id;
+  };
+  say(shop1, 1, "shop", "مرحباً، هل يمكن إضافة كارتونين من الزيت إلى طلبي قبل خروجه؟", 180);
+  say(staffUser, 1, "staff", "أهلاً بك. الطلب ثُبّت وصدرت فاتورته، لذلك أرسل طلباً جديداً بالزيت وسنجهزه مع نفس الجولة.", 172);
+  say(shop1, 1, "shop", "تمام، شكراً جزيلاً", 170);
+  const lastRead = say(staffUser, 1, "staff", "العفو، نحن في خدمتك دائماً.", 168);
+  db.chat_reads[1] = { shop: lastRead, staff: lastRead };
+  say(shop2, 2, "shop", "السلام عليكم، وصلني كارتون حليب مفتوح من الطلب الأخير. كيف أرجعه؟", 25);
+  db.chat_reads[2] = { shop: db.seq.chat, staff: 0 };
 
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);
