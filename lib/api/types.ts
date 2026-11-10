@@ -143,6 +143,36 @@ export interface Order {
   created_at: string;
   created_by: Person;
   invoice_id?: number;
+  /** Made when the order is confirmed: the trip from the warehouse to the shop. */
+  delivery?: Delivery;
+}
+
+// ---------- Delivery proof (no fake deliveries) ----------
+// ready → the delivery rep scans the shipment's QR at the warehouse → out → at the shop he takes a photo of
+// the packages and types the PIN that only the shop owner can see → delivered.
+export type DeliveryStatus = "ready" | "out" | "delivered";
+
+export interface Delivery {
+  status: DeliveryStatus;
+  /** What the QR on the shipment label holds (also printed under it, to type by hand if the camera can't read). */
+  code: string;
+  /** The 4-digit delivery PIN. Sent ONLY to the shop owner of this order; everyone else gets it hidden. */
+  pin?: string;
+  out_at?: string;
+  out_by?: Person;
+  delivered_at?: string;
+  delivered_by?: Person;
+  /** A photo of the packages at the shop exists (loaded on its own, it's big). */
+  has_photo?: boolean;
+  /** Wrong PINs typed so far. At 5 the delivery is locked until the manager opens it again. */
+  pin_attempts: number;
+  locked?: boolean;
+}
+
+export interface DeliverInput {
+  pin: string;
+  /** The photo of the packages, as a small JPEG data URL (made smaller on the phone before sending). */
+  photo: string;
 }
 
 export interface InvoiceBatchUse {
@@ -376,7 +406,7 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved";
+export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked";
 
 export interface AppNotification {
   id: number;

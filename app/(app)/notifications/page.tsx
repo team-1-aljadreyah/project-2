@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Bell, CheckCheck, PackageX, ShieldAlert, ShoppingBag, CheckCircle2, UserPlus } from "lucide-react";
+import { AlertTriangle, Bell, CheckCheck, Lock, PackageCheck, PackageX, ShieldAlert, ShoppingBag, CheckCircle2, Truck, UserPlus } from "lucide-react";
 import { Button, Card, Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { NotificationType } from "@/lib/api/types";
@@ -27,6 +27,12 @@ const icon = (t: NotificationType) => {
       return <UserPlus className="size-5 text-action" />;
     case "account_approved":
       return <CheckCircle2 className="size-5 text-success" />;
+    case "out_for_delivery":
+      return <Truck className="size-5 text-action" />;
+    case "delivered":
+      return <PackageCheck className="size-5 text-success" />;
+    case "delivery_locked":
+      return <Lock className="size-5 text-danger" />;
   }
 };
 

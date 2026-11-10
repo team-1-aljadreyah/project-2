@@ -39,6 +39,7 @@ import type {
   Warehouse,
   OnlinePayment,
   StartOnlinePayment,
+  DeliverInput,
 } from "./types";
 
 export interface Lookups {
@@ -105,6 +106,13 @@ export const httpApi = {
 
   listOrders: () => get<Order[]>("/orders"),
   getOrder: (id: number) => get<Order>(`/orders/${id}`),
+  // Delivery proof. The backend keeps the PIN and only sends it to the order's shop owner.
+  /** The delivery rep scanned the shipment's QR at the warehouse. */
+  dispatchDelivery: (code: string) => post<Order>("/deliveries/dispatch", { code }),
+  /** At the shop: the photo and the PIN. A wrong PIN comes back as { ok: false, left, locked }. */
+  deliverOrder: (id: number, input: DeliverInput) => post<{ ok: true; order: Order } | { ok: false; left: number; locked: boolean }>(`/orders/${id}/deliver`, input),
+  unlockDelivery: (id: number) => post<Order>(`/orders/${id}/delivery/unlock`),
+  getDeliveryPhoto: (id: number) => get<string | null>(`/orders/${id}/delivery/photo`),
   createOrder: (input: NewOrder) => post<Order>("/orders", input, input.client_ref),
   confirmOrder: (id: number) => post<Invoice>(`/orders/${id}/confirm`),
   approveOrder: (id: number) => post<Order>(`/orders/${id}/approve`),

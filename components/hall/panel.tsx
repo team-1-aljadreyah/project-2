@@ -47,12 +47,15 @@ export function HallPanel({
   alerts,
   selectedId,
   onSelect,
+  onConfirmed,
 }: {
   missions: Mission[];
   moves: Move[];
   alerts: { cell: MapCell; zone: string }[];
   selectedId: number | null;
   onSelect: (id: number | null) => void;
+  /** An order was confirmed here: the page shows its shipment label to print. */
+  onConfirmed?: (orderId: number) => void;
 }) {
   const { tr } = useFmt();
   const [tab, setTab] = useState<"missions" | "moves" | "alerts">("missions");
@@ -72,7 +75,7 @@ export function HallPanel({
         {tab === "missions" &&
           (missions.length ? (
             missions.map((m, i) => (
-              <MissionCard key={m.order.id} m={m} i={i} open={m.order.id === selectedId} onToggle={() => onSelect(m.order.id === selectedId ? null : m.order.id)} />
+              <MissionCard key={m.order.id} m={m} i={i} open={m.order.id === selectedId} onToggle={() => onSelect(m.order.id === selectedId ? null : m.order.id)} onConfirmed={onConfirmed} />
             ))
           ) : (
             <EmptyNote icon={<CheckCircle2 className="size-6 text-success" />} text={tr("كل الطلبات تم تجهيزها", "All orders are prepared")} />
@@ -129,7 +132,7 @@ function MoveRow({ mv }: { mv: Move }) {
   );
 }
 
-function MissionCard({ m, i, open, onToggle }: { m: Mission; i: number; open: boolean; onToggle: () => void }) {
+function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: number; open: boolean; onToggle: () => void; onConfirmed?: (orderId: number) => void }) {
   const { tr, qty, num } = useFmt();
   const toast = useToast();
   const picked = new Set(usePicked()[m.order.id] ?? []);
@@ -154,6 +157,7 @@ function MissionCard({ m, i, open, onToggle }: { m: Mission; i: number; open: bo
     try {
       await api.confirmOrder(m.order.id);
       clearPicked(m.order.id);
+      onConfirmed?.(m.order.id);
       toast("success", tr(`تم تجهيز ${m.order.number} وصدرت الفاتورة`, `${m.order.number} prepared and invoiced`));
     } catch (e) {
       toast("danger", errorText(e, tr));
