@@ -15,23 +15,53 @@ function canAnimate() {
 /** Cross-fade the whole page (used for the language switch). */
 export function fadeSwitch(update: () => void) {
   if (!canAnimate()) return update();
+  stopRunning();
   document.documentElement.dataset.vt = "fade";
-  const t = document.startViewTransition(() => flushSync(update));
-  t.finished.finally(() => delete document.documentElement.dataset.vt);
+  const t = start(update);
+  t.finished.catch(() => {}).finally(() => done(t));
 }
 
 /** The new theme grows as a circle from the point (x, y), the middle of the button that was pressed. */
 export function circleSwitch(update: () => void, x: number, y: number) {
   if (!canAnimate()) return update();
+  stopRunning();
   document.documentElement.dataset.vt = "circle";
-  const t = document.startViewTransition(() => flushSync(update));
+  const t = start(update);
   // The circle must reach the farthest corner of the screen.
   const radius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
-  t.ready.then(() => {
-    document.documentElement.animate(
-      { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
-      { duration: 550, easing: "cubic-bezier(0.22, 1, 0.36, 1)", pseudoElement: "::view-transition-new(root)" },
-    );
-  });
-  t.finished.finally(() => delete document.documentElement.dataset.vt);
+  t.ready
+    .then(() => {
+      document.documentElement.animate(
+        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+        { duration: 450, easing: "cubic-bezier(0.22, 1, 0.36, 1)", pseudoElement: "::view-transition-new(root)" },
+      );
+    })
+    // The browser skips the animation when the tab is in the background or another switch starts:
+    // that is fine (the change itself already happened), so it must not show up as an error.
+    .catch(() => {});
+  t.finished.catch(() => {}).finally(() => done(t));
+}
+
+// ---- One animation at a time ----
+// Pressing the switch again while its animation is still running used to start a second one on top
+// ("Transition was aborted" errors and a flicker). Now the running one jumps to its end first.
+let running: ViewTransition | null = null;
+
+function start(update: () => void) {
+  const t = document.startViewTransition(() => flushSync(update));
+  running = t;
+  // Safety net: if the browser never finishes the animation (for example the window is hidden and
+  // nothing is drawn), still clean up after a moment so nothing stays half-switched.
+  setTimeout(() => done(t), 1200);
+  return t;
+}
+
+function stopRunning() {
+  running?.skipTransition();
+  running = null;
+}
+
+function done(t: ViewTransition) {
+  if (running === t) running = null;
+  if (!running) delete document.documentElement.dataset.vt;
 }

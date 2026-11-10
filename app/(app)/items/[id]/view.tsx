@@ -81,7 +81,7 @@ export default function ItemView() {
           ))}
         </Card>
         <Card className="p-4">
-          <KV k={tr("عمولة المندوب", "Rep commission")} v={<span className="num">{it.commission_percent}%</span>} />
+          <KV k={tr("عمولة مندوب التوصيل", "Delivery rep commission")} v={<span className="num">{it.commission_percent}%</span>} />
           {it.avg_cost !== undefined && <KV k={tr("متوسط سعر الشراء/قطعة", "Avg cost/pc")} v={<Money value={it.avg_cost} />} />}
           <KV k={tr("أقرب صلاحية", "Nearest expiry")} v={<span className="num">{it.nearest_expiry ?? "-"}</span>} />
           <KV k={tr("الباركود", "Barcode")} v={<span className="num">{it.barcode ?? "-"}</span>} />

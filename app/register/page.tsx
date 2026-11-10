@@ -119,7 +119,7 @@ export default function RegisterPage() {
                   </IconField>
                 </div>
 
-                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone" error={err.phone} hint={tr("تسجّل به الدخول، ويتصل بك مندوبك عليه", "You log in with it, and your rep calls you on it")} ltr>
+                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone" error={err.phone} hint={tr("تسجّل به الدخول، ويتصل بك مندوب توصيلك عليه", "You log in with it, and your delivery rep calls you on it")} ltr>
                   <input id="phone" type="tel" inputMode="tel" dir="ltr" autoComplete="tel" placeholder="07XX XXX XXXX" value={f.phone} onChange={(e) => set({ phone: e.target.value })} className={iconInput} />
                 </IconField>
 

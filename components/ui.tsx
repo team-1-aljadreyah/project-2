@@ -402,7 +402,13 @@ export function DataTable<T>({
   empty?: ReactNode;
   footer?: ReactNode;
 }) {
+  const { tr, num } = useFmt();
+  // Long lists draw 50 rows first, and more on demand: drawing hundreds of rows (twice: table + phone cards)
+  // made pages like the invoices list slow to open.
+  const [limit, setLimit] = useState(PAGE);
   if (!rows.length) return <>{empty}</>;
+  const shown = rows.length > limit ? rows.slice(0, limit) : rows;
+  const more = rows.length - shown.length;
   return (
     <>
       <div className={cn("overflow-x-auto", mobile && "hidden md:block")}>
@@ -417,7 +423,7 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {shown.map((r) => {
               const href = onRowHref?.(r);
               return (
                 <tr key={rowKey(r)} className={cn("border-b border-line last:border-0", href && "cursor-pointer hover:bg-card-2")}>
@@ -441,7 +447,7 @@ export function DataTable<T>({
       </div>
       {mobile && (
         <ul className="divide-y divide-line md:hidden">
-          {rows.map((r) => {
+          {shown.map((r) => {
             const href = onRowHref?.(r);
             return (
               <li key={rowKey(r)}>
@@ -457,9 +463,18 @@ export function DataTable<T>({
           })}
         </ul>
       )}
+      {more > 0 && (
+        <div className="border-t border-line p-3 text-center">
+          <Button variant="soft" size="sm" onClick={() => setLimit((l) => l + PAGE)}>
+            {tr(`عرض المزيد (${num(more)} متبقية)`, `Show more (${num(more)} left)`)}
+          </Button>
+        </div>
+      )}
     </>
   );
 }
+
+const PAGE = 50;
 
 // ---------- Dialog ----------
 
@@ -473,7 +488,10 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    ref.current?.querySelector<HTMLElement>("input,select,textarea,button:not([data-close])")?.focus();
+    // On a computer, jump to the first field (good for the keyboard). On a phone, focus the dialog itself:
+    // focusing a text field there pops the keyboard up and hides half of the dialog.
+    if (window.matchMedia("(pointer: coarse)").matches) ref.current?.focus();
+    else ref.current?.querySelector<HTMLElement>("input,select,textarea,button:not([data-close])")?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
@@ -481,13 +499,14 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="no-print fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="dialog-backdrop no-print fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
+        tabIndex={-1}
         role="dialog"
         aria-modal
         aria-labelledby={id}
-        className={cn("flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-card shadow-xl sm:rounded-2xl", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}
+        className={cn("dialog-panel flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-card shadow-xl outline-none sm:rounded-2xl", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 id={id} className="text-base font-semibold">

@@ -49,9 +49,7 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
           transition={{ duration: 0.7, delay: 0.2 }}
           className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg"
         >
-          {tr(
-            "مخزون بالدفعات يخرج فيه الأقدم صلاحيةً أولاً، ومندوبون يطلبون من الجوال حتى بدون إنترنت، وديون وتسديدات واضحة لكل محل. شركة النهرين، كربلاء.",
-            "Stock by batches with the oldest expiry first, reps ordering from their phones even offline, and clear debts and payments for every shop. Al-Nahrain, Karbala.",
+          {tr("مخزون بالدفعات يخرج فيه الأقدم صلاحيةً أولاً، ومندوبو توصيل يطلبون من الجوال حتى بدون إنترنت، وديون وتسديدات واضحة لكل محل. شركة النهرين، كربلاء.", "Stock by batches with the oldest expiry first, delivery reps ordering from their phones even offline, and clear debts and payments for every shop. Al-Nahrain, Karbala.",
           )}
         </motion.p>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.35 }} className="mt-9 flex flex-wrap justify-center gap-3">

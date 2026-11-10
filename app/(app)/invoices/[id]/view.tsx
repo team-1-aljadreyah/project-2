@@ -97,7 +97,7 @@ export default function InvoiceView() {
             </p>
           </div>
           <div className="sm:text-end">
-            <p className="text-xs text-muted">{tr("المندوب", "Rep")}</p>
+            <p className="text-xs text-muted">{tr("مندوب التوصيل", "Delivery")}</p>
             <p className="font-semibold">{rep?.name}</p>
             <p className="text-muted">{name(lookups.tiers.find((t) => t.id === c?.tier_id))}</p>
           </div>

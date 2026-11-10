@@ -2,16 +2,17 @@
 
 import { motion } from "motion/react";
 import { Check, Clock, PhoneCall, ShoppingCart, XCircle } from "lucide-react";
-import { OrderBuilder } from "@/components/order-builder";
+import { ShopStore } from "@/components/shop-store";
 import { useApp } from "@/components/shell";
-import { Button, Card, ErrorBox, LoadingRows, Notice, PageHeader } from "@/components/ui";
+import { Button, Card, ErrorBox, LoadingRows, Notice } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Customer } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 
-// The shop owner orders by himself. The order goes to the manager and to the shop's rep.
+// The shop owner orders by himself, in a store made after the coffee-shop app design (components/shop-store.tsx).
+// The order goes to the manager and to the shop's rep.
 // A shop that signed up on the website sees a "waiting for approval" screen until the manager approves it;
 // the screen turns into the order page by itself as soon as that happens.
 export default function ShopOrderPage() {
@@ -33,12 +34,7 @@ export default function ShopOrderPage() {
       </Card>
     );
   }
-  return (
-    <>
-      <PageHeader title={tr("اطلب بضاعتك", "Order your goods")} subtitle={tr("هذه أسعارك الخاصة، ويصل الطلب إلى الشركة وإلى مندوبك.", "These are your own prices. The order reaches the company and your rep.")} />
-      <OrderBuilder fixedCustomerId={user.customer_id} />
-    </>
-  );
+  return <ShopStore customer={c.data} />;
 }
 
 function PendingAccount({ customer }: { customer: Customer }) {
@@ -47,7 +43,7 @@ function PendingAccount({ customer }: { customer: Customer }) {
   const rep = lookups.reps.find((r) => r.id === customer.rep_id);
   const steps = [
     { done: true, now: false, t: tr("سجّلت محلك", "You registered your shop"), b: tr(`${customer.name} · ${customer.area}`, `${customer.name} · ${customer.area}`) },
-    { done: false, now: true, t: tr("الشركة تراجع معلوماتك", "The company checks your details"), b: tr("تحدد أسعارك وسقف الدين ومندوبك", "It sets your prices, debt limit and rep") },
+    { done: false, now: true, t: tr("الشركة تراجع معلوماتك", "The company checks your details"), b: tr("تحدد أسعارك وسقف الدين ومندوب توصيلك", "It sets your prices, debt limit and delivery rep") },
     { done: false, now: false, t: tr("تطلب بضاعتك من الموقع", "You order your goods here"), b: tr("في أي وقت، من جوالك", "Any time, from your phone") },
   ];
   return (
@@ -85,7 +81,7 @@ function PendingAccount({ customer }: { customer: Customer }) {
         <div className="mt-8 grid gap-2 sm:grid-cols-2">
           {rep && (
             <Button href={`tel:${rep.phone}`}>
-              <PhoneCall className="size-4" /> {tr(`اتصل بمندوبك: ${rep.name}`, `Call your rep: ${rep.name}`)}
+              <PhoneCall className="size-4" /> {tr(`اتصل بمندوب توصيلك: ${rep.name}`, `Call your delivery rep: ${rep.name}`)}
             </Button>
           )}
           <Button variant="soft" disabled className={cn(!rep && "sm:col-span-2")}>

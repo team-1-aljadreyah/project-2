@@ -19,12 +19,12 @@ export function BrandPanel({ variant }: { variant: "login" | "register" }) {
   const points = login
     ? [
         tr("الدفعة الأقدم صلاحيةً تخرج أولاً، والمنتهية لا تُباع", "Oldest expiry leaves first, expired is never sold"),
-        tr("المندوب يطلب من جواله حتى بدون إنترنت", "Reps order from their phone, even offline"),
+        tr("مندوب التوصيل يطلب من جواله حتى بدون إنترنت", "Delivery reps order from their phone, even offline"),
         tr("سقف دين لكل زبون وكشف حساب واضح", "A debt limit and a clear statement for every shop"),
       ]
     : [
         tr("أسعار الجملة الخاصة بمحلك", "Your shop's own wholesale prices"),
-        tr("اطلب في أي وقت من جوالك، ويصل الطلب إلى مندوبك", "Order any time from your phone; it reaches your rep"),
+        tr("اطلب في أي وقت من جوالك، ويصل الطلب إلى مندوب توصيلك", "Order any time from your phone; it reaches your delivery rep"),
         tr("كشف حسابك وتسديداتك واضحة دائماً", "Your statement and payments, always clear"),
       ];
   return (
@@ -40,7 +40,7 @@ export function BrandPanel({ variant }: { variant: "login" | "register" }) {
 
       <div className="relative max-w-lg">
         <motion.h2 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-4xl font-bold leading-snug xl:text-5xl">
-          {login ? tr("المخزون والديون والمندوبين", "Stock, debts and reps") : tr("سجّل محلك", "Register your shop")}
+          {login ? tr("المخزون والديون ومندوبي التوصيل", "Stock, debts and delivery reps") : tr("سجّل محلك", "Register your shop")}
           <span className="block text-[#f5b48a]">{login ? tr("في مكان واحد", "in one place") : tr("واطلب بنفسك", "and order by yourself")}</span>
         </motion.h2>
         <motion.ul variants={stagger} initial="hidden" animate="show" className="mt-8 space-y-3">
@@ -57,7 +57,7 @@ export function BrandPanel({ variant }: { variant: "login" | "register" }) {
           {login ? (
             <>
               <div className="flex items-center justify-between text-sm">
-                <span className="opacity-80">{tr("طلب جديد من المندوب", "New order from a rep")}</span>
+                <span className="opacity-80">{tr("طلب جديد من مندوب التوصيل", "New order from a delivery rep")}</span>
                 <span className="flex items-center gap-1 rounded-full bg-[#e1692b]/25 px-2 py-0.5 text-xs text-[#f5b48a]">
                   <WifiOff className="size-3" /> {tr("حُفظ بدون إنترنت", "Saved offline")}
                 </span>
@@ -78,7 +78,7 @@ export function BrandPanel({ variant }: { variant: "login" | "register" }) {
               </div>
               <p className="mt-2 text-lg font-bold">{tr("رز بسمتي · 4 كارتون", "Basmati rice · 4 cartons")}</p>
               <div className="mt-2 flex items-center justify-between text-sm opacity-85">
-                <span>{tr("مندوبك: حسين علي", "Your rep: Hussein Ali")}</span>
+                <span>{tr("مندوب توصيلك: حسين علي", "Your delivery rep: Hussein Ali")}</span>
                 <span className="num font-semibold">177,000 {tr("د.ع", "IQD")}</span>
               </div>
             </>

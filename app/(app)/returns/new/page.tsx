@@ -78,7 +78,7 @@ export default function NewReturnPage() {
   return (
     <>
       <PageHeader title={tr("مرتجع جديد", "New return")} back="/returns" />
-      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
           <Card className="grid gap-3 p-4 sm:grid-cols-2">
             <Field label={tr("الزبون", "Customer")}>

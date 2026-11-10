@@ -172,7 +172,7 @@ function OfflineCard() {
             <WifiOff className="size-5" />
           </span>
           <h3 className="mt-4 text-2xl font-bold sm:text-3xl">{tr("الطلب لا يضيع حتى بدون إنترنت", "No order is lost, even offline")}</h3>
-          <p className="mt-3 text-sm text-muted">{tr("يُكمل المندوب عمله في المناطق ضعيفة الإنترنت؛ إذ يُحفظ الطلب على الجوال ويُرسَل تلقائياً عند عودة الإنترنت، دون أن يتكرر.", "Reps keep working where the internet is weak. Orders are saved on the phone and sent by themselves later, never twice.")}</p>
+          <p className="mt-3 text-sm text-muted">{tr("يُكمل مندوب التوصيل عمله في المناطق ضعيفة الإنترنت؛ إذ يُحفظ الطلب على الجوال ويُرسَل تلقائياً عند عودة الإنترنت، دون أن يتكرر.", "Delivery reps keep working where the internet is weak. Orders are saved on the phone and sent by themselves later, never twice.")}</p>
         </div>
       </div>
     </motion.div>
@@ -216,7 +216,7 @@ function CommissionCard({ enter }: { enter: string }) {
 export function Roles() {
   const { tr } = useFmt();
   const roles: { icon: LucideIcon; t: string; b: string; tilt: number; main?: boolean }[] = [
-    { icon: Truck, t: tr("المندوب", "Sales rep"), b: tr("طلبات وتسديدات من الجوال", "Orders and payments by phone"), tilt: -6 },
+    { icon: Truck, t: tr("مندوب التوصيل", "Delivery rep"), b: tr("طلبات وتسديدات من الجوال", "Orders and payments by phone"), tilt: -6 },
     { icon: Warehouse, t: tr("أمين المخزن", "Warehouse keeper"), b: tr("استلام، صرف، تحويل وجرد", "Receive, issue, transfer, count"), tilt: 4 },
     { icon: LayoutDashboard, t: tr("المدير", "Manager"), b: tr("يرى كل شيء ويتحكم في الأسعار والديون", "Sees all, controls prices and debts"), tilt: -2, main: true },
     { icon: Calculator, t: tr("المحاسب", "Accountant"), b: tr("الفواتير والديون والتسديدات", "Invoices, debts and payments"), tilt: 5 },
@@ -228,7 +228,7 @@ export function Roles() {
         <Eyebrow>{tr("الصلاحيات", "Roles")}</Eyebrow>
         <WordReveal text={tr("كلٌّ يرى عمله فقط", "Everyone sees only their part")} className="mt-4 text-3xl font-bold sm:text-5xl" />
         <motion.p {...rise(0.2)} className="mt-4 text-muted">
-          {tr("المندوب لا يرى سعر الشراء، وأمين المخزن لا يرى الديون، وكل تعديل يُسجَّل باسم صاحبه.", "Reps never see cost, the warehouse never sees debts, and every change is logged by name.")}
+          {tr("مندوب التوصيل لا يرى سعر الشراء، وأمين المخزن لا يرى الديون، وكل تعديل يُسجَّل باسم صاحبه.", "Delivery reps never see cost, the warehouse never sees debts, and every change is logged by name.")}
         </motion.p>
       </div>
       <div className="mt-14 flex flex-wrap justify-center gap-4">

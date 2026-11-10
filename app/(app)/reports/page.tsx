@@ -69,7 +69,7 @@ function Daily() {
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardHeader title={tr("حسب المندوب", "By rep")} />
+              <CardHeader title={tr("حسب مندوب التوصيل", "By delivery rep")} />
               <div className="p-4">{x.by_rep.length ? <RankBars rows={x.by_rep.map((r) => ({ label: r.label, value: r.sales, sub: tr(`${r.invoices} فاتورة`, `${r.invoices} invoices`) }))} /> : <Empty title={tr("لا مبيعات", "No sales")} />}</div>
             </Card>
             <Card>
@@ -114,7 +114,7 @@ function Sales() {
           onChange={setGroup}
           options={[
             { value: "item", label: tr("حسب المادة", "By item") },
-            { value: "rep", label: tr("حسب المندوب", "By rep") },
+            { value: "rep", label: tr("حسب مندوب التوصيل", "By delivery rep") },
             { value: "warehouse", label: tr("حسب المخزن", "By warehouse") },
             { value: "customer", label: tr("حسب الزبون", "By customer") },
           ]}
@@ -247,7 +247,7 @@ function Debts() {
           onRowHref={(r) => `/customers/${r.customer.id}`}
           columns={[
             { key: "n", head: tr("الزبون", "Customer"), cell: (r) => r.customer.name },
-            { key: "r", head: tr("المندوب", "Rep"), cell: (r) => lookups.reps.find((x) => x.id === r.customer.rep_id)?.name },
+            { key: "r", head: tr("مندوب التوصيل", "Delivery"), cell: (r) => lookups.reps.find((x) => x.id === r.customer.rep_id)?.name },
             { key: "o", head: tr("فواتير مفتوحة", "Open invoices"), cell: (r) => <span className="num">{r.open_invoices}</span>, align: "center" },
             { key: "a", head: tr("أقدم فاتورة", "Oldest"), cell: (r) => (r.oldest_open ? ago(r.oldest_open) : "-") },
             {

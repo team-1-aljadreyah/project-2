@@ -5,11 +5,13 @@ import {
   Boxes,
   ClipboardCheck,
   ClipboardList,
+  Contact,
   FileText,
   History,
   Home,
   LayoutDashboard,
   Map as MapIcon,
+  Warehouse,
   Package,
   PackagePlus,
   Percent,
@@ -37,8 +39,10 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
-  { href: "/dashboard", ar: "لوحة التحكم", en: "Dashboard", icon: LayoutDashboard, roles: ["manager", "accountant"], group: "main", mobile: ["manager", "accountant"] },
-  { href: "/map", ar: "خريطة المخازن", en: "Warehouse map", icon: MapIcon, roles: ["manager", "warehouse", "accountant"], group: "main", mobile: ["warehouse"] },
+  { href: "/dashboard", ar: "لوحة التحكم", en: "Dashboard", icon: LayoutDashboard, roles: ["manager", "accountant"], group: "main", mobile: ["manager"] },
+  { href: "/accounts", ar: "ملف الحساب", en: "Account file", icon: Contact, roles: ["accountant"], group: "main", mobile: ["accountant"] },
+  { href: "/hall", ar: "قاعة التجهيز", en: "Picking hall", icon: Warehouse, roles: ["warehouse"], group: "main", mobile: ["warehouse"] },
+  { href: "/map", ar: "خريطة المخازن", en: "Warehouse map", icon: MapIcon, roles: ["manager", "warehouse", "accountant"], group: "main" },
   { href: "/rep", ar: "الرئيسية", en: "Home", icon: Home, roles: ["rep"], group: "main", mobile: ["rep"] },
   { href: "/shop", ar: "اطلب الآن", en: "Order now", icon: Store, roles: ["shop"], group: "main", mobile: ["shop"] },
   { href: "/orders/new", ar: "طلب جديد", en: "New order", icon: ShoppingCart, roles: ["rep", "manager"], group: "sales", mobile: ["rep"] },
@@ -72,7 +76,6 @@ export const GROUPS: Record<NavItem["group"], [string, string]> = {
 const EXTRA: { prefix: string; roles: Role[] }[] = [
   { prefix: "/payments/", roles: ["manager", "accountant", "rep"] },
   { prefix: "/notifications", roles: ["manager", "warehouse", "rep", "accountant", "shop"] },
-  { prefix: "/account", roles: ["manager", "warehouse", "rep", "accountant", "shop"] },
   { prefix: "/invoices/", roles: ["manager", "accountant", "rep", "shop", "warehouse"] },
   { prefix: "/returns/", roles: ["manager", "accountant", "rep", "warehouse", "shop"] },
 ];

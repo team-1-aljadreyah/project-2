@@ -33,7 +33,7 @@ export default function SettingsPage() {
             <Field label={tr("تُعدّ المادة راكدة إذا لم تُبع خلال (يوم)", "An item is slow if not sold in (days)")}>
               <NumberInput value={s.slow_moving_days} onChange={(v) => setS({ ...s, slow_moving_days: v === "" ? 0 : v })} />
             </Field>
-            <Switch checked={s.auto_confirm_rep_orders} onChange={(v) => setS({ ...s, auto_confirm_rep_orders: v })} label={tr("تثبيت طلبات المندوبين تلقائياً (بدون مراجعة المخزن)", "Confirm rep orders automatically (no warehouse review)")} />
+            <Switch checked={s.auto_confirm_rep_orders} onChange={(v) => setS({ ...s, auto_confirm_rep_orders: v })} label={tr("تثبيت طلبات مندوبي التوصيل تلقائياً (بدون مراجعة المخزن)", "Confirm delivery rep orders automatically (no warehouse review)")} />
             <Button
               variant="primary"
               loading={busy}
