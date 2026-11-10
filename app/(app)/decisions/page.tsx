@@ -56,13 +56,14 @@ export default function DecisionsPage() {
   const debts = useLoad(() => api.debts(), []);
   const stocktakes = useLoad(() => api.listStocktakes(), []);
   const closed = useLoad(() => api.closedMonths(), []);
+  const online = useLoad(() => api.listOnlinePayments(), []);
   const snoozedRaw = useSyncExternalStore(subscribeSnooze, readSnooze, () => "[]");
   const snoozed = JSON.parse(snoozedRaw) as string[];
   const [cheer, setCheer] = useState(0);
   const [done, setDone] = useState(0);
   const [ask, setAsk] = useState<Decision | null>(null);
 
-  const loads = [orders, customers, expiring, debts, stocktakes, closed];
+  const loads = [orders, customers, expiring, debts, stocktakes, closed, online];
   const failed = loads.find((l) => l.state.status === "error");
   if (failed && failed.state.status === "error") return <ErrorBox error={failed.state.error} onRetry={failed.reload} />;
   const ready = loads.every((l) => l.data) && now > 0;
@@ -76,6 +77,7 @@ export default function DecisionsPage() {
         debts: debts.data!,
         stocktakes: stocktakes.data!,
         closedMonths: closed.data!,
+        online: online.data!,
         nearDays: lookups.settings.near_expiry_days,
         now,
         tr,
@@ -294,7 +296,7 @@ function DecisionCard({
             {tr("استلام بضاعة", "Receive goods")}
           </Button>
         )}
-        {d.kind === "late_debt" && d.phone && (
+        {(d.kind === "late_debt" || d.kind === "online_failed") && d.phone && (
           <>
             <Button size="sm" variant="action" href={`tel:${d.phone}`}>
               <Phone className="size-3.5" /> {tr("اتصال", "Call")}

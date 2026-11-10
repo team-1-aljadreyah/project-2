@@ -10,6 +10,8 @@ import type {
   InvoiceBatchUse,
   InvoiceLine,
   Item,
+  OnlinePayment,
+  OnlineStatus,
   Order,
   Payment,
   PriceTier,
@@ -61,9 +63,19 @@ export interface Db {
   notified_batches: number[];
   /** Items that are below their minimum right now and were already notified. */
   notified_low: number[];
+  /** Online payments started on the (demo) Qi gateway, finished or not. */
+  online_payments: DbOnline[];
 }
 
-export const DB_VERSION = 8;
+export type DbOnline = Omit<OnlinePayment, "form_url"> & {
+  key: string;
+  return_url: string;
+  /** What the gateway page decided; it becomes the status a moment later, like the gateway's notification. */
+  outcome?: OnlineStatus;
+  settles_at?: number;
+};
+
+export const DB_VERSION = 9;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

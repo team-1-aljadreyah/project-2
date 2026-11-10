@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { RotateCcw } from "lucide-react";
+import { MethodChip } from "@/components/pay-method";
 import { useApp } from "@/components/shell";
 import { roleName } from "@/components/status";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
@@ -52,11 +53,25 @@ export default function PaymentView() {
           <div className="mt-3 border-t border-line pt-2">
             <KV k={tr("الزبون", "Customer")} v={customer.data ? <Link className="text-primary-ink hover:underline" href={`/customers/${customer.data.id}`}>{customer.data.name}</Link> : "…"} />
             <KV k={tr("الوقت", "Time")} v={dateTime(p.date)} />
-            <KV k={tr("سجّله", "Entered by")} v={`${p.received_by.name} (${roleName(p.received_by.role, tr)})`} />
-            <KV k={tr("الطريقة", "Method")} v={p.method === "cash" ? tr("نقداً", "Cash") : tr("تحويل", "Transfer")} />
+            <KV k={p.method === "online" ? tr("دفعه", "Paid by") : tr("سجّله", "Entered by")} v={`${p.received_by.name} (${roleName(p.received_by.role, tr)})`} />
+            <KV k={tr("الطريقة", "Method")} v={<MethodChip m={p.method} tr={tr} />} />
             {p.note && <KV k={tr("ملاحظة", "Note")} v={p.note} />}
             {p.reason && <KV k={tr("سبب العكس", "Reason")} v={p.reason} />}
           </div>
+          {/* Online payment: what the Qi gateway told us (the full card number never reaches our site) */}
+          {p.gateway && (
+            <div className="mt-3 rounded-xl border border-line bg-card-2 p-3">
+              <p className="mb-1 flex items-center gap-2 text-sm font-bold">
+                <span className="flex size-6 items-center justify-center rounded-md bg-[#f7c600] text-[10px] font-black text-black">Qi</span>
+                {tr("تفاصيل الدفع الأونلاين", "Online payment details")}
+              </p>
+              <KV k={tr("بوابة الدفع", "Gateway")} v="Qi Card" />
+              <KV k={tr("رقم العملية لدى Qi", "Qi reference")} v={<span className="num text-xs" dir="ltr">{p.gateway.payment_id}</span>} />
+              <KV k={tr("البطاقة", "Card")} v={<span className="num" dir="ltr">{p.gateway.card}</span>} />
+              <KV k={tr("حالة البوابة", "Gateway status")} v={<span className="font-semibold text-success">{tr("نجح", "Succeeded")}</span>} />
+              <p className="mt-2 text-[11px] text-muted">{tr("عند عكس تسديد أونلاين، يُرجَع المبلغ للزبون من لوحة Qi نفسها.", "If an online payment is reversed, refund the customer from Qi's own dashboard.")}</p>
+            </div>
+          )}
           {p.reversal_of && (
             <div className="mt-3">
               <Notice tone="primary">

@@ -37,6 +37,8 @@ import type {
   User,
   UserInput,
   Warehouse,
+  OnlinePayment,
+  StartOnlinePayment,
 } from "./types";
 
 export interface Lookups {
@@ -115,6 +117,11 @@ export const httpApi = {
   getPayment: (id: number) => get<Payment>(`/payments/${id}`),
   previewAllocation: (customerId: number, amount: number) => get<Allocation[]>(`/customers/${customerId}/allocation`, { amount }),
   createPayment: (input: NewPayment) => post<Payment>("/payments", input, input.client_ref),
+  // Online payment (Qi Card): the backend creates the payment at Qi and returns Qi's page address (form_url).
+  // The result comes from Qi's notification to the backend, so the page asks again until it is final.
+  startOnlinePayment: (input: StartOnlinePayment) => post<OnlinePayment>("/payments/online", input, input.key),
+  getOnlinePayment: (id: string) => get<OnlinePayment>(`/payments/online/${id}`),
+  listOnlinePayments: () => get<OnlinePayment[]>("/payments/online"),
   reversePayment: (id: number, reason: string) => post<Payment>(`/payments/${id}/reverse`, { reason }),
 
   listReturns: () => get<Return[]>("/returns"),

@@ -5,7 +5,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { motion } from "motion/react";
-import { ArrowUpLeft, ArrowUpRight, Banknote, Check, ChevronDown, Landmark, Search, Undo2 } from "lucide-react";
+import { ArrowUpLeft, ArrowUpRight, Banknote, Check, ChevronDown, CreditCard, Landmark, Search, Undo2 } from "lucide-react";
+import { methodLabel } from "@/components/pay-method";
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Customer, Invoice, Payment } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -247,7 +248,7 @@ export function PaymentList({ payments }: { payments: Payment[] }) {
   return (
     <ul className="space-y-2">
       {payments.map((p) => {
-        const Icon = p.reversal_of ? Undo2 : p.method === "cash" ? Banknote : Landmark;
+        const Icon = p.reversal_of ? Undo2 : p.method === "online" ? CreditCard : p.method === "cash" ? Banknote : Landmark;
         const off = p.reversed || !!p.reversal_of;
         return (
           <li key={p.id}>
@@ -260,7 +261,7 @@ export function PaymentList({ payments }: { payments: Payment[] }) {
                   <span className="num" dir="ltr">
                     {p.number}
                   </span>{" "}
-                  · {p.reversal_of ? tr("عملية عكسية", "Reversal") : p.method === "cash" ? tr("نقداً", "Cash") : tr("تحويل", "Transfer")}
+                  · {p.reversal_of ? tr("عملية عكسية", "Reversal") : methodLabel(p.method, tr)}
                 </p>
                 <p className={cn("num text-base font-bold", off && "text-muted line-through")}>{money(Math.abs(p.amount))}</p>
               </div>
