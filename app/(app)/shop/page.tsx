@@ -2,16 +2,17 @@
 
 import { motion } from "motion/react";
 import { Check, Clock, PhoneCall, ShoppingCart, XCircle } from "lucide-react";
-import { OrderBuilder } from "@/components/order-builder";
+import { ShopStore } from "@/components/shop-store";
 import { useApp } from "@/components/shell";
-import { Button, Card, ErrorBox, LoadingRows, Notice, PageHeader } from "@/components/ui";
+import { Button, Card, ErrorBox, LoadingRows, Notice } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Customer } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 
-// The shop owner orders by himself. The order goes to the manager and to the shop's rep.
+// The shop owner orders by himself, in a store made after the coffee-shop app design (components/shop-store.tsx).
+// The order goes to the manager and to the shop's rep.
 // A shop that signed up on the website sees a "waiting for approval" screen until the manager approves it;
 // the screen turns into the order page by itself as soon as that happens.
 export default function ShopOrderPage() {
@@ -33,12 +34,7 @@ export default function ShopOrderPage() {
       </Card>
     );
   }
-  return (
-    <>
-      <PageHeader title={tr("اطلب بضاعتك", "Order your goods")} subtitle={tr("هذه أسعارك الخاصة، ويصل الطلب إلى الشركة وإلى مندوبك.", "These are your own prices. The order reaches the company and your rep.")} />
-      <OrderBuilder fixedCustomerId={user.customer_id} />
-    </>
-  );
+  return <ShopStore customer={c.data} />;
 }
 
 function PendingAccount({ customer }: { customer: Customer }) {
