@@ -43,7 +43,7 @@ function PendingAccount({ customer }: { customer: Customer }) {
   const rep = lookups.reps.find((r) => r.id === customer.rep_id);
   const steps = [
     { done: true, now: false, t: tr("سجّلت محلك", "You registered your shop"), b: tr(`${customer.name} · ${customer.area}`, `${customer.name} · ${customer.area}`) },
-    { done: false, now: true, t: tr("الشركة تراجع معلوماتك", "The company checks your details"), b: tr("تحدد أسعارك وسقف الدين ومندوبك", "It sets your prices, debt limit and rep") },
+    { done: false, now: true, t: tr("الشركة تراجع معلوماتك", "The company checks your details"), b: tr("تحدد أسعارك وسقف الدين ومندوب توصيلك", "It sets your prices, debt limit and delivery rep") },
     { done: false, now: false, t: tr("تطلب بضاعتك من الموقع", "You order your goods here"), b: tr("في أي وقت، من جوالك", "Any time, from your phone") },
   ];
   return (
@@ -81,7 +81,7 @@ function PendingAccount({ customer }: { customer: Customer }) {
         <div className="mt-8 grid gap-2 sm:grid-cols-2">
           {rep && (
             <Button href={`tel:${rep.phone}`}>
-              <PhoneCall className="size-4" /> {tr(`اتصل بمندوبك: ${rep.name}`, `Call your rep: ${rep.name}`)}
+              <PhoneCall className="size-4" /> {tr(`اتصل بمندوب توصيلك: ${rep.name}`, `Call your delivery rep: ${rep.name}`)}
             </Button>
           )}
           <Button variant="soft" disabled className={cn(!rep && "sm:col-span-2")}>

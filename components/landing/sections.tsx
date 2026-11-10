@@ -112,9 +112,9 @@ export function Platform() {
   const rtl = lang === "ar";
   const cards: { icon: LucideIcon; t: string; b: string }[] = [
     { icon: Boxes, t: tr("المخزون بالدفعات", "Stock by batches"), b: tr("صلاحية وسعر لكل دفعة", "Expiry and cost per batch") },
-    { icon: Truck, t: tr("المندوبين", "Sales reps"), b: tr("طلبات من الجوال، حتى بدون إنترنت", "Phone orders, even offline") },
+    { icon: Truck, t: tr("مندوبي التوصيل", "Delivery reps"), b: tr("طلبات من الجوال، حتى بدون إنترنت", "Phone orders, even offline") },
     { icon: HandCoins, t: tr("الديون والتسديد", "Debts and payments"), b: tr("سقف لكل محل، وأقدم فاتورة أولاً", "A limit per shop, oldest invoice first") },
-    { icon: BarChart3, t: tr("التقارير والأرباح", "Reports and profit"), b: tr("يومية، لكل مندوب ومادة ومخزن", "Daily, by rep, item and warehouse") },
+    { icon: BarChart3, t: tr("التقارير والأرباح", "Reports and profit"), b: tr("يومية، لكل مندوب توصيل ومادة ومخزن", "Daily, by delivery rep, item and warehouse") },
   ];
   // The drawing is 900 × 360. In Arabic everything is mirrored: cards on the right, the chip on the left.
   const W = 900;
@@ -135,7 +135,7 @@ export function Platform() {
         <Eyebrow>{tr("مع النهرين", "With Al-Nahrain")}</Eyebrow>
         <WordReveal text={tr("نظام واحد لكل العمل", "One system for all the work")} className="mt-4 text-3xl font-bold sm:text-5xl" />
         <motion.p {...rise(0.2)} className="mt-4 text-muted">
-          {tr("من استلام البضاعة إلى آخر تسديد: يعمل المخزن والمندوب والمحاسب والمدير وصاحب المحل على الأرقام نفسها.", "From receiving goods to the last payment: warehouse, reps, accountant, manager and shop owners all work on the same numbers.")}
+          {tr("من استلام البضاعة إلى آخر تسديد: يعمل المخزن ومندوب التوصيل والمحاسب والمدير وصاحب المحل على الأرقام نفسها.", "From receiving goods to the last payment: warehouse, delivery reps, accountant, manager and shop owners all work on the same numbers.")}
         </motion.p>
       </div>
 

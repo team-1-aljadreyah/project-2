@@ -34,7 +34,7 @@ export default function CommissionsPage() {
   const total = (k: keyof Pick<CommissionRow, "paid_sales" | "commission" | "returns_deducted" | "net">) => (rows.data ?? []).reduce((s, r) => s + r[k], 0);
 
   const columns: Column<CommissionRow>[] = [
-    { key: "r", head: tr("المندوب", "Rep"), cell: (r) => <span className="font-medium">{r.rep.name}</span> },
+    { key: "r", head: tr("مندوب التوصيل", "Delivery"), cell: (r) => <span className="font-medium">{r.rep.name}</span> },
     { key: "p", head: tr("المبالغ المقبوضة", "Money collected"), cell: (r) => <Money value={r.paid_sales} />, align: "end" },
     { key: "c", head: tr("العمولة", "Commission"), cell: (r) => <Money value={r.commission} />, align: "end" },
     { key: "d", head: tr("خصم المرتجعات", "Returns deducted"), cell: (r) => <Money value={-r.returns_deducted} className="text-danger" />, align: "end" },
@@ -44,7 +44,7 @@ export default function CommissionsPage() {
   return (
     <>
       <PageHeader
-        title={user.role === "rep" ? tr("عمولتي", "My commission") : tr("عمولات المندوبين", "Rep commission")}
+        title={user.role === "rep" ? tr("عمولتي", "My commission") : tr("عمولات مندوبي التوصيل", "Delivery rep commission")}
         subtitle={tr("نسبة لكل مادة، تُحسب على المبالغ المدفوعة فعلاً. ولا يُحسب البيع الآجل إلا بعد أن يسدد الزبون.", "A rate per item, counted on money actually paid. Credit sales count only after the customer pays.")}
         actions={
           <>
@@ -59,7 +59,7 @@ export default function CommissionsPage() {
               <Button
                 onClick={() =>
                   downloadCsv(`commission-${month}`, [
-                    [tr("المندوب", "Rep"), tr("المقبوض", "Collected"), tr("العمولة", "Commission"), tr("المرتجعات", "Returns"), tr("الصافي", "Net")],
+                    [tr("مندوب التوصيل", "Delivery"), tr("المقبوض", "Collected"), tr("العمولة", "Commission"), tr("المرتجعات", "Returns"), tr("الصافي", "Net")],
                     ...(rows.data ?? []).map((r) => [r.rep.name, r.paid_sales, r.commission, r.returns_deducted, r.net]),
                   ])
                 }

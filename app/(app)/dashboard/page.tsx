@@ -95,7 +95,7 @@ export default function DashboardPage() {
           </div>
         </Card>
         <Card>
-          <CardHeader title={tr("مبيعات اليوم حسب المندوب", "Today by rep")} />
+          <CardHeader title={tr("مبيعات اليوم حسب مندوب التوصيل", "Today by delivery rep")} />
           <div className="p-4">
             {daily.data && daily.data.by_rep.length ? (
               <RankBars rows={daily.data.by_rep.map((r) => ({ label: r.label, value: r.sales, sub: tr(`${r.invoices} فاتورة`, `${r.invoices} invoices`) }))} />

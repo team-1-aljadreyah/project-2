@@ -12,7 +12,7 @@ export function roleName(role: Role, tr: Tr) {
     case "warehouse":
       return tr("أمين المخزن", "Warehouse keeper");
     case "rep":
-      return tr("مندوب", "Sales rep");
+      return tr("مندوب التوصيل", "Delivery");
     case "accountant":
       return tr("محاسب", "Accountant");
     case "shop":
@@ -55,5 +55,5 @@ export function SourceBadge({ source }: { source: OrderSource }) {
   const { tr } = useFmt();
   if (source === "shop") return <Badge tone="primary">{tr("من المحل", "Shop online")}</Badge>;
   if (source === "office") return <Badge>{tr("من المكتب", "Office")}</Badge>;
-  return <Badge>{tr("مندوب", "Rep")}</Badge>;
+  return <Badge>{tr("من مندوب التوصيل", "Delivery rep")}</Badge>;
 }

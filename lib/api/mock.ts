@@ -520,7 +520,7 @@ export const mockApi: Api = {
         const parts: string[] = [];
         if (c.debt_limit !== clean.debt_limit) parts.push(`سقف الدين ${c.debt_limit.toLocaleString("en")} ← ${clean.debt_limit.toLocaleString("en")}`);
         if (c.tier_id !== clean.tier_id) parts.push("نوع السعر");
-        if (c.rep_id !== clean.rep_id) parts.push("المندوب");
+        if (c.rep_id !== clean.rep_id) parts.push("مندوب التوصيل");
         Object.assign(c, clean);
         audit(db, a, "update", "customer", c.id, `تعديل الزبون ${c.name}${parts.length ? ` (${parts.join("، ")})` : ""}`, `Updated customer ${c.name}`, now);
         // A shop that signed up online: saving it as active is the approval.

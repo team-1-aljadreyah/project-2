@@ -343,7 +343,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
             <p className="text-xs text-muted">{customer.address || customer.area}</p>
             {rep && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-                <Truck className="size-3.5" /> {tr("مندوبك", "Your rep")}: {rep.name}
+                <Truck className="size-3.5" /> {tr("مندوب توصيلك", "Your delivery rep")}: {rep.name}
               </p>
             )}
             <input

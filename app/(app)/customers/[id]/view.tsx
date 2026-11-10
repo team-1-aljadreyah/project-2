@@ -86,7 +86,7 @@ export default function CustomerView() {
             }
           >
             {user.role === "manager"
-              ? tr("حدد نوع السعر والمندوب وسقف الدين، ثم وافق ليتمكن من الطلب.", "Set the price tier, rep and debt limit, then approve so the shop can order.")
+              ? tr("حدد نوع السعر ومندوب التوصيل وسقف الدين، ثم وافق ليتمكن من الطلب.", "Set the price tier, delivery rep and debt limit, then approve so the shop can order.")
               : tr("يراجع المدير هذا المحل، ولا يستطيع الطلب قبل الموافقة.", "The manager is reviewing this shop. It can't order before approval.")}
           </Notice>
         </div>
@@ -125,7 +125,7 @@ export default function CustomerView() {
           <KV k={tr("الهاتف", "Phone")} v={<span dir="ltr">{x.phone}</span>} />
           <KV k={tr("العنوان", "Address")} v={x.address} />
           <KV k={tr("نوع السعر", "Price tier")} v={<Badge tone="primary">{name(lookups.tiers.find((t) => t.id === x.tier_id))}</Badge>} />
-          <KV k={tr("المندوب", "Rep")} v={rep?.name} />
+          <KV k={tr("مندوب التوصيل", "Delivery")} v={rep?.name} />
           <KV k={tr("آخر طلب", "Last order")} v={x.last_order_at ? ago(x.last_order_at) : "-"} />
         </Card>
       </div>

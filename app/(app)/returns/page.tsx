@@ -43,7 +43,7 @@ export default function ReturnsPage() {
     <>
       <PageHeader
         title={tr("المرتجعات", "Returns")}
-        subtitle={tr("السليم يعود إلى المخزون، والتالف يُسجَّل تالفاً ولا يُباع. ويُخصم المرتجع من دين الزبون ومن عمولة المندوب.", "Good stock goes back on the shelf, damaged is written off. A return lowers the customer's debt and the rep's commission.")}
+        subtitle={tr("السليم يعود إلى المخزون، والتالف يُسجَّل تالفاً ولا يُباع. ويُخصم المرتجع من دين الزبون ومن عمولة مندوب التوصيل.", "Good stock goes back on the shelf, damaged is written off. A return lowers the customer's debt and the delivery rep's commission.")}
         actions={
           canCreate && (
             <Button variant="primary" href="/returns/new">

@@ -31,7 +31,7 @@ export default function InvoicesPage() {
     { key: "n", head: tr("الرقم", "No."), cell: (i) => <span className="num">{i.number}</span> },
     { key: "d", head: tr("التاريخ", "Date"), cell: (i) => date(i.date) },
     { key: "c", head: tr("الزبون", "Customer"), cell: (i) => cName(i.customer_id) },
-    { key: "r", head: tr("المندوب", "Rep"), cell: (i) => rName(i.rep_id) },
+    { key: "r", head: tr("مندوب التوصيل", "Delivery"), cell: (i) => rName(i.rep_id) },
     { key: "t", head: tr("المبلغ", "Total"), cell: (i) => <Money value={i.total} />, align: "end" },
     { key: "p", head: tr("المسدد", "Paid"), cell: (i) => <Money value={i.paid + i.returned} className="text-muted" />, align: "end" },
     { key: "rem", head: tr("الباقي", "Left"), cell: (i) => <Money value={Math.max(0, i.remaining)} className="font-semibold" />, align: "end" },
@@ -49,7 +49,7 @@ export default function InvoicesPage() {
             <Button
               onClick={() =>
                 downloadCsv("invoices", [
-                  [tr("الرقم", "No."), tr("التاريخ", "Date"), tr("الزبون", "Customer"), tr("المندوب", "Rep"), tr("المبلغ", "Total"), tr("الباقي", "Left")],
+                  [tr("الرقم", "No."), tr("التاريخ", "Date"), tr("الزبون", "Customer"), tr("مندوب التوصيل", "Delivery"), tr("المبلغ", "Total"), tr("الباقي", "Left")],
                   ...rows.map((i) => [i.number, date(i.date), cName(i.customer_id), rName(i.rep_id), i.total, Math.max(0, i.remaining)]),
                 ])
               }

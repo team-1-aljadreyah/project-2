@@ -184,7 +184,7 @@ export default function OrderView() {
             <div className="mt-3 border-t border-line pt-2">
               <KV k={tr("المنطقة", "Area")} v={c?.area} />
               <KV k={tr("نوع السعر", "Price tier")} v={name(lookups.tiers.find((t) => t.id === c?.tier_id))} />
-              <KV k={tr("المندوب", "Rep")} v={rep?.name} />
+              <KV k={tr("مندوب التوصيل", "Delivery")} v={rep?.name} />
               <KV k={tr("المصدر", "Source")} v={<SourceBadge source={o.source} />} />
               {c?.balance !== undefined && c.debt_limit !== undefined && (
                 <>
