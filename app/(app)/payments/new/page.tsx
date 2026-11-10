@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { ArrowDownWideNarrow, CheckCircle2, WifiOff } from "lucide-react";
 import { Button, Card, CardHeader, Field, LimitBar, Money, NumberInput, Notice, PageHeader, Segmented, Select, Textarea, errorText, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -10,13 +10,29 @@ import { useFmt } from "@/lib/i18n";
 import { enqueue, isNetworkError, newClientRef, useOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
 
+// /payments/new?customer=3 opens with that shop chosen. The address is read with useSearchParams:
+// reading window.location while the page renders gives the OLD address when you arrive through a link inside the site.
 export default function NewPaymentPage() {
+  return (
+    <Suspense>
+      <WithCustomer />
+    </Suspense>
+  );
+}
+
+function WithCustomer() {
+  const pre = Number(useSearchParams().get("customer")) || undefined;
+  // The key starts the form again if the address changes to another shop.
+  return <NewPaymentForm key={pre ?? 0} pre={pre} />;
+}
+
+function NewPaymentForm({ pre }: { pre?: number }) {
   const { tr, money, date } = useFmt();
   const router = useRouter();
   const toast = useToast();
   const offline = useOffline();
   const customers = useLoad(() => api.listCustomers(), []);
-  const [customerId, setCustomerId] = useState<number | "">(() => (typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("customer")) || "" : ""));
+  const [customerId, setCustomerId] = useState<number | "">(pre ?? "");
   const [amount, setAmount] = useState<number | "">("");
   const [method, setMethod] = useState<PayMethod>("cash");
   const [note, setNote] = useState("");

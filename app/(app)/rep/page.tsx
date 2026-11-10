@@ -1,105 +1,179 @@
 "use client";
 
-import Link from "next/link";
-import { ChevronLeft, ChevronRight, Percent, ShoppingCart, Wallet, WifiOff } from "lucide-react";
+// The rep's home on the phone, after the medicine-delivery app design Yasser chose for the rep:
+// - "Hi" + search (his customers),
+// - a dark banner with today's money and the two main buttons (new order, take payment),
+// - "today's route": a drawn map with the shops worth visiting today, and a card for the next stop,
+// - his customers as cards (like the design's "Popular" grid); a tap opens the customer sheet.
+// Saved offline work and his commission stay on this page, like before.
+import { useState } from "react";
+import { motion } from "motion/react";
+import { Percent, Route, Search, ShoppingCart, Truck, Wallet, WifiOff } from "lucide-react";
+import { useNow } from "@/components/hall/live";
+import { CustomerSheet, NextStopCard, RouteMap, buildStops, useVisits } from "@/components/rep-route";
 import { useApp } from "@/components/shell";
-import { OrderStatusBadge } from "@/components/status";
-import { Button, Card, CardHeader, LimitBar, Money, Notice, Stat } from "@/components/ui";
+import { Button, Card, LimitBar, Notice, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
+import type { Customer } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useQueue } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
-import { dayOfIso, today } from "@/lib/utils";
+import { cn, dayOfIso, matches, today } from "@/lib/utils";
 
-// The rep's home on the phone: today's work, his customers with debts, his commission, and saved offline work.
 export default function RepHome() {
-  const { tr, ago, lang } = useFmt();
+  const { tr, money, num } = useFmt();
   const { user } = useApp();
+  const now = useNow();
   const orders = useLoad(() => api.listOrders(), []);
   const customers = useLoad(() => api.listCustomers(), []);
   const payments = useLoad(() => api.listPayments(), []);
   const month = today().slice(0, 7);
   const comm = useLoad(() => api.commissions(month), [month]);
   const queue = useQueue();
-  const Chevron = lang === "ar" ? ChevronLeft : ChevronRight;
+  const visited = useVisits(user.id);
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState<Customer | null>(null);
+
   const t = today();
   const todayOrders = (orders.data ?? []).filter((o) => dayOfIso(o.created_at) === t && o.status !== "cancelled");
-  const collected = (payments.data ?? []).filter((p) => dayOfIso(p.date) === t).reduce((s, p) => s + p.amount, 0);
-  const mine = (customers.data ?? []).slice().sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
+  const collected = (payments.data ?? []).filter((p) => dayOfIso(p.date) === t && !p.reversed && !p.reversal_of).reduce((s, p) => s + p.amount, 0);
+  const all = (customers.data ?? []).slice().sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
+  const shown = all.filter((c) => matches(q, c.name, c.owner_name, c.area, c.phone));
+  const stops = customers.data ? buildStops(customers.data, now) : [];
+  const done = stops.filter((s) => visited.includes(s.customer.id)).length;
+  const nextIdx = stops.findIndex((s) => !visited.includes(s.customer.id));
   const row = comm.data?.[0];
-  const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? "";
 
   return (
-    <>
-      <div className="mb-4">
-        <p className="text-sm text-muted">{tr("أهلاً", "Hello")}</p>
-        <h1 className="text-2xl font-bold">{user.name}</h1>
-      </div>
-      {queue.length > 0 && (
-        <div className="mb-4">
-          <Notice tone="warning" title={tr(`${queue.length} محفوظة على الجوال`, `${queue.length} saved on the phone`)} action={<Button size="sm" href="/orders">{tr("عرض", "Show")}</Button>}>
-            <span className="flex items-center gap-1">
-              <WifiOff className="size-3.5" /> {tr("تُرسَل تلقائياً عند عودة الإنترنت", "They send by themselves when the internet is back")}
-            </span>
-          </Notice>
+    <div className="mx-auto max-w-5xl space-y-5">
+      {/* "Hi, …" */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted">{tr("أهلاً،", "Hi,")}</p>
+          <h1 className="text-2xl font-bold">{user.name.split(" ")[0]}</h1>
         </div>
+        <span className="flex size-12 items-center justify-center rounded-full bg-primary text-xl font-bold text-on-primary ring-4 ring-primary-soft">{user.name.trim()[0]}</span>
+      </div>
+
+      <div className="flex h-12 items-center gap-2 rounded-2xl border border-line-strong bg-card px-4 focus-within:border-action focus-within:ring-4 focus-within:ring-action/15">
+        <Search className="size-5 text-faint" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("ابحث عن زبون", "Search for a customer")} className="h-full flex-1 bg-transparent text-base outline-none placeholder:text-faint" />
+      </div>
+
+      {queue.length > 0 && (
+        <Notice tone="warning" title={tr(`${queue.length} محفوظة على الجوال`, `${queue.length} saved on the phone`)} action={<Button size="sm" href="/orders">{tr("عرض", "Show")}</Button>}>
+          <span className="flex items-center gap-1">
+            <WifiOff className="size-3.5" /> {tr("تُرسَل تلقائياً عند عودة الإنترنت", "They send by themselves when the internet is back")}
+          </span>
+        </Notice>
       )}
-      <div className="mb-4 grid grid-cols-2 gap-3">
-        <Button variant="action" size="lg" href="/orders/new" className="h-20 flex-col gap-1 text-base">
-          <ShoppingCart className="size-6" /> {tr("طلب جديد", "New order")}
-        </Button>
-        <Button variant="primary" size="lg" href="/payments/new" className="h-20 flex-col gap-1 text-base">
-          <Wallet className="size-6" /> {tr("استلام تسديد", "Take payment")}
-        </Button>
-      </div>
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <Stat label={tr("طلبات اليوم", "Orders today")} value={todayOrders.length} hint={<Money value={todayOrders.reduce((s, o) => s + o.total, 0)} />} />
-        <Stat label={tr("قبضت اليوم", "Collected today")} value={<Money value={collected} />} />
-        <Stat label={tr("عمولتي هذا الشهر", "My commission")} value={<Money value={row?.net} />} hint={tr("على المبالغ المدفوعة فعلاً", "On money actually paid")} icon={<Percent className="size-4" />} tone="success" href="/commissions" />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title={tr("زبائني", "My customers")} subtitle={tr("الأعلى ديناً أولاً", "Highest debt first")} action={<Button size="sm" variant="ghost" href="/customers">{tr("الكل", "All")}</Button>} />
-          <ul className="divide-y divide-line">
-            {mine.slice(0, 8).map((c) => (
-              <li key={c.id}>
-                <Link href={`/customers/${c.id}`} className="flex items-center gap-3 px-4 py-3 active:bg-card-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex justify-between gap-2">
-                      <span className="truncate font-medium">{c.name}</span>
-                      <Money value={c.balance} className="text-sm font-semibold" />
-                    </div>
-                    <p className="mb-1.5 text-xs text-muted">
-                      {c.area} · {c.last_order_at ? tr(`آخر طلب ${ago(c.last_order_at)}`, `last order ${ago(c.last_order_at)}`) : tr("لم يطلب بعد", "no orders yet")}
-                    </p>
-                    <LimitBar balance={c.balance ?? 0} limit={c.debt_limit ?? 0} />
-                  </div>
-                  <Chevron className="size-4 shrink-0 text-faint" />
-                </Link>
-              </li>
-            ))}
-          </ul>
+
+      {/* The banner, like "We will deliver your medicines" */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="brand-panel relative overflow-hidden rounded-3xl p-5 sm:p-6">
+        <div className="brand-grid absolute inset-0" aria-hidden />
+        <div className="relative flex items-center gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm opacity-80">{tr("قبضت اليوم", "Collected today")}</p>
+            <p className="num mt-1 text-3xl font-bold">{money(collected)}</p>
+            <p className="mt-1 flex flex-wrap gap-x-3 text-xs opacity-80">
+              <span>
+                <b className="num">{num(todayOrders.length)}</b> {tr("طلبات اليوم", "orders today")}
+              </span>
+              <a href="/commissions" className="flex items-center gap-1 underline-offset-2 hover:underline">
+                <Percent className="size-3" /> {tr("عمولتي", "My commission")} <b className="num">{money(row?.net ?? 0)}</b>
+              </a>
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="action" href="/orders/new">
+                <ShoppingCart className="size-4" /> {tr("طلب جديد", "New order")}
+              </Button>
+              <Button href="/payments/new" className="border-white/25 bg-white/10 text-white hover:bg-white/20">
+                <Wallet className="size-4" /> {tr("استلام تسديد", "Take payment")}
+              </Button>
+            </div>
+          </div>
+          <Truck className="hidden size-28 shrink-0 -scale-x-100 text-[#f5b48a] opacity-90 sm:block rtl:scale-x-100" strokeWidth={1.2} />
+        </div>
+        <div className="hazard absolute inset-x-0 bottom-0 h-1.5" aria-hidden />
+      </motion.div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        {/* Today's route (the design's tracking screen) */}
+        <Card className="overflow-hidden p-3">
+          <div className="mb-2 flex items-center justify-between gap-2 px-1">
+            <h2 className="flex items-center gap-1.5 font-bold">
+              <Route className="size-4 text-action" /> {tr("جولة اليوم", "Today's route")}
+            </h2>
+            <span className="num rounded-full bg-card-2 px-2.5 py-0.5 text-xs font-semibold">
+              {done}/{stops.length}
+            </span>
+          </div>
+          {customers.data ? (
+            stops.length ? (
+              <>
+                <RouteMap stops={stops} visited={visited} onPick={setOpen} />
+                <div className="mt-3">
+                  <NextStopCard stop={stops[nextIdx]} index={nextIdx} total={stops.length} done={done} userId={user.id} onOpen={setOpen} />
+                </div>
+                <p className="mt-2 px-1 text-[11px] text-faint">{tr("المحلات مرتبة حسب الأهم: فوق السقف، قريب منه، ثم من لم يطلب منذ أسبوع.", "Shops in order of importance: over the limit, near it, then those with no order for a week.")}</p>
+              </>
+            ) : (
+              <p className="py-10 text-center text-sm text-muted">{tr("لا توجد زيارات مهمة اليوم", "No important visits today")}</p>
+            )
+          ) : (
+            <Skeleton className="aspect-[36/26] w-full" />
+          )}
         </Card>
-        <Card>
-          <CardHeader title={tr("طلباتي الأخيرة", "My latest orders")} action={<Button size="sm" variant="ghost" href="/orders">{tr("الكل", "All")}</Button>} />
-          <ul className="divide-y divide-line">
-            {(orders.data ?? []).slice(0, 8).map((o) => (
-              <li key={o.id}>
-                <Link href={`/orders/${o.id}`} className="flex items-center justify-between gap-3 px-4 py-3 active:bg-card-2">
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{cName(o.customer_id)}</span>
-                    <span className="text-xs text-muted">{ago(o.created_at)}</span>
+
+        {/* My customers (the design's "Popular" grid) */}
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-bold">{tr("زبائني", "My customers")}</h2>
+            <Button size="sm" variant="ghost" href="/customers">
+              {tr("الكل", "All")}
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {shown.slice(0, q ? 20 : 8).map((c, i) => {
+              const bal = c.balance ?? 0;
+              const lim = c.debt_limit ?? 0;
+              const over = lim > 0 && bal >= lim;
+              const near = !over && lim > 0 && bal / lim >= 0.7;
+              return (
+                <motion.button
+                  key={c.id}
+                  type="button"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i, 8) * 0.04 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setOpen(c)}
+                  className="flex flex-col rounded-3xl border border-line bg-card p-3 text-start"
+                >
+                  <span
+                    className={cn(
+                      "relative flex h-20 items-center justify-center rounded-2xl text-3xl font-bold",
+                      over ? "bg-danger-soft text-danger" : near ? "bg-warning-soft text-warning" : "bg-card-2 text-primary-ink",
+                    )}
+                  >
+                    {c.name.trim()[0]}
+                    {visited.includes(c.id) && <span className="absolute end-2 top-2 size-2.5 rounded-full bg-success" title={tr("زرته اليوم", "Visited today")} />}
                   </span>
-                  <span className="text-end">
-                    <Money value={o.total} className="block text-sm" />
-                    <OrderStatusBadge status={o.status} />
+                  <span className="mt-2 truncate text-sm font-bold">{c.name}</span>
+                  <span className="truncate text-[11px] text-muted">{c.area}</span>
+                  <span className={cn("num mt-1.5 text-sm font-bold", over && "text-danger")}>{money(bal)}</span>
+                  <span className="mt-1.5">
+                    <LimitBar balance={bal} limit={lim} />
                   </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
+                </motion.button>
+              );
+            })}
+          </div>
+          {!shown.length && customers.data && <p className="py-8 text-center text-sm text-muted">{tr("لا يوجد زبون بهذا الاسم", "No customer by that name")}</p>}
+        </div>
       </div>
-    </>
+
+      {open && <CustomerSheet customer={open} stop={stops.find((s) => s.customer.id === open.id)} visited={visited.includes(open.id)} userId={user.id} onClose={() => setOpen(null)} />}
+    </div>
   );
 }
