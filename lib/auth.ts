@@ -36,6 +36,7 @@ export function getToken(): string | null {
 }
 
 export function setSession(session: Session) {
+  loggingOut = false;
   try {
     localStorage.setItem(KEY, JSON.stringify(session));
   } catch {}
@@ -52,6 +53,19 @@ export function clearToken() {
     localStorage.removeItem(KEY);
   } catch {}
   emit();
+}
+
+/**
+ * The "log out" button. Unlike a session that simply ended (then we remember the page, to come back
+ * after logging in), a chosen logout remembers nothing: the next person on this device starts at
+ * their own home page, not at the page the last person left.
+ */
+export function signOut() {
+  loggingOut = true;
+  try {
+    sessionStorage.removeItem(NEXT_KEY);
+  } catch {}
+  clearToken();
 }
 
 function subscribe(l: () => void) {
@@ -92,7 +106,10 @@ const NEXT_KEY = "nahrain.next";
 /** Only pages of this site ("/..."), never another website ("//evil.com"). */
 const safe = (p: string | null | undefined) => (p && p.startsWith("/") && !p.startsWith("//") && !p.startsWith("/login") ? p : null);
 
+let loggingOut = false;
+
 export function rememberNext(path: string) {
+  if (loggingOut) return;
   try {
     if (safe(path)) sessionStorage.setItem(NEXT_KEY, path);
   } catch {}

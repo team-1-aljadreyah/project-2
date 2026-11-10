@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { Bell, CloudOff, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Wifi, WifiOff, X } from "lucide-react";
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
-import { clearToken, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
+import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
 import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
@@ -313,7 +313,7 @@ function AccountMenu({ user, onClose }: { user: User; onClose: () => void }) {
         className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-danger hover:bg-danger-soft"
         onClick={async () => {
           await api.logout().catch(() => {});
-          clearToken();
+          signOut();
           router.replace("/login");
         }}
       >
