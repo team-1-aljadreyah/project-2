@@ -84,3 +84,26 @@ export function homeOf(role: Role) {
       return "/dashboard";
   }
 }
+
+// ---- The page to return to after logging in ----
+// Kept in this tab (sessionStorage), not in the address, so the login address stays a clean "/login".
+const NEXT_KEY = "nahrain.next";
+
+/** Only pages of this site ("/..."), never another website ("//evil.com"). */
+const safe = (p: string | null | undefined) => (p && p.startsWith("/") && !p.startsWith("//") && !p.startsWith("/login") ? p : null);
+
+export function rememberNext(path: string) {
+  try {
+    if (safe(path)) sessionStorage.setItem(NEXT_KEY, path);
+  } catch {}
+}
+
+/** The page to go to after login (also reads an old "?next=" link), then forgets it. */
+export function takeNext(): string | null {
+  let p: string | null = null;
+  try {
+    p = new URLSearchParams(window.location.search).get("next") ?? sessionStorage.getItem(NEXT_KEY);
+    sessionStorage.removeItem(NEXT_KEY);
+  } catch {}
+  return safe(p);
+}
