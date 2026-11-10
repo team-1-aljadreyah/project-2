@@ -5,6 +5,7 @@ import {
   Boxes,
   ClipboardCheck,
   ClipboardList,
+  Contact,
   FileText,
   History,
   Home,
@@ -38,7 +39,8 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
-  { href: "/dashboard", ar: "لوحة التحكم", en: "Dashboard", icon: LayoutDashboard, roles: ["manager", "accountant"], group: "main", mobile: ["manager", "accountant"] },
+  { href: "/dashboard", ar: "لوحة التحكم", en: "Dashboard", icon: LayoutDashboard, roles: ["manager", "accountant"], group: "main", mobile: ["manager"] },
+  { href: "/accounts", ar: "ملف الحساب", en: "Account file", icon: Contact, roles: ["accountant"], group: "main", mobile: ["accountant"] },
   { href: "/hall", ar: "قاعة التجهيز", en: "Picking hall", icon: Warehouse, roles: ["warehouse"], group: "main", mobile: ["warehouse"] },
   { href: "/map", ar: "خريطة المخازن", en: "Warehouse map", icon: MapIcon, roles: ["manager", "warehouse", "accountant"], group: "main" },
   { href: "/rep", ar: "الرئيسية", en: "Home", icon: Home, roles: ["rep"], group: "main", mobile: ["rep"] },

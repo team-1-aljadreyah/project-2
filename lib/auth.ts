@@ -78,6 +78,8 @@ export function homeOf(role: Role) {
       return "/shop";
     case "warehouse":
       return "/hall";
+    case "accountant":
+      return "/accounts";
     default:
       return "/dashboard";
   }
