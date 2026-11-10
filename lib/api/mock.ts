@@ -50,6 +50,10 @@ import {
   msg,
   need,
   onlineView,
+  orderView,
+  dispatchDelivery,
+  deliverOrder,
+  unlockDelivery,
   startOnline,
   physicalQty,
   registerShop,
@@ -582,12 +586,28 @@ export const mockApi: Api = {
     }),
 
   // Orders
-  listOrders: () => read((db, a) => db.orders.filter((o) => canSeeOrder(a, o)).slice().reverse()),
+  // orderView hides the delivery PIN from everyone except the shop owner of the order.
+  listOrders: () => read((db, a) => db.orders.filter((o) => canSeeOrder(a, o)).map((o) => orderView(o, a)).reverse()),
   getOrder: (id) =>
     read((db, a) => {
       const o = db.orders.find((x) => x.id === id);
       if (!o || !canSeeOrder(a, o)) notFound();
-      return o;
+      return orderView(o, a);
+    }),
+
+  // Delivery proof
+  dispatchDelivery: (code) => write((db, a, now) => orderView(dispatchDelivery(db, a, code, now), a)),
+  deliverOrder: (id, input) =>
+    write((db, a, now) => {
+      const r = deliverOrder(db, a, id, input, now);
+      return r.ok ? { ...r, order: orderView(r.order, a) } : r;
+    }),
+  unlockDelivery: (id) => write((db, a, now) => orderView(unlockDelivery(db, a, id, now), a)),
+  getDeliveryPhoto: (id) =>
+    read((db, a) => {
+      const o = db.orders.find((x) => x.id === id);
+      if (!o || !canSeeOrder(a, o)) notFound();
+      return db.delivery_photos?.[id] ?? null;
     }),
   createOrder: (input) => write((db, a, now) => createOrder(db, a, input, now)),
   confirmOrder: (id) =>

@@ -65,6 +65,8 @@ export interface Db {
   notified_low: number[];
   /** Online payments started on the (demo) Qi gateway, finished or not. */
   online_payments: DbOnline[];
+  /** Delivery photos, kept apart from the orders because they are big (order id → JPEG data URL). */
+  delivery_photos: Record<number, string>;
 }
 
 export type DbOnline = Omit<OnlinePayment, "form_url"> & {
@@ -75,7 +77,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 9;
+export const DB_VERSION = 10;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

@@ -2,6 +2,8 @@
 
 import { motion } from "motion/react";
 import { Check, Clock, PhoneCall, ShoppingCart, XCircle } from "lucide-react";
+import Link from "next/link";
+import { PinCard } from "@/components/delivery/status";
 import { ShopStore } from "@/components/shop-store";
 import { useApp } from "@/components/shell";
 import { Button, Card, ErrorBox, LoadingRows, Notice } from "@/components/ui";
@@ -34,7 +36,12 @@ export default function ShopOrderPage() {
       </Card>
     );
   }
-  return <ShopStore customer={c.data} />;
+  return (
+    <>
+      <MyShipments />
+      <ShopStore customer={c.data} />
+    </>
+  );
 }
 
 function PendingAccount({ customer }: { customer: Customer }) {
@@ -89,6 +96,36 @@ function PendingAccount({ customer }: { customer: Customer }) {
           </Button>
         </div>
       </Card>
+    </div>
+  );
+}
+
+/** Shipments on their way to this shop, each with its delivery PIN (only the shop owner ever sees it). */
+function MyShipments() {
+  const { tr } = useFmt();
+  const orders = useLoad(() => api.listOrders(), []);
+  const coming = (orders.data ?? []).filter((o) => o.delivery && o.delivery.status !== "delivered" && o.delivery.pin);
+  if (!coming.length) return null;
+  return (
+    <div className="mx-auto mb-4 max-w-5xl space-y-2">
+      {coming.map((o) => (
+        <motion.div key={o.id} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="grid items-center gap-3 rounded-3xl border border-line bg-card p-4 sm:grid-cols-[1fr_auto]">
+          <div>
+            <p className="font-bold">
+              {o.delivery!.status === "out" ? tr("طلبك في الطريق إليك", "Your order is on its way") : tr("طلبك يُجهَّز للشحن", "Your order is being packed")}
+            </p>
+            <p className="text-sm text-muted">
+              <Link href={`/orders/${o.id}`} className="num font-semibold hover:underline" dir="ltr">
+                {o.number}
+              </Link>
+              {o.delivery!.out_by && <> · {tr(`مع ${o.delivery!.out_by.name}`, `with ${o.delivery!.out_by.name}`)}</>}
+            </p>
+          </div>
+          <div className="sm:w-80">
+            <PinCard pin={o.delivery!.pin!} compact />
+          </div>
+        </motion.div>
+      ))}
     </div>
   );
 }

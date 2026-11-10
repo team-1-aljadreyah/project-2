@@ -14,7 +14,8 @@ import { HallPlan } from "@/components/hall/plan";
 import { buildMissions, type Mission } from "@/components/hall/data";
 import { useNow } from "@/components/hall/live";
 import { useApp } from "@/components/shell";
-import { Button, Card, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
+import { Button, Card, Dialog, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
+import { PrintButton, ShipmentLabel } from "@/components/delivery/qr";
 import { api } from "@/lib/api";
 import type { Order, Receipt } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -47,6 +48,8 @@ export default function HallPage() {
     }
   });
   const [zoom, setZoom] = useState(1);
+  // The order just confirmed: its shipment label opens, to print and stick on the packages.
+  const [labelFor, setLabelFor] = useState<number | null>(null);
   const [intro] = useState(threeD);
 
   useEffect(() => {
@@ -127,7 +130,7 @@ export default function HallPage() {
             </div>
           </div>
           {view ? (
-            <HallPanel missions={missions} moves={moves} alerts={alerts} selectedId={selected?.order.id ?? null} onSelect={setPicked} />
+            <HallPanel missions={missions} moves={moves} alerts={alerts} selectedId={selected?.order.id ?? null} onSelect={setPicked} onConfirmed={setLabelFor} />
           ) : (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
@@ -207,7 +210,26 @@ export default function HallPage() {
           </div>
         </Card>
       </div>
+      {labelFor && <LabelDialog orderId={labelFor} onClose={() => setLabelFor(null)} />}
     </>
+  );
+}
+
+/** The shipment label of an order just confirmed. */
+function LabelDialog({ orderId, onClose }: { orderId: number; onClose: () => void }) {
+  const { tr } = useFmt();
+  const { lookups } = useApp();
+  const order = useLoad(() => api.getOrder(orderId), [orderId]);
+  const customer = useLoad(() => (order.data ? api.getCustomer(order.data.customer_id) : Promise.resolve(undefined)), [order.data?.customer_id]);
+  const o = order.data;
+  return (
+    <Dialog open onClose={onClose} title={tr("ملصق الشحنة: اطبعه والصقه على البضاعة", "Shipment label: print it and stick it on the goods")} footer={<PrintButton />}>
+      {o?.delivery ? (
+        <ShipmentLabel order={o} shop={customer.data?.name ?? ""} area={customer.data?.area} rep={lookups.reps.find((r) => r.id === o.rep_id)?.name ?? ""} />
+      ) : (
+        <Skeleton className="h-44" />
+      )}
+    </Dialog>
   );
 }
 

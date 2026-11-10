@@ -14,6 +14,8 @@ import type {
   InvoiceStatus,
   NewOrder,
   NewPayment,
+  DeliverInput,
+  Delivery,
   OnlinePayment,
   GatewayInfo,
   StartOnlinePayment,
@@ -520,6 +522,8 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
   o.status = "confirmed";
   o.invoice_id = invId;
   o.reserved_until = undefined;
+  // The trip to the shop starts here: a QR code for the shipment label and a PIN for the shop owner.
+  o.delivery = newDelivery();
   audit(db, actor, "confirm", "order", o.id, `تثبيت الطلب ${o.number} وإصدار الفاتورة ${inv.number}`, `Confirmed ${o.number}, invoice ${inv.number}`, now);
   for (const l of lines) checkLowStock(db, l.item_id, now);
   const customer = db.customers.find((c) => c.id === o.customer_id);
@@ -1197,4 +1201,132 @@ export function settleOnline(db: Db, now: Date) {
     );
     o.recorded_payment_id = p.id;
   }
+}
+
+// ---------- Delivery proof (no fake deliveries) ----------
+
+const MAX_PIN_TRIES = 5;
+
+/** A random number from the browser's secure random source (Math.random can be guessed). */
+function secureInt(max: number) {
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] % max;
+}
+
+export function newDelivery(): Delivery {
+  // Letters and digits that can't be mixed up when typed by hand (no 0/O, 1/I).
+  const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const code = Array.from({ length: 8 }, () => abc[secureInt(abc.length)]).join("");
+  return { status: "ready", code, pin: String(1000 + secureInt(9000)), pin_attempts: 0 };
+}
+
+/** What a QR or a typed code becomes: "NAHRAIN:DLV:ab12-cd34" → "AB12CD34". */
+export function normalizeCode(raw: string) {
+  return raw.trim().toUpperCase().replace(/^NAHRAIN:DLV:/, "").replace(/[^A-Z0-9]/g, "");
+}
+
+/** At the warehouse: the delivery rep scans the shipment's QR, and the packages are "out" with him. */
+export function dispatchDelivery(db: Db, actor: DbUser, rawCode: string, now: Date): Order {
+  need(actor, ["rep", "manager"]);
+  const code = normalizeCode(rawCode);
+  const o = db.orders.find((x) => x.delivery?.code === code) ?? fail(404, "NOT_FOUND", "رمز شحنة غير معروف", "Unknown shipment code");
+  const d = o.delivery!;
+  if (actor.role === "rep" && o.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذه الشحنة لمندوب توصيل آخر", "This shipment belongs to another delivery rep");
+  if (d.status === "delivered") fail(409, "BAD_STATE", "هذه الشحنة سُلِّمت من قبل", "This shipment was already delivered");
+  if (d.status === "out") return o; // scanned twice: nothing changes
+  Object.assign(d, { status: "out", out_at: now.toISOString(), out_by: person(actor) });
+  const customer = db.customers.find((c) => c.id === o.customer_id);
+  audit(db, actor, "update", "order", o.id, `خروج الشحنة ${o.number} مع ${actor.name} إلى ${customer?.name ?? ""}`, `Shipment ${o.number} out with ${actor.name}`, now);
+  // Only the shop owner gets the PIN, in his own notification.
+  const shopUser = db.users.find((u) => u.role === "shop" && u.customer_id === o.customer_id);
+  if (shopUser) {
+    notify(
+      db,
+      {
+        type: "out_for_delivery",
+        roles: ["shop"],
+        user_id: shopUser.id,
+        title: `طلبك ${o.number} في الطريق إليك`,
+        title_en: `Your order ${o.number} is on its way`,
+        body: `مع ${actor.name}. رمز الاستلام ${d.pin}: أعطه له فقط بعد أن تستلم البضاعة سليمة.`,
+        body_en: `With ${actor.name}. Delivery PIN ${d.pin}: give it only after you get the goods in good shape.`,
+        link: `/orders/${o.id}`,
+      },
+      now,
+    );
+  }
+  return o;
+}
+
+export type DeliverResult = { ok: true; order: Order } | { ok: false; left: number; locked: boolean };
+
+/**
+ * At the shop: the delivery rep sends the photo and the PIN the shop owner gave him.
+ * A wrong PIN is RETURNED, not thrown: a thrown error saves nothing, and the wrong try must be counted.
+ */
+export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverInput, now: Date): DeliverResult {
+  need(actor, ["rep"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  const d = o.delivery ?? fail(409, "BAD_STATE", "هذا الطلب ليس له شحنة", "This order has no shipment");
+  if (o.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذه الشحنة لمندوب توصيل آخر", "This shipment belongs to another delivery rep");
+  if (d.status === "ready") fail(409, "BAD_STATE", "امسح رمز QR للشحنة في المخزن أولاً", "Scan the shipment's QR at the warehouse first");
+  if (d.status === "delivered") fail(409, "BAD_STATE", "هذه الشحنة سُلِّمت من قبل", "This shipment was already delivered");
+  if (d.locked) return { ok: false, left: 0, locked: true };
+  if (!/^data:image\/(jpeg|png|webp);base64,/.test(input.photo ?? "")) {
+    fail(422, "VALIDATION", "صوّر الشحنة عند المحل أولاً", "Take a photo of the packages first", { photo: msg("الصورة مطلوبة", "A photo is required") });
+  }
+  if (input.photo.length > 600_000) fail(422, "VALIDATION", "الصورة كبيرة جداً", "The photo is too big", { photo: msg("التقط الصورة مرة أخرى", "Take the photo again") });
+
+  if (input.pin.trim() !== d.pin) {
+    d.pin_attempts += 1;
+    const left = Math.max(0, MAX_PIN_TRIES - d.pin_attempts);
+    if (left === 0) {
+      d.locked = true;
+      const customer = db.customers.find((c) => c.id === o.customer_id);
+      audit(db, actor, "update", "order", o.id, `قُفلت شحنة ${o.number}: ${MAX_PIN_TRIES} رموز استلام خاطئة`, `Shipment ${o.number} locked: ${MAX_PIN_TRIES} wrong PINs`, now);
+      notify(
+        db,
+        {
+          type: "delivery_locked",
+          roles: ["manager"],
+          title: `شحنة مقفلة: ${o.number}`,
+          title_en: `Shipment locked: ${o.number}`,
+          body: `${actor.name} أدخل رمز استلام خاطئاً ${MAX_PIN_TRIES} مرات عند ${customer?.name ?? ""}. تحقق قبل فتحها.`,
+          body_en: `${actor.name} typed a wrong PIN ${MAX_PIN_TRIES} times at ${customer?.name ?? ""}. Check before unlocking.`,
+          link: `/orders/${o.id}`,
+        },
+        now,
+      );
+    }
+    return { ok: false, left, locked: !!d.locked };
+  }
+
+  Object.assign(d, { status: "delivered", delivered_at: now.toISOString(), delivered_by: person(actor), has_photo: true });
+  db.delivery_photos[o.id] = input.photo;
+  const customer = db.customers.find((c) => c.id === o.customer_id);
+  audit(db, actor, "update", "order", o.id, `تسليم ${o.number} إلى ${customer?.name ?? ""} برمز الاستلام وصورة`, `${o.number} delivered with PIN and photo`, now);
+  const shopUser = db.users.find((u) => u.role === "shop" && u.customer_id === o.customer_id);
+  if (shopUser) {
+    notify(db, { type: "delivered", roles: ["shop"], user_id: shopUser.id, title: `تم تسليم طلبك ${o.number}`, title_en: `Order ${o.number} delivered`, body: `سلّمه ${actor.name}`, body_en: `Delivered by ${actor.name}`, link: `/orders/${o.id}` }, now);
+  }
+  return { ok: true, order: o };
+}
+
+/** The manager checked what happened and opens a locked shipment again. */
+export function unlockDelivery(db: Db, actor: DbUser, id: number, now: Date): Order {
+  need(actor, ["manager"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if (!o.delivery?.locked) fail(409, "BAD_STATE", "الشحنة ليست مقفلة", "The shipment isn't locked");
+  Object.assign(o.delivery!, { locked: false, pin_attempts: 0 });
+  audit(db, actor, "update", "order", o.id, `فتح الشحنة المقفلة ${o.number}`, `Unlocked shipment ${o.number}`, now);
+  return o;
+}
+
+/** Everyone except the shop owner of the order gets the PIN hidden. */
+export function orderView(o: Order, actor: DbUser): Order {
+  if (!o.delivery || (actor.role === "shop" && actor.customer_id === o.customer_id)) return o;
+  const { pin: _hidden, ...d } = o.delivery;
+  void _hidden;
+  return { ...o, delivery: d };
 }

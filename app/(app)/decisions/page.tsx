@@ -306,6 +306,11 @@ function DecisionCard({
             </a>
           </>
         )}
+        {d.kind === "delivery_locked" && (
+          <Button size="sm" variant="action" href={d.href}>
+            {tr("مراجعة وفتح الشحنة", "Review and unlock")}
+          </Button>
+        )}
         {(d.kind === "close_month" || d.kind === "stocktake" || d.kind === "waiting_orders") && (
           <Button size="sm" variant="action" href={d.href}>
             {d.kind === "close_month" ? tr("إغلاق الشهر", "Close the month") : d.kind === "stocktake" ? tr("فتح الجرد", "Open the count") : tr("عرض الطلبات", "Show orders")}

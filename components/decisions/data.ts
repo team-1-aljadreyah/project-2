@@ -4,7 +4,7 @@ import type { Customer, DebtRow, Item, NearExpiryRow, OnlinePayment, Order, Stoc
 
 export type Lane = "a" | "b" | "c" | "d";
 
-export type Kind = "over_limit" | "new_shop" | "expired" | "near_expiry" | "low_stock" | "late_debt" | "online_failed" | "close_month" | "stocktake" | "waiting_orders";
+export type Kind = "over_limit" | "new_shop" | "expired" | "near_expiry" | "low_stock" | "late_debt" | "online_failed" | "delivery_locked" | "close_month" | "stocktake" | "waiting_orders";
 
 export interface Decision {
   /** Stable id (the same tomorrow), used for "remind me tomorrow". */
@@ -200,7 +200,22 @@ export function buildDecisions({
     });
   }
 
-  // ---- د: work in the warehouses ----
+  // ---- د: work in the warehouses (and on the road) ----
+  for (const o of orders.filter((x) => x.delivery?.locked)) {
+    const c = cust.get(o.customer_id);
+    out.push({
+      id: `locked-${o.id}`,
+      lane: "d",
+      kind: "delivery_locked",
+      ref: o.id,
+      title: tr(`شحنة مقفلة: ${c?.name ?? ""}`, `Shipment locked: ${c?.name ?? ""}`),
+      sub: tr(`${o.number} · 5 رموز استلام خاطئة من ${o.delivery!.out_by?.name ?? ""}. تحقق مع المحل قبل فتحها`, `${o.number} · 5 wrong PINs by ${o.delivery!.out_by?.name ?? ""}. Check with the shop first`),
+      amount: o.total,
+      weight: 95,
+      href: `/orders/${o.id}`,
+      phone: c?.phone,
+    });
+  }
   for (const s of stocktakes.filter((x) => x.status === "open")) {
     const counted = s.lines.filter((l) => l.counted_qty !== null).length;
     out.push({

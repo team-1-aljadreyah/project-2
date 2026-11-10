@@ -164,6 +164,7 @@ export function makeSeed(now = new Date()): Db {
     notified_batches: [],
     notified_low: [],
     online_payments: [],
+    delivery_photos: {},
   };
 
   const manager = users[0];
@@ -375,6 +376,23 @@ export function makeSeed(now = new Date()): Db {
       t(1, 5),
     ),
   );
+
+  // Deliveries: orders confirmed before today were already delivered (before this feature: no photo).
+  // Today's stay "ready" at the warehouse, and the oldest one of today is already out with its delivery rep.
+  const todayStr = dayOf(now);
+  const confirmed = db.orders.filter((o) => o.status === "confirmed" && o.delivery);
+  for (const o of confirmed) {
+    const inv = db.invoices.find((i) => i.id === o.invoice_id);
+    if (!inv || dayOf(new Date(inv.date)) === todayStr) continue;
+    const rep = db.users.find((u) => u.id === o.rep_id);
+    const at = new Date(new Date(inv.date).getTime() + 3 * 3_600_000).toISOString();
+    Object.assign(o.delivery!, { status: "delivered", out_at: inv.date, out_by: rep && { id: rep.id, name: rep.name }, delivered_at: at, delivered_by: rep && { id: rep.id, name: rep.name }, has_photo: false });
+  }
+  const firstToday = confirmed.find((o) => o.delivery!.status === "ready");
+  if (firstToday) {
+    const rep = db.users.find((u) => u.id === firstToday.rep_id);
+    Object.assign(firstToday.delivery!, { status: "out", out_at: addDays(now, 0).toISOString(), out_by: rep && { id: rep.id, name: rep.name } });
+  }
 
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);

@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import type { Batch } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { DeliveryPanel } from "@/components/delivery/status";
 import { piecesOf, useIdParam } from "@/lib/utils";
 
 export default function OrderView() {
@@ -112,6 +113,7 @@ export default function OrderView() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
+          {o.delivery && <DeliveryPanel order={o} role={user.role} shop={c?.name ?? ""} rep={rep?.name ?? ""} area={c?.area} />}
           {o.status === "needs_approval" && (
             <Notice tone="warning" title={tr("هذا الطلب يتجاوز سقف دين الزبون", "This order passes the customer's debt limit")}>
               {user.role === "manager" ? tr("وافق عليه إذا كنت تثق بالزبون، أو ألغِه.", "Approve it if you trust the customer, or cancel it.") : tr("ينتظر موافقة المدير، والكمية محجوزة حتى ذلك الحين.", "Waiting for the manager. The stock stays held until then.")}
