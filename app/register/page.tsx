@@ -70,6 +70,10 @@ export default function RegisterPage() {
       const s = await api.register(input);
       setSession(s);
       router.replace("/shop");
+      // Next keeps this page's state for later: leave it empty and not "busy", or after logging out
+      // the form would come back filled in with every button disabled.
+      setBusy(false);
+      setF({ shop_name: "", owner_name: "", phone: "", area: "", address: "", password: "", confirm: "" });
     } catch (x) {
       if (x instanceof ApiError && x.errors) setErr(x.errors);
       setError(errorText(x, tr));

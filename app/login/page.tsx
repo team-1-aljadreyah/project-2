@@ -11,6 +11,7 @@ import { ArrowLeft, ArrowRight, Boxes, Calculator, Eye, EyeOff, Info, LayoutDash
 import { rise, stagger } from "@/components/auth";
 import { LoginArt } from "@/components/login-art";
 import { LogoMark } from "@/components/logo";
+import { canOpen } from "@/components/nav";
 import { roleName } from "@/components/status";
 import { LanguageSwitch, ThemeToggle } from "@/components/switches";
 import { errorText } from "@/components/ui";
@@ -63,7 +64,10 @@ export default function LoginPage() {
   // and this would race it and always win with the home page.
   const loggingIn = useRef(false);
   useEffect(() => {
-    if (session && !loggingIn.current) router.replace(homeOf(session.user.role));
+    if (!session) return;
+    // Right after pressing "login", login() already chose where to go: let it, and switch the flag off.
+    if (loggingIn.current) loggingIn.current = false;
+    else router.replace(homeOf(session.user.role));
   }, [session, router]);
 
   async function login(p: string, pw: string, key: string) {
@@ -73,8 +77,15 @@ export default function LoginPage() {
       const s = await api.login(p, pw);
       loggingIn.current = true;
       setSession(s);
-      // Back to the page you wanted before logging in (only pages of this site), or your home page.
-      router.replace(takeNext() ?? homeOf(s.user.role));
+      // Back to the page you wanted before logging in, if your role may open it; otherwise your home page.
+      const next = takeNext();
+      router.replace(next && canOpen(s.user.role, next) ? next : homeOf(s.user.role));
+      // Next keeps this page's state for when you come back (after logging out). So leave it clean:
+      // not "busy" (that disabled every button with a spinner forever) and without the password.
+      setBusy(null);
+      setPassword("");
+      setShow(false);
+      setForgot(false);
     } catch (e) {
       setError(errorText(e, tr));
       setBusy(null);
