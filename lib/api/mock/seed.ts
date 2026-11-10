@@ -294,7 +294,7 @@ export function makeSeed(now = new Date()): Db {
             client_ref: cref(),
             invoice_id: inv.id,
             lines: [{ item_id: line.item_id, unit: "piece", qty: Math.min(line.pieces, int(2, 6)), condition: rand() < 0.5 ? "damaged" : "good" }],
-            note: rand() < 0.5 ? "تالف بالنقل" : "خطأ بالطلب",
+            note: rand() < 0.5 ? "تالف أثناء النقل" : "خطأ في الطلب",
           },
           at(d, 16),
         );
@@ -322,7 +322,7 @@ export function makeSeed(now = new Date()): Db {
       allocations: p.allocations.map((a) => ({ ...a, amount: -a.amount })),
       reversed: false,
       reversal_of: p.id,
-      reason: "سُجّل مرتين بالغلط",
+      reason: "سُجّل مرتين خطأً",
     });
     p.reversed = true;
     p.reversed_by_id = rid;

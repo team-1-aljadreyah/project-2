@@ -116,7 +116,7 @@ export function StatementView({ customerId, links = true }: { customerId: number
               </tfoot>
             </table>
           </div>
-          {!st.data.rows.length && <p className="p-6 text-center text-sm text-muted">{tr("لا توجد حركات بهذه الفترة", "No entries in this period")}</p>}
+          {!st.data.rows.length && <p className="p-6 text-center text-sm text-muted">{tr("لا توجد حركات في هذه الفترة", "No entries in this period")}</p>}
         </>
       ) : null}
     </Card>

@@ -57,7 +57,7 @@ export default function NewReceiptPage() {
           purchase_price: perPiece(r),
         })),
       });
-      toast("success", tr(`انحفظ الاستلام ${rec.number} ونزلت الدفعات بالمخزون`, `Saved ${rec.number}. Batches added to stock`));
+      toast("success", tr(`تم حفظ الاستلام ${rec.number} وأُضيفت الدفعات إلى المخزون`, `Saved ${rec.number}. Batches added to stock`));
       reloadItems();
       router.push(`/receipts/${rec.id}`);
     } catch (e) {
@@ -70,7 +70,7 @@ export default function NewReceiptPage() {
 
   return (
     <>
-      <PageHeader title={tr("استلام بضاعة", "Receive goods")} back="/receipts" subtitle={tr("كل سطر يصير دفعة بتاريخ صلاحيته وسعر شرائه", "Each line becomes a batch with its own expiry and cost")} />
+      <PageHeader title={tr("استلام بضاعة", "Receive goods")} back="/receipts" subtitle={tr("كل سطر يصبح دفعة بتاريخ صلاحيته وسعر شرائه", "Each line becomes a batch with its own expiry and cost")} />
       <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-2">
         <Field label={tr("المخزن", "Warehouse")}>
           <Select value={warehouse} onChange={(e) => setWarehouse(Number(e.target.value))} disabled={user.role === "warehouse"}>

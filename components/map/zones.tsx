@@ -22,7 +22,7 @@ export function statusLabel(s: CellStatus, tr: Tr) {
     ok: tr("سليم", "OK"),
     near: tr("قريب الانتهاء", "Expiring soon"),
     low: tr("مخزون قليل", "Low stock"),
-    expired: tr("فيه منتهي", "Has expired stock"),
+    expired: tr("فيها مواد منتهية", "Has expired stock"),
     empty: tr("فارغ هنا", "Empty here"),
   }[s];
 }
@@ -129,7 +129,7 @@ export function ZonesView({
 
       {!zone && (
         <p className="pointer-events-none absolute bottom-3 left-1/2 hidden -translate-x-1/2 rounded-full bg-card/90 px-3 py-1 text-xs text-muted shadow md:block">
-          {tr("اضغط على أي منطقة حتى تشوف المواد", "Click any zone to see its items")}
+          {tr("اضغط على أي منطقة لعرض موادها", "Click any zone to see its items")}
         </p>
       )}
     </div>
@@ -186,7 +186,7 @@ function ZonePopCard({ zone }: { zone: MapZone }) {
         </p>
       )}
       <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary-ink">
-        {tr("اضغط حتى تفتح المنطقة", "Click to open the zone")} <Forward className="size-3.5" />
+        {tr("اضغط لفتح المنطقة", "Click to open the zone")} <Forward className="size-3.5" />
       </p>
     </motion.div>
   );

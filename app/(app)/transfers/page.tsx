@@ -27,7 +27,7 @@ export default function TransfersPage() {
     <>
       <PageHeader
         title={tr("التحويل بين المخازن", "Transfers between warehouses")}
-        subtitle={tr("التحويل يتم كاملاً أو ما يتم أبداً، فالبضاعة ما تضيع ولا تنحسب مرتين", "A transfer happens fully or not at all, so goods are never lost or counted twice")}
+        subtitle={tr("التحويل يتم كاملاً أو لا يتم أبداً، فلا تضيع البضاعة ولا تُحسب مرتين", "A transfer happens fully or not at all, so goods are never lost or counted twice")}
         actions={
           <Button variant="action" onClick={() => setOpen(true)}>
             <Plus className="size-4" /> {tr("تحويل جديد", "New transfer")}

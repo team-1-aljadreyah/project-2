@@ -25,7 +25,7 @@ export default function ReceiptsPage() {
     <>
       <PageHeader
         title={tr("استلام البضاعة", "Receiving goods")}
-        subtitle={tr("كل استلام يصير دفعة لها تاريخ صلاحية وسعر شراء خاص بها", "Every receipt becomes a batch with its own expiry date and purchase price")}
+        subtitle={tr("كل استلام يصبح دفعة لها تاريخ صلاحية وسعر شراء خاصّان بها", "Every receipt becomes a batch with its own expiry date and purchase price")}
         actions={
           <Button variant="action" href="/receipts/new">
             <PackagePlus className="size-4" /> {tr("استلام جديد", "New receipt")}

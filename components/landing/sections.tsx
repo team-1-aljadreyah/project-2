@@ -46,11 +46,11 @@ export function Problems() {
   const { tr } = useFmt();
   const reduce = useReducedMotion();
   const labels = [
-    { t: tr("بضاعة انتهت صلاحيتها بالمخزن", "Stock expired on the shelf"), x: "6%", line: 40 },
-    { t: tr("مادة انباعت وهي مو موجودة", "Sold what wasn't there"), x: "52%", line: 18 },
-    { t: tr("النهرين يرتبها كلها", "Al-Nahrain sorts it all"), x: "24%", line: 92, main: true },
-    { t: tr("ديون ما نعرف كمها", "Debts nobody can count"), x: "60%", line: 110 },
-    { t: tr("طلب ضاع لأن النت انقطع", "Order lost with no internet"), x: "10%", line: 168 },
+    { t: tr("بضاعة انتهت صلاحيتها في المخزن", "Stock expired on the shelf"), x: "6%", line: 40 },
+    { t: tr("مادة بيعت وهي غير موجودة", "Sold what wasn't there"), x: "52%", line: 18 },
+    { t: tr("النهرين ينظّمها كلها", "Al-Nahrain sorts it all"), x: "24%", line: 92, main: true },
+    { t: tr("ديون لا نعرف مقدارها", "Debts nobody can count"), x: "60%", line: 110 },
+    { t: tr("طلب ضاع لانقطاع الإنترنت", "Order lost with no internet"), x: "10%", line: 168 },
   ];
   return (
     <section className="mx-auto max-w-6xl px-4 py-20">
@@ -61,9 +61,9 @@ export function Problems() {
         <Stars count={18} seed={21} />
         <div className="relative">
           <Eyebrow>{tr("قبل النهرين", "Before Al-Nahrain")}</Eyebrow>
-          <WordReveal text={tr("مشاكل تصير كل يوم", "Problems that happen every day")} className="mt-4 text-3xl font-bold sm:text-5xl" />
+          <WordReveal text={tr("مشكلات تحدث كل يوم", "Problems that happen every day")} className="mt-4 text-3xl font-bold sm:text-5xl" />
           <p className="mt-4 max-w-md text-muted">
-            {tr("الشغل كله على دفاتر وإكسل: بضاعة تنتهي، مواد تنباع وهي مو موجودة، وديون على المحلات ما نعرفها بالضبط. المشاكل ما تنتهي، بس الفوضى تنتهي.", "Everything on notebooks and Excel: stock expires, items get sold that weren't there, and nobody knows the exact shop debts. Problems will come, but the chaos can end.")}
+            {tr("العمل كله على الدفاتر وإكسل: بضاعة تنتهي صلاحيتها، ومواد تُباع وهي غير موجودة، وديون على المحلات لا نعرفها بدقة. المشكلات لا تنتهي، لكن الفوضى تنتهي.", "Everything on notebooks and Excel: stock expires, items get sold that weren't there, and nobody knows the exact shop debts. Problems will come, but the chaos can end.")}
           </p>
         </div>
 
@@ -112,8 +112,8 @@ export function Platform() {
   const rtl = lang === "ar";
   const cards: { icon: LucideIcon; t: string; b: string }[] = [
     { icon: Boxes, t: tr("المخزون بالدفعات", "Stock by batches"), b: tr("صلاحية وسعر لكل دفعة", "Expiry and cost per batch") },
-    { icon: Truck, t: tr("المندوبين", "Sales reps"), b: tr("طلبات من الجوال، حتى بدون نت", "Phone orders, even offline") },
-    { icon: HandCoins, t: tr("الديون والتسديد", "Debts and payments"), b: tr("سقف لكل محل، وأقدم فاتورة أول", "A limit per shop, oldest invoice first") },
+    { icon: Truck, t: tr("المندوبين", "Sales reps"), b: tr("طلبات من الجوال، حتى بدون إنترنت", "Phone orders, even offline") },
+    { icon: HandCoins, t: tr("الديون والتسديد", "Debts and payments"), b: tr("سقف لكل محل، وأقدم فاتورة أولاً", "A limit per shop, oldest invoice first") },
     { icon: BarChart3, t: tr("التقارير والأرباح", "Reports and profit"), b: tr("يومية، لكل مندوب ومادة ومخزن", "Daily, by rep, item and warehouse") },
   ];
   // The drawing is 900 × 360. In Arabic everything is mirrored: cards on the right, the chip on the left.
@@ -133,9 +133,9 @@ export function Platform() {
     <section id="platform" className="relative mx-auto max-w-6xl scroll-mt-24 px-4 py-20">
       <div className="mx-auto max-w-2xl text-center">
         <Eyebrow>{tr("مع النهرين", "With Al-Nahrain")}</Eyebrow>
-        <WordReveal text={tr("نظام واحد لكل الشغل", "One system for all the work")} className="mt-4 text-3xl font-bold sm:text-5xl" />
+        <WordReveal text={tr("نظام واحد لكل العمل", "One system for all the work")} className="mt-4 text-3xl font-bold sm:text-5xl" />
         <motion.p {...rise(0.2)} className="mt-4 text-muted">
-          {tr("من استلام البضاعة للتسديد الأخير: المخزن والمندوب والمحاسب والمدير وصاحب المحل يشتغلون على نفس الأرقام.", "From receiving goods to the last payment: warehouse, reps, accountant, manager and shop owners all work on the same numbers.")}
+          {tr("من استلام البضاعة إلى آخر تسديد: يعمل المخزن والمندوب والمحاسب والمدير وصاحب المحل على الأرقام نفسها.", "From receiving goods to the last payment: warehouse, reps, accountant, manager and shop owners all work on the same numbers.")}
         </motion.p>
       </div>
 

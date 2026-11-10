@@ -39,7 +39,7 @@ export default function RepHome() {
         <div className="mb-4">
           <Notice tone="warning" title={tr(`${queue.length} محفوظة على الجوال`, `${queue.length} saved on the phone`)} action={<Button size="sm" href="/orders">{tr("عرض", "Show")}</Button>}>
             <span className="flex items-center gap-1">
-              <WifiOff className="size-3.5" /> {tr("تنرسل لوحدها لما يرجع النت", "They send by themselves when the internet is back")}
+              <WifiOff className="size-3.5" /> {tr("تُرسَل تلقائياً عند عودة الإنترنت", "They send by themselves when the internet is back")}
             </span>
           </Notice>
         </div>

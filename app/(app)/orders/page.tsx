@@ -60,7 +60,7 @@ export default function OrdersPage() {
                   <p className="font-medium">
                     {j.kind === "order" ? tr("طلب", "Order") : tr("تسديد", "Payment")} · {j.label}
                   </p>
-                  <p className="text-xs text-muted">{tr("انحفظ", "Saved")} {ago(j.saved_at)}</p>
+                  <p className="text-xs text-muted">{tr("تم الحفظ", "Saved")} {ago(j.saved_at)}</p>
                   {j.error && <p className="mt-1 text-xs text-danger">{j.error}</p>}
                 </div>
                 {j.error ? (
@@ -74,7 +74,7 @@ export default function OrdersPage() {
                   </div>
                 ) : (
                   <span className="flex items-center gap-1 text-xs text-warning">
-                    <Clock className="size-3.5" /> {tr("ينتظر النت", "Waiting")}
+                    <Clock className="size-3.5" /> {tr("بانتظار الإنترنت", "Waiting")}
                   </span>
                 )}
               </li>

@@ -33,7 +33,7 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
     setErr({});
     try {
       const it = await api.saveItem(item?.id ?? null, f);
-      toast("success", tr("انحفظت المادة", "Item saved"));
+      toast("success", tr("تم حفظ المادة", "Item saved"));
       reloadItems();
       onSaved?.(it);
       onClose();
@@ -81,7 +81,7 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
         <Field label={tr("عدد القطع في الكارتون", "Pieces per carton")} error={err.pieces_per_carton}>
           <NumberInput value={f.pieces_per_carton} onChange={(v) => set({ pieces_per_carton: v === "" ? 0 : v })} invalid={!!err.pieces_per_carton} />
         </Field>
-        <Field label={tr("الحد الأدنى (بالقطعة)", "Minimum stock (pieces)")} error={err.min_stock} hint={tr("إذا نزل المخزون عنه يوصلك إشعار", "You get a notification below this")}>
+        <Field label={tr("الحد الأدنى (بالقطعة)", "Minimum stock (pieces)")} error={err.min_stock} hint={tr("إذا نزل المخزون عنه يصلك إشعار", "You get a notification below this")}>
           <NumberInput value={f.min_stock} onChange={(v) => set({ min_stock: v === "" ? 0 : v })} />
         </Field>
         <Field label={tr("عمولة المندوب %", "Rep commission %")} error={err.commission_percent} hint={tr("على المبلغ المدفوع فعلاً", "On money actually paid")}>

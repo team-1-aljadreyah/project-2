@@ -74,7 +74,7 @@ export default function PaymentView() {
                 <Link className="font-semibold underline" href={`/payments/${p.reversed_by_id}`}>
                   #{p.reversed_by_id}
                 </Link>
-                . {tr("التسديد يبقى ظاهر ولا ينحذف.", "It stays visible and is never deleted.")}
+                . {tr("يبقى التسديد ظاهراً ولا يُحذف.", "It stays visible and is never deleted.")}
               </Notice>
             </div>
           )}
@@ -109,7 +109,7 @@ export default function PaymentView() {
                 setBusy(true);
                 try {
                   await api.reversePayment(p.id, reason);
-                  toast("success", tr("تم العكس، والدين رجع على الزبون", "Reversed. The debt is back on the customer"));
+                  toast("success", tr("تم العكس، وعاد الدين على الزبون", "Reversed. The debt is back on the customer"));
                   setOpen(false);
                   pay.reload();
                 } catch (e) {
@@ -125,9 +125,9 @@ export default function PaymentView() {
         }
       >
         <div className="space-y-3">
-          <Notice tone="primary">{tr("التسديد ما ينحذف. راح تنسجل عملية عكسية بنفس المبلغ باسمك، وتظهر بكشف الحساب.", "Payments are never deleted. A reverse entry with the same amount is saved under your name and shows in the statement.")}</Notice>
+          <Notice tone="primary">{tr("التسديد لا يُحذف، بل ستُسجَّل عملية عكسية بالمبلغ نفسه باسمك، وتظهر في كشف الحساب.", "Payments are never deleted. A reverse entry with the same amount is saved under your name and shows in the statement.")}</Notice>
           <Field label={tr("السبب", "Reason")}>
-            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("مثلاً: سُجّل مرتين بالغلط", "e.g. entered twice by mistake")} />
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("مثلاً: سُجّل مرتين خطأً", "e.g. entered twice by mistake")} />
           </Field>
         </div>
       </Dialog>

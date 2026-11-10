@@ -21,7 +21,7 @@ export default function LandingPage() {
   const session = useSession();
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
   const enter = session ? homeOf(session.user.role) : "/login";
-  const enterLabel = session ? tr("ادخل لحسابك", "Go to my account") : tr("تسجيل الدخول", "Log in");
+  const enterLabel = session ? tr("ادخل إلى حسابك", "Go to my account") : tr("تسجيل الدخول", "Log in");
 
   // The page is dark, like the reference design. The rest of the site keeps the user's day/night choice,
   // so the page/overscroll color is set here and put back when you leave.
@@ -51,8 +51,8 @@ export default function LandingPage() {
             <div className="hero-beam pointer-events-none absolute -top-1/2 left-[30%] h-[200%] w-[40%]" aria-hidden />
             <Stars count={30} seed={11} />
             <div className="relative">
-              <WordReveal text={tr("جاهز تودّع الدفاتر؟", "Ready to say goodbye to notebooks?")} className="text-3xl font-bold sm:text-5xl" />
-              <p className="mx-auto mt-4 max-w-xl text-muted">{tr("صاحب محل؟ ادخل بحسابك، شوف أسعارك الخاصة، اطلب، وتابع كشف حسابك بأي وقت.", "A shop owner? Log in, see your own prices, order, and follow your statement any time.")}</p>
+              <WordReveal text={tr("هل أنت مستعد لتوديع الدفاتر؟", "Ready to say goodbye to notebooks?")} className="text-3xl font-bold sm:text-5xl" />
+              <p className="mx-auto mt-4 max-w-xl text-muted">{tr("صاحب محل؟ ادخل إلى حسابك، واطّلع على أسعارك الخاصة، واطلب، وتابع كشف حسابك في أي وقت.", "A shop owner? Log in, see your own prices, order, and follow your statement any time.")}</p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 {/* New shops register by themselves; the company approves them before the first order. */}
                 {!session && (
@@ -121,7 +121,7 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
         </Link>
         <div className="hidden items-center gap-7 text-sm text-muted md:flex">
           <a href="#platform" className="transition hover:text-text">
-            {tr("كيف يشتغل", "How it works")}
+            {tr("كيف يعمل", "How it works")}
           </a>
           <a href="#features" className="transition hover:text-text">
             {tr("المميزات", "Features")}

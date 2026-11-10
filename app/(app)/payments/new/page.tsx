@@ -46,12 +46,12 @@ export default function NewPaymentPage() {
     setBusy(true);
     try {
       const p = await api.createPayment(body);
-      toast("success", tr(`انحفظ التسديد ${money(amount)} من ${c.name}`, `Saved ${money(amount)} from ${c.name}`));
+      toast("success", tr(`تم حفظ التسديد ${money(amount)} من ${c.name}`, `Saved ${money(amount)} from ${c.name}`));
       router.push(`/payments/${p.id}`);
     } catch (e) {
       if (isNetworkError(e)) {
         enqueue({ kind: "payment", client_ref: ref, body, label: `${c.name} · ${money(amount)}`, saved_at: new Date().toISOString() });
-        toast("primary", tr("بدون إنترنت: انحفظ التسديد على الجوال وينرسل لوحده", "Offline: the payment is saved on the phone and will send by itself"));
+        toast("primary", tr("بدون إنترنت: حُفظ التسديد على الجوال وسيُرسَل تلقائياً", "Offline: the payment is saved on the phone and will send by itself"));
         router.push("/payments");
       } else {
         if (e instanceof ApiError && e.errors) setErr(e.errors);
@@ -130,7 +130,7 @@ export default function NewPaymentPage() {
           <Field label={tr("ملاحظة", "Note")}>
             <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={tr("اختياري", "Optional")} />
           </Field>
-          {offline && <Notice tone="primary">{tr("بدون إنترنت: ينحفظ التسديد على الجوال وينرسل لوحده.", "Offline: the payment is saved on the phone and sent later.")}</Notice>}
+          {offline && <Notice tone="primary">{tr("بدون إنترنت: يُحفظ التسديد على الجوال ويُرسَل تلقائياً.", "Offline: the payment is saved on the phone and sent later.")}</Notice>}
           <Button variant="action" size="lg" className="w-full" loading={busy} disabled={!c || !amount || tooMuch} onClick={submit}>
             {offline ? <WifiOff className="size-5" /> : <CheckCircle2 className="size-5" />}
             {tr("حفظ التسديد", "Save payment")} {typeof amount === "number" && amount > 0 && <span className="num">· {money(amount)}</span>}
@@ -138,7 +138,7 @@ export default function NewPaymentPage() {
         </Card>
 
         <Card>
-          <CardHeader title={<span className="flex items-center gap-2"><ArrowDownWideNarrow className="size-4" /> {tr("على أي فواتير يروح المبلغ", "Where the money goes")}</span>} subtitle={tr("الأقدم أولاً، تلقائياً", "Oldest first, automatically")} />
+          <CardHeader title={<span className="flex items-center gap-2"><ArrowDownWideNarrow className="size-4" /> {tr("على أي الفواتير يُوزَّع المبلغ", "Where the money goes")}</span>} subtitle={tr("الأقدم أولاً، تلقائياً", "Oldest first, automatically")} />
           {!c ? (
             <p className="p-6 text-center text-sm text-muted">{tr("اختر الزبون", "Choose a customer")}</p>
           ) : !open.length ? (
@@ -159,7 +159,7 @@ export default function NewPaymentPage() {
                     {a ? (
                       <span className={full ? "text-success" : "text-warning"}>
                         <Money value={a.amount} className="font-semibold" />
-                        <span className="block text-end text-[11px]">{full ? tr("تتسدد كاملة", "fully paid") : tr("جزئي", "partly")}</span>
+                        <span className="block text-end text-[11px]">{full ? tr("تُسدَّد كاملة", "fully paid") : tr("جزئي", "partly")}</span>
                       </span>
                     ) : (
                       <span className="text-xs text-faint">—</span>

@@ -47,8 +47,8 @@ export default function StocktakeView() {
       if (close) {
         await api.closeStocktake(s.id);
         reloadItems();
-        toast("success", tr("انغلق الجرد وتعدّل المخزون، والفروقات انحفظت مع أسبابها", "Count closed. Stock updated and differences saved with reasons"));
-      } else toast("success", tr("انحفظ العد", "Count saved"));
+        toast("success", tr("أُغلق الجرد وعُدّل المخزون، وحُفظت الفروقات مع أسبابها", "Count closed. Stock updated and differences saved with reasons"));
+      } else toast("success", tr("تم حفظ العد", "Count saved"));
       st.reload();
       setEdits(null);
     } catch (e) {
@@ -86,7 +86,7 @@ export default function StocktakeView() {
       />
       {open && user.role !== "manager" && (
         <div className="mb-4">
-          <Notice tone="primary">{tr("بعد ما تخلص العد، المدير يغلق الجرد حتى تتعدل الكميات.", "When you finish counting, the manager closes the count to update the stock.")}</Notice>
+          <Notice tone="primary">{tr("بعد انتهاء العد، يغلق المدير الجرد لتُعدَّل الكميات.", "When you finish counting, the manager closes the count to update the stock.")}</Notice>
         </div>
       )}
       {Object.keys(err).length > 0 && (
@@ -121,7 +121,7 @@ export default function StocktakeView() {
                 <div>
                   <p className="font-medium">{name(it)}</p>
                   <p className="text-xs text-muted">
-                    {tr("بالنظام", "System")}: {qty(l.system_qty, ppc)}
+                    {tr("في النظام", "System")}: {qty(l.system_qty, ppc)}
                   </p>
                 </div>
                 <div>

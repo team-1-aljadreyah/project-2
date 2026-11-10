@@ -37,7 +37,7 @@ export default function PaymentsPage() {
     <>
       <PageHeader
         title={tr("التسديدات", "Payments")}
-        subtitle={tr("كل تسديد يروح على أقدم فاتورة أولاً، وما ينحذف أبداً", "Each payment goes to the oldest invoice first, and is never deleted")}
+        subtitle={tr("كل تسديد يُخصم من أقدم فاتورة أولاً، ولا يُحذف أبداً", "Each payment goes to the oldest invoice first, and is never deleted")}
         actions={
           <Button variant="action" href="/payments/new">
             <Plus className="size-4" /> {tr("استلام تسديد", "Take a payment")}

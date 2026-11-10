@@ -32,7 +32,7 @@ export default function ReturnView() {
                     <p className="text-xs text-muted">{it && qty(l.pieces, it.pieces_per_carton)}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {l.condition === "good" ? <Badge tone="success">{tr("سليم، رجع للمخزون", "Good, back on shelf")}</Badge> : <Badge tone="danger">{tr("تالف", "Damaged")}</Badge>}
+                    {l.condition === "good" ? <Badge tone="success">{tr("سليم، عاد إلى المخزون", "Good, back on shelf")}</Badge> : <Badge tone="danger">{tr("تالف", "Damaged")}</Badge>}
                     <Money value={l.amount} className="font-semibold" />
                   </div>
                 </li>
@@ -40,7 +40,7 @@ export default function ReturnView() {
             })}
           </ul>
           <div className="flex justify-between border-t border-line px-4 py-3 font-semibold">
-            <span>{tr("نزل من الدين", "Taken off the debt")}</span>
+            <span>{tr("خُصم من الدين", "Taken off the debt")}</span>
             <Money value={ret.amount} className="text-lg" />
           </div>
         </Card>

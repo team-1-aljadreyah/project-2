@@ -151,7 +151,7 @@ function ItemCard({ cell: c, zone, view, other }: { cell: MapCell; zone: MapZone
   const canMove = user.role === "manager" || user.role === "warehouse";
 
   let chip: { icon: typeof AlertTriangle; text: string; cls: string } | null = null;
-  if (c.status === "expired") chip = { icon: PackageX, text: tr(`${num(c.expired)} قطعة منتهية، ما تنباع`, `${num(c.expired)} pieces expired, not for sale`), cls: statusStyle.expired };
+  if (c.status === "expired") chip = { icon: PackageX, text: tr(`${num(c.expired)} قطعة منتهية، لا تُباع`, `${num(c.expired)} pieces expired, not for sale`), cls: statusStyle.expired };
   else if (c.status === "low") chip = { icon: AlertTriangle, text: tr("مخزون قليل، تحت الحد الأدنى", "Low stock, under the minimum"), cls: statusStyle.low };
   else if (c.near) chip = { icon: Clock, text: tr(`${num(c.near.pieces)} قطعة تنتهي بعد ${c.near.days} يوم`, `${num(c.near.pieces)} pieces expire in ${c.near.days} days`), cls: statusStyle.near };
 

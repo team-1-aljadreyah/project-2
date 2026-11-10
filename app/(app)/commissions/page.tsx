@@ -45,7 +45,7 @@ export default function CommissionsPage() {
     <>
       <PageHeader
         title={user.role === "rep" ? tr("عمولتي", "My commission") : tr("عمولات المندوبين", "Rep commission")}
-        subtitle={tr("نسبة لكل مادة، وتنحسب على الفلوس المدفوعة فعلاً. البيع الآجل ما ينحسب إلا بعد ما الزبون يسدد.", "A rate per item, counted on money actually paid. Credit sales count only after the customer pays.")}
+        subtitle={tr("نسبة لكل مادة، تُحسب على المبالغ المدفوعة فعلاً. ولا يُحسب البيع الآجل إلا بعد أن يسدد الزبون.", "A rate per item, counted on money actually paid. Credit sales count only after the customer pays.")}
         actions={
           <>
             <Select value={month} onChange={(e) => setMonth(e.target.value)} className="w-48">
@@ -72,11 +72,11 @@ export default function CommissionsPage() {
                 variant="action"
                 loading={busy}
                 onClick={async () => {
-                  if (!confirm(tr(`إغلاق شهر ${monthName(month)}؟ بعد الإغلاق ما تتغير الأرقام.`, `Close ${monthName(month)}? Numbers won't change after closing.`))) return;
+                  if (!confirm(tr(`إغلاق شهر ${monthName(month)}؟ بعد الإغلاق لا تتغير الأرقام.`, `Close ${monthName(month)}? Numbers won't change after closing.`))) return;
                   setBusy(true);
                   try {
                     await api.closeMonth(month);
-                    toast("success", tr("انغلق الشهر", "Month closed"));
+                    toast("success", tr("أُغلق الشهر", "Month closed"));
                     rows.reload();
                   } catch (e) {
                     toast("danger", errorText(e, tr));
@@ -98,7 +98,7 @@ export default function CommissionsPage() {
           </Notice>
         ) : current ? (
           <Notice tone="primary" title={tr("الشهر الحالي", "Current month")}>
-            {tr("الأرقام تتحدث مع كل تسديد ومرتجع. تقدر تغلقه بعد ما ينتهي.", "Numbers update with every payment and return. You can close it after it ends.")}
+            {tr("تتحدّث الأرقام مع كل تسديد ومرتجع، ويمكنك إغلاقه بعد انتهائه.", "Numbers update with every payment and return. You can close it after it ends.")}
           </Notice>
         ) : null}
       </div>

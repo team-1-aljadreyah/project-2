@@ -50,7 +50,7 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
           className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg"
         >
           {tr(
-            "مخزون بالدفعات والأقدم صلاحية يطلع أول، مندوبين يطلبون من الجوال حتى بدون نت، وديون وتسديد واضح لكل محل. شركة النهرين، كربلاء.",
+            "مخزون بالدفعات يخرج فيه الأقدم صلاحيةً أولاً، ومندوبون يطلبون من الجوال حتى بدون إنترنت، وديون وتسديدات واضحة لكل محل. شركة النهرين، كربلاء.",
             "Stock by batches with the oldest expiry first, reps ordering from their phones even offline, and clear debts and payments for every shop. Al-Nahrain, Karbala.",
           )}
         </motion.p>
@@ -60,7 +60,7 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
             <Forward className="size-5 transition group-hover:-translate-x-1 ltr:group-hover:translate-x-1" />
           </Link>
           <a href="#platform" className="flex h-12 items-center rounded-full border border-white/15 bg-white/5 px-7 text-base font-semibold backdrop-blur transition hover:bg-white/10">
-            {tr("شوف كيف يشتغل", "See how it works")}
+            {tr("شاهد كيف يعمل", "See how it works")}
           </a>
         </motion.div>
       </div>
@@ -153,7 +153,7 @@ function DashboardMock() {
         <div className="hidden space-y-2 lg:block">
           <p className="text-start text-sm font-semibold">{tr("تنبيهات", "Alerts")}</p>
           {[
-            { icon: AlertTriangle, t: tr("قريب الانتهاء", "Expiring soon"), b: tr("جبن مثلثات · باقي 12 يوم", "Cheese · 12 days left"), c: "bg-[#3a2a10] text-[#f2b75a]" },
+            { icon: AlertTriangle, t: tr("قريب الانتهاء", "Expiring soon"), b: tr("جبن مثلثات · بقي 12 يوماً", "Cheese · 12 days left"), c: "bg-[#3a2a10] text-[#f2b75a]" },
             { icon: PackageX, t: tr("مخزون قليل", "Low stock"), b: tr("لبن 1 لتر · تحت الحد الأدنى", "Laban 1 L · below minimum"), c: "bg-[#3d1a18] text-[#f39a92]" },
             { icon: ShieldAlert, t: tr("يتجاوز سقف الدين", "Over debt limit"), b: tr("محلات الأمانة · ينتظر موافقتك", "Al-Amana · waiting for you"), c: "bg-[#3a2a10] text-[#f2b75a]" },
           ].map((a, i) => (

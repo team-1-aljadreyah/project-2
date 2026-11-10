@@ -341,7 +341,7 @@ export function errorText(e: unknown, tr: (a: string, b: string) => string) {
     if (e.status === 403) return tr("ليست لديك صلاحية", "You don't have permission");
     if (e.status === 404) return tr("غير موجود", "Not found");
   }
-  return tr("حدث خطأ غير متوقع، حاول مرة ثانية", "Something went wrong. Try again");
+  return tr("حدث خطأ غير متوقع، حاول مرة أخرى", "Something went wrong. Try again");
 }
 
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {

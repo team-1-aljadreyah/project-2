@@ -35,7 +35,7 @@ export default function StocktakesPage() {
     <>
       <PageHeader
         title={tr("الجرد", "Stock count")}
-        subtitle={tr("إذا طلع فرق بين النظام والرف، ينسجل الفرق مع سببه وما ينمسح", "If the shelf differs from the system, the difference is saved with a reason, never erased")}
+        subtitle={tr("إذا ظهر فرق بين النظام والرف، يُسجَّل الفرق مع سببه ولا يُحذف", "If the shelf differs from the system, the difference is saved with a reason, never erased")}
         actions={
           <Button variant="action" onClick={() => setOpen(true)}>
             <Plus className="size-4" /> {tr("بدء جرد", "Start a count")}

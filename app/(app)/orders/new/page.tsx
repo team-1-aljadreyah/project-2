@@ -10,7 +10,7 @@ export default function NewOrderPage() {
   const pre = typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("customer")) || undefined : undefined;
   return (
     <>
-      <PageHeader title={tr("طلب جديد", "New order")} back="/orders" subtitle={tr("الأسعار حسب نوع الزبون، والكمية تنحجز لحد التثبيت", "Prices follow the customer's tier. Stock is held until confirmed")} />
+      <PageHeader title={tr("طلب جديد", "New order")} back="/orders" subtitle={tr("الأسعار حسب نوع الزبون، وتُحجز الكمية حتى التثبيت", "Prices follow the customer's tier. Stock is held until confirmed")} />
       <OrderBuilder preselectCustomerId={pre} />
     </>
   );

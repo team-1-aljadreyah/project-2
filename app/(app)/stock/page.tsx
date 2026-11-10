@@ -68,7 +68,7 @@ export default function StockPage() {
     { key: "t", head: tr("الوقت", "Time"), cell: (d) => dateTime(d.created_at) },
     { key: "n", head: tr("المادة", "Item"), cell: (d) => name(itemById.get(d.item_id)) },
     { key: "q", head: tr("الكمية", "Qty"), cell: (d) => qty(d.pieces, itemById.get(d.item_id)?.pieces_per_carton ?? 1) },
-    { key: "s", head: tr("المصدر", "Source"), cell: (d) => <Badge tone={d.source === "return" ? "warning" : "danger"}>{d.source === "return" ? tr("مرتجع تالف", "Damaged return") : d.source === "stocktake" ? tr("نقص بالجرد", "Count shortage") : tr("منتهي", "Expired")}</Badge> },
+    { key: "s", head: tr("المصدر", "Source"), cell: (d) => <Badge tone={d.source === "return" ? "warning" : "danger"}>{d.source === "return" ? tr("مرتجع تالف", "Damaged return") : d.source === "stocktake" ? tr("نقص في الجرد", "Count shortage") : tr("منتهي", "Expired")}</Badge> },
     { key: "r", head: tr("المرجع", "Ref"), cell: (d) => <span className="text-muted">{d.ref}</span> },
   ];
 

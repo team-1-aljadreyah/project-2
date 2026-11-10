@@ -124,7 +124,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
       if (isNetworkError(e)) {
         enqueue({ kind: "order", client_ref: body.client_ref, body, label: `${customer.name} · ${money(total)}`, saved_at: new Date().toISOString() });
         fresh();
-        toast("primary", tr("لا يوجد إنترنت: انحفظ الطلب على الجوال وينرسل لوحده", "No internet: the order is saved on the phone and will send by itself"));
+        toast("primary", tr("لا يوجد إنترنت: حُفظ الطلب على الجوال وسيُرسَل تلقائياً", "No internet: the order is saved on the phone and will send by itself"));
         router.push(fixedCustomerId ? "/orders" : "/rep");
       } else {
         if (e instanceof ApiError && e.errors) setErrors(e.errors);
@@ -195,12 +195,12 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
       )}
       {overLimit && (
         <Notice tone="warning" title={tr("الطلب يتجاوز سقف الدين", "This order passes the debt limit")}>
-          {tr("يقدر ينرسل، بس يبقى معلّق لحد ما يوافق المدير.", "You can send it, but it waits until the manager approves.")}
+          {tr("يمكن إرساله، لكنه يبقى معلّقاً حتى يوافق المدير.", "You can send it, but it waits until the manager approves.")}
         </Notice>
       )}
       {offline && (
         <Notice tone="primary" title={tr("بدون إنترنت", "Offline")}>
-          {tr("الطلب ينحفظ على الجوال وينرسل لما يرجع النت.", "The order is saved on the phone and sent when the internet is back.")}
+          {tr("يُحفظ الطلب على الجوال ويُرسَل عند عودة الإنترنت.", "The order is saved on the phone and sent when the internet is back.")}
         </Notice>
       )}
       <div className="flex items-center justify-between">
@@ -245,7 +245,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
             {!fixedCustomerId && (
               <div>
                 <label className="mb-1 block text-xs text-muted" htmlFor="wh">
-                  {tr("يطلع من", "From")}
+                  {tr("يخرج من", "From")}
                 </label>
                 <Select id="wh" value={draft.warehouse_id} onChange={(e) => update({ warehouse_id: Number(e.target.value) })}>
                   {lookups.warehouses.map((w) => (
@@ -378,7 +378,7 @@ function CustomerPicker({ open, customers, onClose, onPick }: { open: boolean; c
               <button type="button" onClick={() => onPick(c)} className="w-full py-3 text-start hover:bg-card-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium">{c.name}</span>
-                  {over ? <Badge tone="danger">{tr("واصل السقف", "At limit")}</Badge> : null}
+                  {over ? <Badge tone="danger">{tr("بلغ السقف", "At limit")}</Badge> : null}
                 </div>
                 <p className="text-xs text-muted">
                   {c.owner_name} · {c.area}
@@ -397,7 +397,7 @@ function CustomerPicker({ open, customers, onClose, onPick }: { open: boolean; c
       </ul>
       {rep && (
         <p className="mt-2 flex items-center gap-1 text-xs text-faint">
-          <AlertTriangle className="size-3" /> {tr("تشوف زبائنك فقط", "You see your own customers only")}
+          <AlertTriangle className="size-3" /> {tr("ترى زبائنك فقط", "You see your own customers only")}
         </p>
       )}
     </Dialog>
