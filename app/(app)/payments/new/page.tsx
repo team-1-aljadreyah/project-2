@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ArrowDownWideNarrow, CheckCircle2, WifiOff } from "lucide-react";
 import { Button, Card, CardHeader, Field, LimitBar, Money, NumberInput, Notice, PageHeader, Segmented, Select, Textarea, errorText, useToast } from "@/components/ui";
+import { methodLabel } from "@/components/pay-method";
 import { api, ApiError } from "@/lib/api";
 import type { NewPayment, PayMethod } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -133,13 +134,16 @@ function NewPaymentForm({ pre }: { pre?: number }) {
               })}
             </div>
           )}
-          <Field label={tr("طريقة الدفع", "Method")}>
+          <Field
+            label={tr("طريقة الدفع المحلي", "Local payment method")}
+            hint={tr("الدفع الأونلاين ببطاقة Qi يقوم به صاحب المحل من «كشف حسابي»، ويُسجَّل تلقائياً.", "Online Qi Card payments are made by the shop owner from “My statement” and recorded by themselves.")}
+          >
             <Segmented
               value={method}
               onChange={setMethod}
               options={[
-                { value: "cash", label: tr("نقداً", "Cash") },
-                { value: "transfer", label: tr("تحويل / زين كاش", "Transfer") },
+                { value: "cash", label: methodLabel("cash", tr) },
+                { value: "transfer", label: methodLabel("transfer", tr) },
               ]}
             />
           </Field>

@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
   Candy,
+  CreditCard,
   Croissant,
   CupSoda,
   Droplets,
@@ -214,9 +215,16 @@ export function ShopStore({ customer }: { customer: Customer }) {
             <div className="mt-3 h-1.5 w-56 max-w-full overflow-hidden rounded-full bg-white/15">
               <div className="h-full rounded-full bg-[#f5b48a]" style={{ width: `${limit ? Math.min(100, (balance / limit) * 100) : 0}%` }} />
             </div>
-            <Link href="/statement" className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-action px-4 py-2 text-sm font-bold text-on-action transition hover:bg-action-hover">
-              <FileText className="size-4" /> {tr("كشف حسابي", "My statement")}
-            </Link>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/statement" className="inline-flex items-center gap-1.5 rounded-full bg-action px-4 py-2 text-sm font-bold text-on-action transition hover:bg-action-hover">
+                <FileText className="size-4" /> {tr("كشف حسابي", "My statement")}
+              </Link>
+              {balance > 0 && (
+                <Link href="/statement" className="inline-flex items-center gap-1.5 rounded-full bg-[#f7c600] px-4 py-2 text-sm font-bold text-black transition hover:brightness-95">
+                  <CreditCard className="size-4" /> {tr("ادفع أونلاين", "Pay online")}
+                </Link>
+              )}
+            </div>
           </div>
           <ShoppingBag className="hidden size-28 shrink-0 rotate-[-8deg] text-[#f5b48a] opacity-90 sm:block" strokeWidth={1.2} />
         </div>

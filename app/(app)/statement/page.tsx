@@ -1,5 +1,7 @@
 "use client";
 
+import { Suspense } from "react";
+import { OnlineReturn, PayOnlineCard } from "@/components/online-pay";
 import { useApp } from "@/components/shell";
 import { StatementView } from "@/components/statement-view";
 import { Card, LimitBar, Money, Notice, PageHeader } from "@/components/ui";
@@ -7,7 +9,7 @@ import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 
-// The shop owner's own account: what he owes, his limit and every movement.
+// The shop owner's own account: what he owes, his limit, every movement, and paying online with Qi Card.
 export default function MyStatementPage() {
   const { tr } = useFmt();
   const { user } = useApp();
@@ -16,6 +18,10 @@ export default function MyStatementPage() {
   return (
     <>
       <PageHeader title={tr("كشف حسابي", "My statement")} subtitle={c.data?.name} />
+      {/* Back from the Qi gateway: the result of the online payment */}
+      <Suspense fallback={null}>
+        <OnlineReturn />
+      </Suspense>
       {c.data?.pending && (
         <div className="mb-4">
           <Notice tone="warning" title={tr("حسابك قيد المراجعة", "Your account is being checked")}>
@@ -40,6 +46,7 @@ export default function MyStatementPage() {
           </div>
         </Card>
       )}
+      {c.data && !c.data.pending && c.data.active && <PayOnlineCard customer={c.data} />}
       <StatementView customerId={id} links={false} />
     </>
   );

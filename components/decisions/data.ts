@@ -1,10 +1,10 @@
 // "My decisions today": everything that waits for the manager, gathered from the real data and sorted
 // into four stacks (أ ب ج د), like the four cards on the desk in the design.
-import type { Customer, DebtRow, Item, NearExpiryRow, Order, Stocktake } from "@/lib/api/types";
+import type { Customer, DebtRow, Item, NearExpiryRow, OnlinePayment, Order, Stocktake } from "@/lib/api/types";
 
 export type Lane = "a" | "b" | "c" | "d";
 
-export type Kind = "over_limit" | "new_shop" | "expired" | "near_expiry" | "low_stock" | "late_debt" | "close_month" | "stocktake" | "waiting_orders";
+export type Kind = "over_limit" | "new_shop" | "expired" | "near_expiry" | "low_stock" | "late_debt" | "online_failed" | "close_month" | "stocktake" | "waiting_orders";
 
 export interface Decision {
   /** Stable id (the same tomorrow), used for "remind me tomorrow". */
@@ -34,6 +34,7 @@ export function buildDecisions({
   debts,
   stocktakes,
   closedMonths,
+  online,
   nearDays,
   now,
   tr,
@@ -48,6 +49,7 @@ export function buildDecisions({
   debts: DebtRow[];
   stocktakes: Stocktake[];
   closedMonths: string[];
+  online: OnlinePayment[];
   nearDays: number;
   now: number;
   tr: Tr;
@@ -158,6 +160,29 @@ export function buildDecisions({
       phone: d.customer.phone,
     });
   }
+  // A shop tried to pay online today and it didn't go through (and no later try succeeded): it may need help.
+  const todayKey = new Date(now).toISOString().slice(0, 10);
+  const todays = online.filter((o) => o.created_at.slice(0, 10) === todayKey);
+  for (const cid of new Set(todays.map((o) => o.customer_id))) {
+    const mine = todays.filter((o) => o.customer_id === cid).sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const last = mine[mine.length - 1];
+    if (!last || last.status === "success" || last.status === "created") continue;
+    const failed = mine.filter((o) => o.status !== "success" && o.status !== "created");
+    const c = cust.get(cid);
+    out.push({
+      id: `online-${cid}-${todayKey}`,
+      lane: "c",
+      kind: "online_failed",
+      ref: cid,
+      title: tr(`دفع أونلاين لم ينجح: ${c?.name ?? ""}`, `Online payment failed: ${c?.name ?? ""}`),
+      sub: tr(`${failed.length} محاولات اليوم ببطاقة Qi، ولم يُسحب أي مبلغ`, `${failed.length} Qi Card tries today, no money taken`),
+      amount: last.amount,
+      weight: 55,
+      href: "/payments",
+      phone: c?.phone,
+    });
+  }
+
   // Last month's commissions should be closed once the month is over.
   const nowD = new Date(now);
   const last = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);

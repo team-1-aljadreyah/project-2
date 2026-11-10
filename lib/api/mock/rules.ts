@@ -14,6 +14,9 @@ import type {
   InvoiceStatus,
   NewOrder,
   NewPayment,
+  OnlinePayment,
+  GatewayInfo,
+  StartOnlinePayment,
   NewReceipt,
   NewReturn,
   NewTransfer,
@@ -27,7 +30,7 @@ import type {
   Transfer,
   Unit,
 } from "../types";
-import { nextId, type Db, type DbBatch, type DbBatchUse, type DbCustomer, type DbInvoice, type DbItem, type DbReturn, type DbUser } from "./db";
+import { nextId, type Db, type DbOnline, type DbBatch, type DbBatchUse, type DbCustomer, type DbInvoice, type DbItem, type DbReturn, type DbUser } from "./db";
 
 // ---------- small helpers ----------
 
@@ -238,6 +241,7 @@ export function checkLowStock(db: Db, itemId: number, now: Date) {
 
 /** Runs before every request: frees expired reservations and sends expiry alerts once per batch. */
 export function sweep(db: Db, now: Date) {
+  settleOnline(db, now);
   const nowIso = now.toISOString();
   const today = dayOf(now);
   for (const o of db.orders) {
@@ -573,6 +577,13 @@ export function allocate(db: Db, customerId: number, amount: number) {
 
 export function createPayment(db: Db, actor: DbUser, input: NewPayment, now: Date): Payment {
   need(actor, ["manager", "rep", "accountant"]);
+  // Online payments are never typed in by hand: only the gateway's "success" records them.
+  if (input.method === "online") fail(422, "VALIDATION", "الدفع الأونلاين يُسجَّل تلقائياً من بوابة الدفع", "Online payments are recorded by the payment gateway");
+  return addPayment(db, actor, input, now);
+}
+
+/** Records money received (no role check: createPayment checks people, the gateway is checked by its session). */
+export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, gateway?: GatewayInfo): Payment {
   const same = db.payments.find((p) => p.client_ref === input.client_ref);
   if (same) return same;
   const customer = db.customers.find((c) => c.id === input.customer_id) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
@@ -603,6 +614,7 @@ export function createPayment(db: Db, actor: DbUser, input: NewPayment, now: Dat
     date: now.toISOString(),
     note: input.note?.trim() || undefined,
     allocations,
+    ...(gateway ? { gateway } : {}),
     reversed: false,
   };
   db.payments.push(p);
@@ -1112,4 +1124,77 @@ export function invoiceView(db: Db, inv: DbInvoice, showCost: boolean): Invoice 
     status: invoiceStatus(inv),
     ...(showCost ? { cost: rawCost - returnedCost, profit: inv.total - inv.returned - (rawCost - returnedCost) } : {}),
   };
+}
+
+// ---------- Online payment (Qi Card gateway, demo) ----------
+// Same flow as Project 1: we create the payment, the customer pays on the gateway's page and comes back,
+// and only the gateway's notification (a moment later) makes it final.
+
+export function onlineView(o: DbOnline): OnlinePayment {
+  const { key: _k, return_url: _r, outcome: _o, settles_at: _s, ...rest } = o;
+  void _k;
+  void _r;
+  void _o;
+  void _s;
+  // The real gateway's page is on Qi's site. The demo one is a page of ours.
+  return { ...rest, form_url: `/pay/qi?payment=${o.payment_id}` };
+}
+
+export function startOnline(db: Db, actor: DbUser, input: StartOnlinePayment, now: Date): OnlinePayment {
+  need(actor, ["shop", "manager", "accountant"]);
+  // A second press (or a retry) gives back the same payment, never a second one.
+  const same = db.online_payments.find((o) => o.key === input.key);
+  if (same) return onlineView(same);
+  const customer = db.customers.find((c) => c.id === input.customer_id) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
+  if (actor.role === "shop" && actor.customer_id !== customer.id) fail(403, "FORBIDDEN", "لا تستطيع الدفع عن محل آخر", "You can't pay for another shop");
+  const balance = customerBalance(db, customer.id);
+  if (!(input.amount > 0) || !Number.isInteger(input.amount)) {
+    fail(422, "VALIDATION", "المبلغ غير صحيح", "Amount is not valid", { amount: msg("اكتب مبلغاً صحيحاً بالدينار", "Enter a whole amount in dinars") });
+  }
+  if (input.amount > balance) {
+    fail(422, "VALIDATION", "المبلغ أكبر من الدين", "Amount is more than the debt", {
+      amount: msg(`الدين الحالي ${balance.toLocaleString("en")} د.ع`, `Current debt is ${balance.toLocaleString("en")} IQD`),
+    });
+  }
+  // Only pages of our own site can be the way back (never another website).
+  const back = input.return_url.startsWith("/") && !input.return_url.startsWith("//") ? input.return_url : "/";
+  const o: DbOnline = {
+    payment_id: `qi_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`,
+    customer_id: customer.id,
+    amount: input.amount,
+    status: "created",
+    created_at: now.toISOString(),
+    by: { ...person(actor), role: actor.role },
+    key: input.key,
+    return_url: back,
+  };
+  db.online_payments.push(o);
+  return onlineView(o);
+}
+
+/** The gateway's notification "arrived": the result becomes final, and a success is recorded as a payment. */
+export function settleOnline(db: Db, now: Date) {
+  db.online_payments ??= [];
+  for (const o of db.online_payments) {
+    if (o.status !== "created" || !o.outcome || (o.settles_at ?? 0) > now.getTime()) continue;
+    o.status = o.outcome;
+    if (o.status !== "success") continue;
+    const customer = db.customers.find((c) => c.id === o.customer_id);
+    const user = db.users.find((u) => u.id === o.by.id);
+    if (!customer || !user) continue;
+    // The debt may have been paid in cash meanwhile: take only what is still owed.
+    const amount = Math.min(o.amount, customerBalance(db, customer.id));
+    if (amount <= 0) {
+      o.note = "nothing_owed";
+      continue;
+    }
+    const p = addPayment(
+      db,
+      user,
+      { client_ref: `gateway:${o.payment_id}`, customer_id: customer.id, amount, method: "online", note: "Qi Card" },
+      now,
+      { provider: "qi", payment_id: o.payment_id, card: "**** 0000" },
+    );
+    o.recorded_payment_id = p.id;
+  }
 }

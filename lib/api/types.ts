@@ -179,7 +179,45 @@ export interface Invoice {
   created_by: Person;
 }
 
-export type PayMethod = "cash" | "transfer";
+/** Local: cash (نقداً) or a transfer / Zain Cash (تحويل). Online: paid by card through the Qi Card gateway. */
+export type PayMethod = "cash" | "transfer" | "online";
+
+/** For an online payment: what the gateway told us. The full card number never reaches our site. */
+export interface GatewayInfo {
+  provider: "qi";
+  /** The gateway's own id for the payment (to find it in Qi's dashboard). */
+  payment_id: string;
+  /** Only the last 4 digits, like "**** 0000". */
+  card: string;
+}
+
+// ---------- Online payment (shaped like the Qi Card gateway, as in Project 1) ----------
+// Our server creates the payment, the customer pays on the gateway's own page and comes back.
+// Coming back does NOT mean it worked: only the gateway's notification decides (the status below).
+export type OnlineStatus = "created" | "success" | "failed" | "authentication_failed" | "canceled";
+
+export interface OnlinePayment {
+  payment_id: string;
+  customer_id: number;
+  amount: number;
+  status: OnlineStatus;
+  /** The gateway's payment page. The card is typed there, never on our site. */
+  form_url: string;
+  created_at: string;
+  by: Person & { role: Role };
+  /** Our payment record, once the gateway said "success". */
+  recorded_payment_id?: number;
+  note?: string;
+}
+
+export interface StartOnlinePayment {
+  customer_id: number;
+  amount: number;
+  /** Stops a double press from opening two payments. */
+  key: string;
+  /** Where the gateway sends the customer back to (a page of our site). */
+  return_url: string;
+}
 
 export interface Allocation {
   invoice_id: number;
@@ -198,6 +236,8 @@ export interface Payment {
   date: string;
   note?: string;
   allocations: Allocation[];
+  /** Only for online payments. */
+  gateway?: GatewayInfo;
   reversed: boolean;
   reversal_of?: number;
   reversed_by_id?: number;

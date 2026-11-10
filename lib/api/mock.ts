@@ -6,6 +6,7 @@ import { ApiError, NETWORK_ERROR } from "./errors";
 import type { Api } from "./http";
 import type {
   AuditEntry,
+  OnlineStatus,
   Batch,
   Customer,
   DailySales,
@@ -48,6 +49,8 @@ import {
   invoiceView,
   msg,
   need,
+  onlineView,
+  startOnline,
   physicalQty,
   registerShop,
   rejectShop,
@@ -637,6 +640,23 @@ export const mockApi: Api = {
       return allocate(db, customerId, Math.max(0, amount)).allocations;
     }),
   createPayment: (input) => write((db, a, now): Payment => createPayment(db, a, input, now)),
+
+  // Online payment (Qi Card, demo gateway)
+  startOnlinePayment: (input) => write((db, a, now) => startOnline(db, a, input, now)),
+  getOnlinePayment: (id) =>
+    read((db, a) => {
+      const o = db.online_payments.find((x) => x.payment_id === id);
+      if (!o || (a.role === "shop" && a.customer_id !== o.customer_id)) notFound();
+      return onlineView(o);
+    }),
+  listOnlinePayments: () =>
+    read((db, a) => {
+      need(a, ["manager", "accountant", "shop"]);
+      return db.online_payments
+        .filter((o) => a.role !== "shop" || o.customer_id === a.customer_id)
+        .map(onlineView)
+        .sort((x, y) => y.created_at.localeCompare(x.created_at));
+    }),
   reversePayment: (id, reason) => write((db, a, now) => reversePayment(db, a, id, reason, now)),
 
   // Returns
@@ -809,3 +829,30 @@ export const mockApi: Api = {
   },
 };
 
+// ---------- The demo Qi Card gateway ----------
+// A stand-in for the gateway's own website, only in the demo. With the real backend the customer goes to
+// Qi's page and this is never used. It changes the stored data directly, like an outside service would.
+export const demoGateway = {
+  /** What the payment page shows: the amount, and whether it was already finished. */
+  info: async (paymentId: string) => {
+    await wait(300);
+    const db = db0();
+    db.online_payments ??= [];
+    const o = db.online_payments.find((x) => x.payment_id === paymentId);
+    if (!o) notFound();
+    const customer = db.customers.find((c) => c.id === o.customer_id);
+    return { amount: o.amount, shop: customer?.name ?? "", finished: !!o.outcome || o.status !== "created" };
+  },
+  /** The customer finished on the payment page. Returns the address to send them back to. */
+  finish: async (paymentId: string, outcome: Exclude<OnlineStatus, "created">) => {
+    await wait(600);
+    const db = db0();
+    const o = db.online_payments.find((x) => x.payment_id === paymentId);
+    if (!o) notFound();
+    // The gateway's notification reaches our server a moment after the customer is sent back.
+    if (!o.outcome) Object.assign(o, { outcome, settles_at: Date.now() + 1500 });
+    saveDb(db);
+    emitChange();
+    return `${o.return_url}${o.return_url.includes("?") ? "&" : "?"}payment=${encodeURIComponent(o.payment_id)}`;
+  },
+};

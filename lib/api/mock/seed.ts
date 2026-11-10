@@ -4,6 +4,7 @@ import type { Db, DbItem, DbUser } from "./db";
 import { DB_VERSION } from "./db";
 import {
   addDays,
+  addPayment,
   approveOrder,
   closeMonth,
   confirmOrder,
@@ -162,6 +163,7 @@ export function makeSeed(now = new Date()): Db {
     closed_months: {},
     notified_batches: [],
     notified_low: [],
+    online_payments: [],
   };
 
   const manager = users[0];
@@ -279,6 +281,18 @@ export function makeSeed(now = new Date()): Db {
       const who = rand() < 0.7 ? (db.users.find((u) => u.id === c.rep_id) as DbUser) : accountant;
       const paidAt = at(d, int(12, 18), int(0, 59));
       if (paidAt.getTime() > now.getTime() - 1_800_000) continue;
+      // The two shops that have a login sometimes pay online (Qi Card) by themselves.
+      const shopUser = db.users.find((u) => u.role === "shop" && u.customer_id === c.id);
+      if (shopUser && rand() < 0.5) {
+        const pid = `qi_demo${String(db.online_payments.length + 1).padStart(4, "0")}${c.id}`;
+        const p = addPayment(db, shopUser, { client_ref: `gateway:${pid}`, customer_id: c.id, amount, method: "online", note: "Qi Card" }, paidAt, { provider: "qi", payment_id: pid, card: "**** 0000" });
+        db.online_payments.push({ payment_id: pid, customer_id: c.id, amount, status: "success", created_at: new Date(paidAt.getTime() - 120_000).toISOString(), by: { id: shopUser.id, name: shopUser.name, role: "shop" }, recorded_payment_id: p.id, key: pid, return_url: "/statement" });
+        // Now and then a try that didn't go through first (wrong bank code, or the owner cancelled).
+        if (rand() < 0.5) {
+          db.online_payments.push({ payment_id: `${pid}x`, customer_id: c.id, amount, status: rand() < 0.5 ? "authentication_failed" : "canceled", created_at: new Date(paidAt.getTime() - 600_000).toISOString(), by: { id: shopUser.id, name: shopUser.name, role: "shop" }, key: `${pid}x`, return_url: "/statement" });
+        }
+        continue;
+      }
       createPayment(db, who, { client_ref: cref(), customer_id: c.id, amount, method: rand() < 0.85 ? "cash" : "transfer" }, paidAt);
     }
     // A return now and then: damaged or wrong items.
