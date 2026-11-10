@@ -10,6 +10,7 @@ import {
   History,
   Home,
   LayoutDashboard,
+  ListChecks,
   Map as MapIcon,
   Warehouse,
   Package,
@@ -39,7 +40,8 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
-  { href: "/dashboard", ar: "لوحة التحكم", en: "Dashboard", icon: LayoutDashboard, roles: ["manager", "accountant"], group: "main", mobile: ["manager"] },
+  { href: "/decisions", ar: "قراراتي اليوم", en: "My decisions", icon: ListChecks, roles: ["manager"], group: "main", mobile: ["manager"] },
+  { href: "/dashboard", ar: "لوحة التحكم", en: "Dashboard", icon: LayoutDashboard, roles: ["manager", "accountant"], group: "main" },
   { href: "/accounts", ar: "ملف الحساب", en: "Account file", icon: Contact, roles: ["accountant"], group: "main", mobile: ["accountant"] },
   { href: "/hall", ar: "قاعة التجهيز", en: "Picking hall", icon: Warehouse, roles: ["warehouse"], group: "main", mobile: ["warehouse"] },
   { href: "/map", ar: "خريطة المخازن", en: "Warehouse map", icon: MapIcon, roles: ["manager", "warehouse", "accountant"], group: "main" },

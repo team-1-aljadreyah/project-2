@@ -94,6 +94,8 @@ export function homeOf(role: Role) {
       return "/hall";
     case "accountant":
       return "/accounts";
+    case "manager":
+      return "/decisions";
     default:
       return "/dashboard";
   }
