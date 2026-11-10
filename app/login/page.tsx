@@ -1,13 +1,18 @@
 "use client";
 
+// The login page, after the "Login Page Illustration - Online Payment" shot Yasser chose:
+// a strong background, one big rounded card, the illustration on one side and a light form on the other
+// ("Hello, welcome back", underline fields, one big button, sign-up link). Made in our warehouse colors.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Boxes, Calculator, Eye, EyeOff, LayoutDashboard, Loader2, Lock, Phone, ShieldCheck, Store, Truck, UserPlus, type LucideIcon } from "lucide-react";
-import { AuthTopBar, BrandPanel, IconField, PhoneBand, iconInput, rise, stagger } from "@/components/auth";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowLeft, ArrowRight, Boxes, Calculator, Eye, EyeOff, Info, LayoutDashboard, Loader2, Lock, Phone, Store, Truck, UserPlus, type LucideIcon } from "lucide-react";
+import { rise, stagger } from "@/components/auth";
+import { LoginArt } from "@/components/login-art";
 import { LogoMark } from "@/components/logo";
 import { roleName } from "@/components/status";
+import { LanguageSwitch, ThemeToggle } from "@/components/switches";
 import { errorText } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Role } from "@/lib/api/types";
@@ -35,6 +40,8 @@ export default function LoginPage() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
+  const Back = lang === "ar" ? ArrowRight : ArrowLeft;
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
 
   // Already logged in: go straight to your own home page.
@@ -58,29 +65,55 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-dvh bg-bg lg:grid-cols-[1.05fr_1fr]">
-      <BrandPanel variant="login" />
+    <div className="brand-panel relative flex min-h-dvh flex-col overflow-hidden">
+      <div className="brand-grid absolute inset-0" aria-hidden />
+      {/* Big translucent shapes floating in the background, like the design */}
+      <div className="pointer-events-none absolute -start-24 top-24 size-72 rotate-12 rounded-[48px] bg-white/[0.04]" aria-hidden />
+      <div className="pointer-events-none absolute -end-16 bottom-10 size-80 -rotate-12 rounded-[56px] bg-[#e1692b]/10" aria-hidden />
 
-      <main className="relative flex min-h-dvh flex-col">
-        <PhoneBand />
-        <AuthTopBar />
+      {/* Top bar */}
+      <div className="relative flex items-center justify-between gap-2 p-4 sm:p-6">
+        <Link href="/" className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-white/90 hover:bg-white/10">
+          <Back className="size-4" aria-hidden />
+          <LogoMark size={28} />
+          <span className="hidden sm:inline">{tr("النهرين", "Al-Nahrain")}</span>
+        </Link>
+        <div className="flex gap-2">
+          <LanguageSwitch onBrand />
+          <ThemeToggle onBrand />
+        </div>
+      </div>
 
-        <div className="relative flex flex-1 items-start justify-center px-4 pb-10 lg:items-center">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: "easeOut" }} className="w-full max-w-md">
-            <div className="mb-6 flex items-center gap-3 text-white lg:hidden">
-              <LogoMark size={48} />
-              <div>
-                <p className="text-xl font-bold">{tr("النهرين", "Al-Nahrain")}</p>
-                <p className="text-sm opacity-80">{tr("للمواد الغذائية بالجملة · كربلاء", "Wholesale foods · Karbala")}</p>
-              </div>
+      <main className="relative flex flex-1 items-center justify-center px-3 pb-8 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 24, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="grid w-full max-w-5xl overflow-hidden rounded-[32px] bg-card text-text shadow-[0_40px_120px_-30px_rgb(0_0_0/0.6)] lg:grid-cols-[1.1fr_1fr]"
+        >
+          {/* The illustration side */}
+          <div className="relative flex items-center justify-center bg-gradient-to-br from-[#e1692b]/10 via-card-2 to-card-2 px-6 pb-0 pt-4 lg:p-10">
+            <div className="w-full max-w-[220px] sm:max-w-[300px] lg:max-w-none">
+              <LoginArt />
             </div>
+            <p className="absolute bottom-4 start-6 hidden max-w-xs text-sm text-muted lg:block">
+              {tr("المخزون والطلبات والديون في مكان واحد، حتى بدون إنترنت.", "Stock, orders and debts in one place, even offline.")}
+            </p>
+          </div>
 
-            <div className="rounded-3xl border border-line bg-card p-6 shadow-[0_20px_60px_-20px_rgb(17_19_23/0.22)] sm:p-8">
-              <h1 className="text-2xl font-bold">{tr("أهلاً بك من جديد", "Welcome back")}</h1>
-              <p className="mt-1 text-sm text-muted">{tr("سجّل الدخول برقم هاتفك وكلمة المرور", "Log in with your phone number and password")}</p>
+          {/* The form side */}
+          <div className="flex flex-col justify-center p-6 pt-4 sm:p-10">
+            <motion.div variants={stagger} initial="hidden" animate="show">
+              <motion.h1 variants={rise} className="text-3xl font-bold leading-tight sm:text-4xl">
+                {tr("أهلاً،", "Hello,")}
+                <span className="block">{tr("مرحباً بعودتك", "Welcome back")}</span>
+              </motion.h1>
+              <motion.p variants={rise} className="mt-2 text-sm text-muted">
+                {tr("سجّل الدخول برقم هاتفك وكلمة المرور", "Log in with your phone number and password")}
+              </motion.p>
 
               <form
-                className="mt-6 space-y-4"
+                className="mt-8 space-y-6"
                 noValidate
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -91,22 +124,39 @@ export default function LoginPage() {
                   login(phone, password, "form");
                 }}
               >
-                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone" ltr>
-                  <input id="phone" type="tel" inputMode="tel" autoComplete="username" dir="ltr" placeholder="07XX XXX XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} className={iconInput} />
-                </IconField>
-                <IconField
-                  icon={Lock}
-                  label={tr("كلمة المرور", "Password")}
-                  htmlFor="password"
-                  ltr
-                  end={
-                    <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? tr("إخفاء", "Hide") : tr("إظهار", "Show")} className="flex h-12 w-11 shrink-0 items-center justify-center text-faint hover:text-text">
-                      {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </button>
-                  }
-                >
-                  <input id="password" type={show ? "text" : "password"} autoComplete="current-password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} className={cn(iconInput, "pe-0")} />
-                </IconField>
+                <motion.div variants={rise}>
+                  <LineField id="phone" label={tr("رقم الهاتف", "Phone number")} icon={Phone}>
+                    <input id="phone" type="tel" inputMode="tel" autoComplete="username" dir="ltr" placeholder="07XX XXX XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} className={lineInput} />
+                  </LineField>
+                </motion.div>
+                <motion.div variants={rise}>
+                  <LineField
+                    id="password"
+                    label={tr("كلمة المرور", "Password")}
+                    icon={Lock}
+                    end={
+                      <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? tr("إخفاء", "Hide") : tr("إظهار", "Show")} className="flex size-10 shrink-0 items-center justify-center text-faint hover:text-text">
+                        {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    }
+                  >
+                    <input id="password" type={show ? "text" : "password"} autoComplete="current-password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} className={lineInput} />
+                  </LineField>
+                </motion.div>
+
+                <motion.div variants={rise} className="flex justify-end text-xs">
+                  <button type="button" onClick={() => setForgot((f) => !f)} aria-expanded={forgot} className="font-semibold text-muted hover:text-text">
+                    {tr("نسيت كلمة المرور؟", "Forgot your password?")}
+                  </button>
+                </motion.div>
+                <AnimatePresence initial={false}>
+                  {forgot && (
+                    <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="-mt-3 flex items-start gap-2 overflow-hidden rounded-xl bg-card-2 p-3 text-xs text-muted">
+                      <Info className="mt-0.5 size-3.5 shrink-0" />
+                      {tr("كلمات المرور يضبطها مدير الشركة. اتصل به ليعطيك كلمة مرور جديدة.", "Passwords are set by the company manager. Call him for a new one.")}
+                    </motion.p>
+                  )}
+                </AnimatePresence>
 
                 {error && (
                   <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="rounded-xl bg-danger-soft px-3 py-2.5 text-sm font-medium text-danger">
@@ -115,10 +165,11 @@ export default function LoginPage() {
                 )}
 
                 <motion.button
+                  variants={rise}
                   type="submit"
                   whileTap={{ scale: 0.98 }}
                   disabled={!!busy}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action transition hover:bg-action-hover disabled:opacity-70"
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action shadow-[0_12px_30px_-10px_rgb(225_105_43/0.7)] transition hover:bg-action-hover disabled:opacity-70"
                 >
                   {busy === "form" ? <Loader2 className="size-5 animate-spin" /> : null}
                   {tr("دخول", "Log in")}
@@ -126,69 +177,66 @@ export default function LoginPage() {
                 </motion.button>
               </form>
 
-              {/* New shops make their own account */}
-              <div className="mt-6 flex items-center gap-3 text-xs text-faint">
-                <span className="h-px flex-1 bg-line" />
-                {tr("صاحب محل وليس لديك حساب؟", "A shop owner without an account?")}
-                <span className="h-px flex-1 bg-line" />
-              </div>
-              <Link
-                href="/register"
-                className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-primary text-base font-bold text-primary-ink transition hover:bg-primary hover:text-on-primary"
-              >
-                <UserPlus className="size-5" /> {tr("سجّل محلك", "Register your shop")}
-              </Link>
-
-              <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-faint">
-                <ShieldCheck className="size-3.5" /> {tr("كل موظف يرى ما يخص عمله فقط", "Each person sees only what their job needs")}
-              </p>
-            </div>
+              <motion.p variants={rise} className="mt-5 text-center text-sm text-muted">
+                {tr("صاحب محل وليس لديك حساب؟", "A shop owner without an account?")}{" "}
+                <Link href="/register" className="inline-flex items-center gap-1 font-bold text-action hover:underline">
+                  <UserPlus className="size-4" /> {tr("سجّل محلك", "Register your shop")}
+                </Link>
+              </motion.p>
+            </motion.div>
 
             {USE_MOCK && (
-              <div className="mt-6">
-                <div className="mb-3 flex items-end justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold">{tr("جرّب النظام", "Try the system")}</p>
-                    <p className="text-xs text-muted">{tr("ادخل بأي دور بضغطة واحدة", "Enter as any role with one tap")}</p>
-                  </div>
-                  <span className="rounded-lg bg-card-2 px-2 py-1 text-xs text-muted">
+              <div className="mt-8 border-t border-line pt-5">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-muted">{tr("جرّب النظام بضغطة واحدة", "Try it with one tap")}</p>
+                  <span className="rounded-lg bg-card-2 px-2 py-0.5 text-[11px] text-muted">
                     {tr("كلمة المرور", "Password")} <b className="num" dir="ltr">{DEMO_PASSWORD}</b>
                   </span>
                 </div>
-                <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="flex flex-wrap gap-2">
                   {DEMO.map((d) => (
-                    <motion.button
+                    <button
                       key={d.phone}
-                      variants={rise}
-                      whileHover={{ y: -2 }}
-                      whileTap={{ scale: 0.97 }}
                       type="button"
                       disabled={!!busy}
+                      title={d.name}
                       onClick={() => {
                         setPhone(d.phone);
                         setPassword(DEMO_PASSWORD);
                         login(d.phone, DEMO_PASSWORD, d.phone);
                       }}
-                      className={cn(
-                        "group flex flex-col items-start gap-2 rounded-2xl border border-line bg-card p-3 text-start transition hover:border-action hover:shadow-card disabled:opacity-60",
-                        busy === d.phone && "border-action",
-                      )}
+                      className={cn("flex items-center gap-1.5 rounded-full border border-line-strong px-3 py-1.5 text-xs font-semibold transition hover:border-action hover:text-action disabled:opacity-60", busy === d.phone && "border-action text-action")}
                     >
-                      <span className="flex size-9 items-center justify-center rounded-xl bg-primary-soft text-primary-ink transition group-hover:bg-action group-hover:text-on-action">
-                        {busy === d.phone ? <Loader2 className="size-4 animate-spin" /> : <d.icon className="size-4" />}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold">{roleName(d.role, tr)}</span>
-                        <span className="block truncate text-xs text-muted">{d.name}</span>
-                      </span>
-                    </motion.button>
+                      {busy === d.phone ? <Loader2 className="size-3.5 animate-spin" /> : <d.icon className="size-3.5" />}
+                      {roleName(d.role, tr)}
+                      <span className="sr-only">{d.name}</span>
+                    </button>
                   ))}
-                </motion.div>
+                </div>
               </div>
             )}
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
       </main>
+    </div>
+  );
+}
+
+const lineInput = "h-11 w-full bg-transparent pe-2 ps-9 text-base outline-none placeholder:text-faint";
+
+/** The design's "underline only" field: a thin line that turns orange and grows from the middle on focus. */
+function LineField({ id, label, icon: Icon, end, children }: { id: string; label: string; icon: LucideIcon; end?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div>
+      <label htmlFor={id} className="text-xs font-semibold text-muted">
+        {label}
+      </label>
+      <div dir="ltr" className="group relative mt-1 flex items-center border-b-2 border-line-strong">
+        <Icon className="pointer-events-none absolute start-1 size-[18px] text-faint transition group-focus-within:text-action" aria-hidden />
+        {children}
+        {end}
+        <span className="absolute inset-x-0 -bottom-0.5 h-0.5 origin-center scale-x-0 bg-action transition-transform duration-300 group-focus-within:scale-x-100" aria-hidden />
+      </div>
     </div>
   );
 }
