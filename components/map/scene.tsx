@@ -2,16 +2,16 @@
 
 // The site in 3D: Al-Nahrain's two warehouses in Karbala, drawn from above at an angle.
 // Al-Sinaa (main) has a big storage hall, an office tower and grain silos. Al-Hur is a smaller hall.
-// A truck drives between them, people's cursors move around, and each warehouse shows how full it is.
+// Each warehouse shows how full it is, with a red dot for its alerts. (No moving truck or cursors: they
+// distracted from the numbers that matter.)
 // Click a warehouse to go inside.
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { AlertTriangle, ArrowLeft, ArrowRight, ClipboardList } from "lucide-react";
 import { useFmt } from "@/lib/i18n";
-import { Iso, type P3 } from "@/lib/iso";
+import { Iso } from "@/lib/iso";
 import { cn } from "@/lib/utils";
-import { NamedCursor } from "./cursor";
-import type { MapWarehouse, Person } from "./data";
+import type { MapWarehouse } from "./data";
 
 // ---------- the drawing (made once, it never changes) ----------
 
@@ -156,46 +156,17 @@ function buildScene() {
 
   objs.sort((a, b) => a.depth - b.depth);
 
-  // The moving van is drawn around (0, 0) and then moved along the roads.
-  const van = solid(-0.45, -0.35, 0.05, 0.9, 0.7, 0.65, { top: "#f5b48a", left: ACTION, right: "#b8521c" });
-  const route: P3[] = [
-    [16.2, 2.2, 0],
-    [16.2, 9.6, 0],
-    [16.2, 17.8, 0],
-    [25.6, 17.8, 0],
-  ];
-  const vanPath = route.map((pt) => iso.p(pt));
-
-  // Where the % badges and the cursors go (also counted in the frame).
+  // Where the % badges go (also counted in the frame).
   const badge = { 1: iso.p([8, 8.5, 3.6]), 2: iso.p([22, 6, 2.9]) } as Record<number, [number, number]>;
-  const walks = {
-    keeper1: ([[5.5, 7, 2.7], [10.5, 7.5, 2.7], [9, 10.8, 2.7], [6, 10, 2.7]] as P3[]).map((pt) => iso.p(pt)),
-    keeper2: ([[19.8, 4.2, 2.2], [24, 4.6, 2.2], [22.4, 7.8, 2.2]] as P3[]).map((pt) => iso.p(pt)),
-    repA: ([[14.4, 9.6, 0], [16.2, 13.5, 0], [11.5, 16.2, 0]] as P3[]).map((pt) => iso.p(pt)),
-    repB: ([[17.8, 9.3, 0], [16.2, 5.2, 0], [19.5, 12.2, 0]] as P3[]).map((pt) => iso.p(pt)),
-    repC: ([[9, 16.4, 0], [13, 15.2, 0], [6, 16.8, 0]] as P3[]).map((pt) => iso.p(pt)),
-  };
 
   const vb = { x: iso.minX - 30, y: iso.minY - 80, w: iso.maxX - iso.minX + 60, h: iso.maxY - iso.minY + 110 };
-  return { objs, van, vanPath, badge, walks, vb };
+  return { objs, badge, vb };
 }
 
 const SCENE = buildScene();
 const { vb } = SCENE;
 /** Screen point → % of the picture, for things drawn in HTML on top of the SVG. */
 const pct = ([X, Y]: [number, number]) => ({ x: ((X - vb.x) / vb.w) * 100, y: ((Y - vb.y) / vb.h) * 100 });
-
-/** Each person walks around their own warehouse: keepers on the roof, reps on the roads. */
-function placeCursors(people: { name: string; warehouseId: number; kind: Person["kind"] }[]) {
-  const repWalks = [SCENE.walks.repA, SCENE.walks.repB, SCENE.walks.repC];
-  const out: { name: string; path: { x: number; y: number }[]; tone: "orange" | "green"; duration: number }[] = [];
-  let reps = 0;
-  for (const [i, p] of people.slice(0, 5).entries()) {
-    const walk = p.kind === "staff" ? (p.warehouseId === 2 ? SCENE.walks.keeper2 : SCENE.walks.keeper1) : repWalks[reps++ % repWalks.length];
-    out.push({ name: p.name, path: walk.map(pct), tone: i % 2 === 0 ? "orange" : "green", duration: 8 + i * 1.7 });
-  }
-  return out;
-}
 
 function ShapeEl({ s }: { s: Shape }) {
   if (s.k === "poly") return <polygon points={s.d} fill={s.f} opacity={s.o} />;
@@ -207,12 +178,10 @@ function ShapeEl({ s }: { s: Shape }) {
 
 export function SiteScene({
   warehouses,
-  people,
   myWarehouseId,
   onEnter,
 }: {
   warehouses: MapWarehouse[];
-  people: { name: string; warehouseId: number; kind: Person["kind"] }[];
   myWarehouseId?: number;
   onEnter: (id: number, origin: { x: number; y: number }) => void;
 }) {
@@ -226,7 +195,6 @@ export function SiteScene({
     onEnter(id, { x: b.x / 100, y: (b.y + 12) / 100 });
   };
 
-  const cursors = placeCursors(people);
 
   return (
     <div className="relative mx-auto w-full max-w-5xl select-none">
@@ -272,16 +240,6 @@ export function SiteScene({
           );
         })}
 
-        {/* The van drives along the roads: from the silos, down past both warehouses, to the main road and back. */}
-        <motion.g
-          initial={{ x: SCENE.vanPath[0][0], y: SCENE.vanPath[0][1] }}
-          animate={reduce ? undefined : { x: SCENE.vanPath.map((p) => p[0]), y: SCENE.vanPath.map((p) => p[1]) }}
-          transition={{ duration: 16, repeat: Infinity, repeatType: "mirror", ease: "linear", times: [0, 0.3, 0.62, 1] }}
-        >
-          {SCENE.van.map((s, j) => (
-            <ShapeEl key={j} s={s} />
-          ))}
-        </motion.g>
       </svg>
 
       {/* How full each warehouse is, floating above it */}
@@ -305,19 +263,20 @@ export function SiteScene({
           >
             <span
               className={cn(
-                "num flex size-12 items-center justify-center rounded-full text-sm font-bold shadow-lg ring-4 sm:size-14 sm:text-base",
+                "num relative flex size-12 items-center justify-center rounded-full text-sm font-bold shadow-lg ring-4 sm:size-14 sm:text-base",
                 full ? "bg-action text-on-action ring-action/25" : "bg-primary text-on-primary ring-primary/25",
               )}
             >
               {Math.round(w.fill * 100)}%
+              {/* The alerts count sits on the circle's edge (it used to sit on the edge of the whole label, far away) */}
+              {w.alerts > 0 && (
+                <span className="num absolute -end-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-card">{w.alerts}</span>
+              )}
             </span>
             <span className="whitespace-nowrap rounded-full bg-card/90 px-2.5 py-0.5 text-[11px] font-semibold text-text shadow backdrop-blur">
               {name(w.wh)}
               {myWarehouseId === w.wh.id && <span className="text-primary-ink"> · {tr("مخزنك", "yours")}</span>}
             </span>
-            {w.alerts > 0 && (
-              <span className="num absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">{w.alerts}</span>
-            )}
           </motion.button>
         );
       })}
@@ -362,10 +321,6 @@ export function SiteScene({
           })()}
       </AnimatePresence>
 
-      {/* People working today */}
-      {cursors.map((c, i) => (
-        <NamedCursor key={c.name} name={c.name.split(" ")[0]} tone={c.tone} path={c.path} duration={c.duration} delay={i * 0.6} />
-      ))}
     </div>
   );
 }

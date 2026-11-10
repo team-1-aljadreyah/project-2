@@ -211,8 +211,7 @@ export default function MapPage() {
                   {level.name === "site" && (
                     <div className="px-2 pb-4 pt-2 sm:px-6">
                       <SiteScene
-                        warehouses={views}
-                        people={people}
+                        warehouses={views}
                         myWarehouseId={user.role === "warehouse" ? user.warehouse_id : undefined}
                         onEnter={(id, o) => go({ name: "warehouse", id }, { dir: 1, ox: o.x, oy: o.y })}
                       />
