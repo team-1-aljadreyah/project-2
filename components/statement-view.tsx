@@ -1,7 +1,6 @@
 "use client";
 
 // Customer statement: every invoice, payment, return and reverse entry, with the running balance.
-import Link from "next/link";
 import { useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { api } from "@/lib/api";
@@ -9,7 +8,7 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { downloadCsv, today } from "@/lib/utils";
 import type { StatementType } from "@/lib/api/types";
-import { Badge, Button, Card, ErrorBox, Input, LoadingRows, Money, Pager, usePages } from "./ui";
+import { Badge, Button, Card, ClickRow, ErrorBox, Input, LoadingRows, Money, Pager, RefLink, usePages } from "./ui";
 
 export function StatementView({ customerId, links = true }: { customerId: number; links?: boolean }) {
   const { tr, date } = useFmt();
@@ -27,7 +26,8 @@ export function StatementView({ customerId, links = true }: { customerId: number
       credit_note: tr("تعويض عن خطأ", "Credit note"),
       refund: tr("مبلغ مُعاد للزبون", "Refund"),
     })[t];
-  const tone = (t: StatementType) => (t === "invoice" ? "primary" : t === "payment" ? "success" : t === "return" ? "warning" : t === "reversal" ? "danger" : t === "credit_note" ? "success" : t === "refund" ? "warning" : "neutral");
+  const tone = (t: StatementType) =>
+    t === "invoice" ? "primary" : t === "payment" ? "success" : t === "return" ? "warning" : t === "reversal" ? "danger" : t === "credit_note" ? "success" : t === "refund" ? "warning" : "neutral";
 
   return (
     <Card className="print-area">
@@ -79,15 +79,15 @@ export function StatementView({ customerId, links = true }: { customerId: number
               </thead>
               <tbody>
                 {pg.shown.map((r, i) => (
-                  <tr key={i} className="border-b border-line last:border-0">
+                  <ClickRow key={i} href={r.link && (links || r.type === "invoice") ? r.link : undefined} className="border-b border-line last:border-0">
                     <td className="num whitespace-nowrap px-3 py-2.5 text-muted">{date(r.date)}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Badge tone={tone(r.type)}>{label(r.type)}</Badge>
                         {r.link && (links || r.type === "invoice") ? (
-                          <Link href={r.link} className="num text-xs text-primary-ink hover:underline">
+                          <RefLink href={r.link} className="num text-xs">
                             {r.ref}
-                          </Link>
+                          </RefLink>
                         ) : (
                           <span className="num text-xs">{r.ref}</span>
                         )}
@@ -98,7 +98,7 @@ export function StatementView({ customerId, links = true }: { customerId: number
                     <td className="px-3 py-2.5 text-end">
                       <Money value={r.balance} className="font-semibold" />
                     </td>
-                  </tr>
+                  </ClickRow>
                 ))}
               </tbody>
               <tfoot>

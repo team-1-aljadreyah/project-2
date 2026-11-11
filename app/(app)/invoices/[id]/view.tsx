@@ -2,13 +2,13 @@
 
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { MessageCircle, Printer, Undo2, Wallet } from "lucide-react";
+import { ClipboardList, MessageCircle, Printer, Undo2, Wallet } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { useBrand } from "@/lib/site";
 import { CreditNoteButton } from "@/components/refund";
 import { useApp } from "@/components/shell";
 import { InvoiceStatusBadge } from "@/components/status";
-import { Badge, Button, Card, ErrorBox, LoadingRows, Money, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, ClickRow, ErrorBox, GoIcon, LoadingRows, Money, PageHeader, RefLink } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -69,6 +69,9 @@ export default function InvoiceView() {
         }
         actions={
           <>
+            <Button href={`/orders/${i.order_id}`}>
+              <ClipboardList className="size-4" /> {tr("الطلب", "Order")}
+            </Button>
             {canReturn && (
               <Button href={`/returns/new?invoice=${i.id}`}>
                 <Undo2 className="size-4" /> {tr("مرتجع", "Return")}
@@ -98,13 +101,15 @@ export default function InvoiceView() {
             <LogoMark size={44} />
             <div>
               <p className="text-lg font-bold">{brand.company}</p>
-              <p className="text-xs text-muted">{tr("بالجملة - كربلاء", "Wholesale - Karbala")} · {name(wh)}
+              <p className="text-xs text-muted">
+                {tr("بالجملة - كربلاء", "Wholesale - Karbala")} · {name(wh)}
                 {brand.phone && (
                   <span className="num" dir="ltr">
                     {" · "}
                     {brand.phone}
                   </span>
-                )}</p>
+                )}
+              </p>
             </div>
           </div>
           <div className="text-end text-sm">
@@ -116,7 +121,9 @@ export default function InvoiceView() {
         <div className="grid gap-4 border-b border-line py-5 text-sm sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted">{tr("إلى", "Bill to")}</p>
-            <p className="font-semibold">{c?.name}</p>
+            <p className="font-semibold">
+              <RefLink href={c && `/customers/${c.id}`}>{c?.name}</RefLink>
+            </p>
             <p className="text-muted">{c?.owner_name}</p>
             <p className="text-muted">
               {c?.address} · <span dir="ltr">{c?.phone}</span>
@@ -142,9 +149,11 @@ export default function InvoiceView() {
             {i.lines.map((l, k) => {
               const it = itemById.get(l.item_id);
               return (
-                <tr key={k} className="border-b border-line align-top">
+                <ClickRow key={k} href={`/items/${l.item_id}`} className="border-b border-line align-top">
                   <td className="py-3">
-                    <p className="font-medium">{name(it)}</p>
+                    <p className="font-medium">
+                      <RefLink href={`/items/${l.item_id}`}>{name(it)}</RefLink>
+                    </p>
                     {l.returned_pieces > 0 && it && (
                       <p className="text-xs text-warning">
                         {tr("أُرجع", "Returned")} {qty(l.returned_pieces, it.pieces_per_carton)}
@@ -170,7 +179,7 @@ export default function InvoiceView() {
                   <td className="py-3 text-end">
                     <Money value={l.total} className="font-medium" />
                   </td>
-                </tr>
+                </ClickRow>
               );
             })}
           </tbody>
@@ -188,7 +197,11 @@ export default function InvoiceView() {
           {!!i.usd_rate && (
             <Row
               k={<span className="text-xs text-muted">{tr(`بالدولار (1$ = ${num(i.usd_rate)})`, `In dollars ($1 = ${num(i.usd_rate)})`)}</span>}
-              v={<span className="num text-xs text-muted" dir="ltr">≈ ${(i.total / i.usd_rate).toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>}
+              v={
+                <span className="num text-xs text-muted" dir="ltr">
+                  ≈ ${(i.total / i.usd_rate).toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                </span>
+              }
             />
           )}
           {i.returned > 0 && <Row k={tr("المرتجع", "Returns")} v={<Money value={-i.returned} />} />}
@@ -209,7 +222,9 @@ export default function InvoiceView() {
             </div>
           )}
         </div>
-        <p className="mt-8 text-center text-xs text-faint">{tr("شكراً لتعاملكم مع", "Thank you for dealing with")} {brand.company}</p>
+        <p className="mt-8 text-center text-xs text-faint">
+          {tr("شكراً لتعاملكم مع", "Thank you for dealing with")} {brand.company}
+        </p>
       </Card>
 
       {seesMoney && (myPays.length > 0 || myReturns.length > 0) && (
@@ -219,20 +234,34 @@ export default function InvoiceView() {
             {myPays.map((p) => {
               const a = p.allocations.find((x) => x.invoice_id === i.id);
               return (
-                <li key={p.id} className="flex justify-between gap-2 px-4 py-2.5">
+                <li key={p.id} className="box-row flex items-center justify-between gap-2 px-4 py-2.5">
                   <span>
-                    {p.amount < 0 ? tr("عكس تسديد", "Reversal") : tr("تسديد", "Payment")} <span className="num">{p.number}</span> · {dateTime(p.date)} · {p.received_by.name}
+                    {p.amount < 0 ? tr("عكس تسديد", "Reversal") : tr("تسديد", "Payment")}{" "}
+                    <RefLink main href={`/payments/${p.id}`} className="num">
+                      {p.number}
+                    </RefLink>{" "}
+                    · {dateTime(p.date)} · {p.received_by.name}
                   </span>
-                  <Money value={a?.amount} />
+                  <span className="flex items-center gap-1.5">
+                    <Money value={a?.amount} />
+                    <GoIcon className="text-faint" />
+                  </span>
                 </li>
               );
             })}
             {myReturns.map((r) => (
-              <li key={r.id} className="flex justify-between gap-2 px-4 py-2.5">
+              <li key={r.id} className="box-row flex items-center justify-between gap-2 px-4 py-2.5">
                 <span>
-                  {tr("مرتجع", "Return")} <span className="num">{r.number}</span> · {dateTime(r.created_at)}
+                  {tr("مرتجع", "Return")}{" "}
+                  <RefLink main href={`/returns/${r.id}`} className="num">
+                    {r.number}
+                  </RefLink>{" "}
+                  · {dateTime(r.created_at)}
                 </span>
-                <Money value={r.amount} />
+                <span className="flex items-center gap-1.5">
+                  <Money value={r.amount} />
+                  <GoIcon className="text-faint" />
+                </span>
               </li>
             ))}
           </ul>

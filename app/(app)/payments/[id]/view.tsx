@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { MethodChip } from "@/components/pay-method";
 import { useApp } from "@/components/shell";
 import { roleName } from "@/components/status";
-import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, GoIcon, KV, LoadingRows, Money, Notice, PageHeader, RefLink, Textarea, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -51,7 +50,7 @@ export default function PaymentView() {
           <p className="text-xs text-muted">{tr("المبلغ", "Amount")}</p>
           <Money value={p.amount} className={`text-3xl font-bold ${p.amount < 0 ? "text-danger" : ""}`} />
           <div className="mt-3 border-t border-line pt-2">
-            <KV k={tr("الزبون", "Customer")} v={customer.data ? <Link className="text-primary-ink hover:underline" href={`/customers/${customer.data.id}`}>{customer.data.name}</Link> : "…"} />
+            <KV k={tr("الزبون", "Customer")} href={customer.data && `/customers/${customer.data.id}`} v={customer.data?.name ?? "…"} />
             <KV k={tr("الوقت", "Time")} v={dateTime(p.date)} />
             <KV k={p.method === "online" ? tr("دفعه", "Paid by") : tr("سجّله", "Entered by")} v={`${p.received_by.name} (${roleName(p.received_by.role, tr)})`} />
             <KV k={tr("الطريقة", "Method")} v={<MethodChip m={p.method} tr={tr} />} />
@@ -66,30 +65,40 @@ export default function PaymentView() {
                 {tr("تفاصيل الدفع الأونلاين", "Online payment details")}
               </p>
               <KV k={tr("بوابة الدفع", "Gateway")} v="Qi Card" />
-              <KV k={tr("رقم العملية لدى Qi", "Qi reference")} v={<span className="num text-xs" dir="ltr">{p.gateway.payment_id}</span>} />
-              <KV k={tr("البطاقة", "Card")} v={<span className="num" dir="ltr">{p.gateway.card}</span>} />
+              <KV
+                k={tr("رقم العملية لدى Qi", "Qi reference")}
+                v={
+                  <span className="num text-xs" dir="ltr">
+                    {p.gateway.payment_id}
+                  </span>
+                }
+              />
+              <KV
+                k={tr("البطاقة", "Card")}
+                v={
+                  <span className="num" dir="ltr">
+                    {p.gateway.card}
+                  </span>
+                }
+              />
               <KV k={tr("حالة البوابة", "Gateway status")} v={<span className="font-semibold text-success">{tr("نجح", "Succeeded")}</span>} />
-              <p className="mt-2 text-[11px] text-muted">{tr("عند عكس تسديد أونلاين، يُرجَع المبلغ للزبون من لوحة Qi نفسها.", "If an online payment is reversed, refund the customer from Qi's own dashboard.")}</p>
+              <p className="mt-2 text-[11px] text-muted">
+                {tr("عند عكس تسديد أونلاين، يُرجَع المبلغ للزبون من لوحة Qi نفسها.", "If an online payment is reversed, refund the customer from Qi's own dashboard.")}
+              </p>
             </div>
           )}
           {p.reversal_of && (
             <div className="mt-3">
-              <Notice tone="primary">
-                {tr("هذه عملية عكسية تلغي أثر التسديد", "This reverse entry cancels payment")}{" "}
-                <Link className="font-semibold underline" href={`/payments/${p.reversal_of}`}>
-                  #{p.reversal_of}
-                </Link>
+              <Notice tone="primary" href={`/payments/${p.reversal_of}`}>
+                {tr("هذه عملية عكسية تلغي أثر التسديد", "This reverse entry cancels payment")} <b className="num">#{p.reversal_of}</b>
               </Notice>
             </div>
           )}
           {p.reversed && p.reversed_by_id && (
             <div className="mt-3">
-              <Notice tone="warning">
-                {tr("تم عكس هذا التسديد بالعملية", "This payment was reversed by")}{" "}
-                <Link className="font-semibold underline" href={`/payments/${p.reversed_by_id}`}>
-                  #{p.reversed_by_id}
-                </Link>
-                . {tr("يبقى التسديد ظاهراً ولا يُحذف.", "It stays visible and is never deleted.")}
+              <Notice tone="warning" href={`/payments/${p.reversed_by_id}`}>
+                {tr("تم عكس هذا التسديد بالعملية", "This payment was reversed by")} <b className="num">#{p.reversed_by_id}</b>.{" "}
+                {tr("يبقى التسديد ظاهراً ولا يُحذف.", "It stays visible and is never deleted.")}
               </Notice>
             </div>
           )}
@@ -98,11 +107,14 @@ export default function PaymentView() {
           <CardHeader title={tr("توزيع المبلغ على الفواتير", "Applied to invoices")} subtitle={tr("الأقدم أولاً", "Oldest first")} />
           <ul className="divide-y divide-line text-sm">
             {p.allocations.map((a) => (
-              <li key={a.invoice_id} className="flex justify-between px-4 py-2.5">
-                <Link href={`/invoices/${a.invoice_id}`} className="num text-primary-ink hover:underline">
+              <li key={a.invoice_id} className="box-row flex items-center justify-between gap-3 px-4 py-2.5">
+                <RefLink main href={`/invoices/${a.invoice_id}`} className="num">
                   {a.number}
-                </Link>
-                <Money value={a.amount} className="font-medium" />
+                </RefLink>
+                <span className="flex items-center gap-1.5">
+                  <Money value={a.amount} className="font-medium" />
+                  <GoIcon className="text-faint" />
+                </span>
               </li>
             ))}
           </ul>
@@ -140,7 +152,12 @@ export default function PaymentView() {
         }
       >
         <div className="space-y-3">
-          <Notice tone="primary">{tr("التسديد لا يُحذف، بل ستُسجَّل عملية عكسية بالمبلغ نفسه باسمك، وتظهر في كشف الحساب.", "Payments are never deleted. A reverse entry with the same amount is saved under your name and shows in the statement.")}</Notice>
+          <Notice tone="primary">
+            {tr(
+              "التسديد لا يُحذف، بل ستُسجَّل عملية عكسية بالمبلغ نفسه باسمك، وتظهر في كشف الحساب.",
+              "Payments are never deleted. A reverse entry with the same amount is saved under your name and shows in the statement.",
+            )}
+          </Notice>
           <Field label={tr("السبب", "Reason")}>
             <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("مثلاً: سُجّل مرتين خطأً", "e.g. entered twice by mistake")} />
           </Field>

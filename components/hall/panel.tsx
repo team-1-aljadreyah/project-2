@@ -81,7 +81,11 @@ export function HallPanel({
             <EmptyNote icon={<CheckCircle2 className="size-6 text-success" />} text={tr("كل الطلبات تم تجهيزها", "All orders are prepared")} />
           ))}
         {tab === "moves" &&
-          (moves.length ? moves.map((mv, i) => <MoveRow key={i} mv={mv} />) : <EmptyNote icon={<Clock className="size-6 text-faint" />} text={tr("لا توجد حركة اليوم بعد", "No movements today yet")} />)}
+          (moves.length ? (
+            moves.map((mv, i) => <MoveRow key={i} mv={mv} />)
+          ) : (
+            <EmptyNote icon={<Clock className="size-6 text-faint" />} text={tr("لا توجد حركة اليوم بعد", "No movements today yet")} />
+          ))}
         {tab === "alerts" &&
           (alerts.length ? (
             alerts.map(({ cell, zone }) => (
@@ -231,7 +235,10 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
               {m.lines.map((l, n) => {
                 const ok = picked.has(l.item.id);
                 return (
-                  <label key={l.item.id} className={cn("flex cursor-pointer items-center gap-2.5 rounded-xl border p-2 transition", ok ? "border-success/40 bg-success-soft" : "border-line hover:bg-card-2")}>
+                  <label
+                    key={l.item.id}
+                    className={cn("flex cursor-pointer items-center gap-2.5 rounded-xl border p-2 transition", ok ? "border-success/40 bg-success-soft" : "border-line hover:bg-card-2")}
+                  >
                     <input type="checkbox" checked={ok} onChange={() => togglePicked(m.order.id, l.item.id)} className="size-4 shrink-0 accent-[var(--action)]" />
                     <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-action text-[10px] font-bold text-on-action">
                       {m.stops.findIndex((z) => z.code === l.zone.code) + 1}
@@ -265,6 +272,9 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
                   {all ? tr("تثبيت وإصدار فاتورة", "Confirm and invoice") : tr(`أكمل التجهيز (${done}/${m.lines.length})`, `Finish picking (${done}/${m.lines.length})`)}
                 </Button>
               )}
+              <Button variant="ghost" size="sm" className="w-full text-muted" href={`/orders/${m.order.id}`}>
+                {tr("فتح صفحة الطلب", "Open the order's page")}
+              </Button>
             </div>
           </motion.div>
         )}

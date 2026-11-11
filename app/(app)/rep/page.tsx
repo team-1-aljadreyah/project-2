@@ -69,7 +69,10 @@ export default function RepHome() {
           <span className="min-w-0 flex-1">
             <span className="block font-bold">{tr("جولة التوصيل", "Delivery trip")}</span>
             <span className="block text-sm opacity-80">
-              {tr(`${num(myShipments.length)} ${myShipments.length === 1 ? "شحنة" : myShipments.length === 2 ? "شحنتان" : myShipments.length <= 10 ? "شحنات" : "شحنة"} لـ ${num(shipShops)} ${shipShops <= 2 || shipShops > 10 ? "محل" : "محلات"}: اخترها لجولة واحدة`, `${num(myShipments.length)} shipments for ${num(shipShops)} shops: pick them for one trip`)}
+              {tr(
+                `${num(myShipments.length)} ${myShipments.length === 1 ? "شحنة" : myShipments.length === 2 ? "شحنتان" : myShipments.length <= 10 ? "شحنات" : "شحنة"} لـ ${num(shipShops)} ${shipShops <= 2 || shipShops > 10 ? "محل" : "محلات"}: اخترها لجولة واحدة`,
+                `${num(myShipments.length)} shipments for ${num(shipShops)} shops: pick them for one trip`,
+              )}
             </span>
           </span>
           <Truck className="size-5 shrink-0 opacity-70" />
@@ -79,11 +82,16 @@ export default function RepHome() {
 
       <div className="flex h-12 items-center gap-2 rounded-2xl border border-line-strong bg-card px-4 focus-within:border-action focus-within:ring-4 focus-within:ring-action/15">
         <Search className="size-5 text-faint" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("ابحث عن زبون", "Search for a customer")} className="h-full flex-1 bg-transparent text-base outline-none placeholder:text-faint" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={tr("ابحث عن زبون", "Search for a customer")}
+          className="h-full flex-1 bg-transparent text-base outline-none placeholder:text-faint"
+        />
       </div>
 
       {queue.length > 0 && (
-        <Notice tone="warning" title={tr(`${queue.length} محفوظة على الجوال`, `${queue.length} saved on the phone`)} action={<Button size="sm" href="/orders">{tr("عرض", "Show")}</Button>}>
+        <Notice tone="warning" title={tr(`${queue.length} محفوظة على الجوال`, `${queue.length} saved on the phone`)} href="/orders">
           <span className="flex items-center gap-1">
             <WifiOff className="size-3.5" /> {tr("تُرسَل تلقائياً عند عودة الإنترنت", "They send by themselves when the internet is back")}
           </span>
@@ -101,9 +109,9 @@ export default function RepHome() {
               <span>
                 <b className="num">{num(todayOrders.length)}</b> {tr("طلبات اليوم", "orders today")}
               </span>
-              <a href="/commissions" className="flex items-center gap-1 underline-offset-2 hover:underline">
+              <Link href="/commissions" className="-my-1 flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 transition hover:bg-white/20 active:scale-[0.98]">
                 <Percent className="size-3" /> {tr("عمولتي", "My commission")} <b className="num">{money(row?.net ?? 0)}</b>
-              </a>
+              </Link>
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button variant="action" href="/orders/new">
@@ -137,7 +145,9 @@ export default function RepHome() {
                 <div className="mt-3">
                   <NextStopCard stop={stops[nextIdx]} index={nextIdx} total={stops.length} done={done} userId={user.id} onOpen={setOpen} />
                 </div>
-                <p className="mt-2 px-1 text-[11px] text-faint">{tr("المحلات مرتبة حسب الأهم: فوق السقف، قريب منه، ثم من لم يطلب منذ أسبوع.", "Shops in order of importance: over the limit, near it, then those with no order for a week.")}</p>
+                <p className="mt-2 px-1 text-[11px] text-faint">
+                  {tr("المحلات مرتبة حسب الأهم: فوق السقف، قريب منه، ثم من لم يطلب منذ أسبوع.", "Shops in order of importance: over the limit, near it, then those with no order for a week.")}
+                </p>
               </>
             ) : (
               <p className="py-10 text-center text-sm text-muted">{tr("لا توجد زيارات مهمة اليوم", "No important visits today")}</p>
@@ -170,7 +180,7 @@ export default function RepHome() {
                   transition={{ delay: Math.min(i, 8) * 0.04 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={() => setOpen(c)}
-                  className="flex flex-col rounded-3xl border border-line bg-card p-3 text-start"
+                  className="flex flex-col rounded-3xl border border-line bg-card p-3 text-start transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-md"
                 >
                   <span
                     className={cn(

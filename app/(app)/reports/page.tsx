@@ -7,7 +7,7 @@ import { RankBars } from "@/components/charts";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
-import { Button, Card, CardHeader, DataTable, Empty, Input, LimitBar, LoadingRows, Money, PageHeader, Segmented, Stat, type Column } from "@/components/ui";
+import { Button, Card, CardHeader, DataTable, Empty, GoIcon, Input, LimitBar, LoadingRows, Money, PageHeader, Segmented, Stat, type Column } from "@/components/ui";
 import { api, type SalesGroup } from "@/lib/api";
 import type { SalesRow } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -64,19 +64,31 @@ function Daily() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Stat label={tr("المبيعات", "Sales")} value={<Money value={x.sales} />} />
-            <Stat label={tr("عدد الفواتير", "Invoices")} value={x.invoices} />
-            <Stat label={tr("المقبوض", "Collected")} value={<Money value={x.collected} />} />
-            <Stat label={tr("المرتجعات", "Returns")} value={<Money value={x.returns} />} />
+            <Stat label={tr("المبيعات", "Sales")} value={<Money value={x.sales} />} href="/invoices" />
+            <Stat label={tr("عدد الفواتير", "Invoices")} value={x.invoices} href="/invoices" />
+            <Stat label={tr("المقبوض", "Collected")} value={<Money value={x.collected} />} href="/payments" />
+            <Stat label={tr("المرتجعات", "Returns")} value={<Money value={x.returns} />} href="/returns" />
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader title={tr("حسب المندوب", "By rep")} />
-              <div className="p-4">{x.by_rep.length ? <RankBars rows={x.by_rep.map((r) => ({ label: r.label, value: r.sales, sub: tr(`${r.invoices} فاتورة`, `${r.invoices} invoices`) }))} /> : <Empty title={tr("لا مبيعات", "No sales")} />}</div>
+              <div className="p-4">
+                {x.by_rep.length ? (
+                  <RankBars rows={x.by_rep.map((r) => ({ label: r.label, value: r.sales, sub: tr(`${r.invoices} فاتورة`, `${r.invoices} invoices`) }))} />
+                ) : (
+                  <Empty title={tr("لا مبيعات", "No sales")} />
+                )}
+              </div>
             </Card>
             <Card>
               <CardHeader title={tr("حسب المخزن", "By warehouse")} />
-              <div className="p-4">{x.by_warehouse.length ? <RankBars rows={x.by_warehouse.map((r) => ({ label: name({ name: r.label, name_en: r.label_en }), value: r.sales }))} /> : <Empty title={tr("لا مبيعات", "No sales")} />}</div>
+              <div className="p-4">
+                {x.by_warehouse.length ? (
+                  <RankBars rows={x.by_warehouse.map((r) => ({ label: name({ name: r.label, name_en: r.label_en }), value: r.sales }))} />
+                ) : (
+                  <Empty title={tr("لا مبيعات", "No sales")} />
+                )}
+              </div>
             </Card>
           </div>
         </>
@@ -105,7 +117,12 @@ function Sales() {
     ...(showProfit
       ? [
           { key: "p", head: tr("الربح", "Profit"), cell: (r: SalesRow) => <Money value={r.profit} className="text-success" />, align: "end" as const },
-          { key: "m", head: tr("الهامش", "Margin"), cell: (r: SalesRow) => <span className="num text-muted">{r.sales - r.returns > 0 ? Math.round(((r.profit ?? 0) / (r.sales - r.returns)) * 100) : 0}%</span>, align: "end" as const },
+          {
+            key: "m",
+            head: tr("الهامش", "Margin"),
+            cell: (r: SalesRow) => <span className="num text-muted">{r.sales - r.returns > 0 ? Math.round(((r.profit ?? 0) / (r.sales - r.returns)) * 100) : 0}%</span>,
+            align: "end" as const,
+          },
         ]
       : []),
   ];
@@ -151,7 +168,17 @@ function Sales() {
           <Stat label={tr("الهامش", "Margin")} value={`${sum("sales") - sum("returns") > 0 ? Math.round((sum("profit") / (sum("sales") - sum("returns"))) * 100) : 0}%`} />
         </div>
       )}
-      {rows.state.status === "loading" ? <LoadingRows /> : <DataTable rows={data} columns={columns} rowKey={(r) => r.key} empty={<Empty title={tr("لا توجد مبيعات في هذه الفترة", "No sales in this period")} />} />}
+      {rows.state.status === "loading" ? (
+        <LoadingRows />
+      ) : (
+        <DataTable
+          rows={data}
+          columns={columns}
+          rowKey={(r) => r.key}
+          onRowHref={(r) => (group === "item" ? `/items/${r.key}` : group === "customer" ? `/customers/${r.key}` : undefined)}
+          empty={<Empty title={tr("لا توجد مبيعات في هذه الفترة", "No sales in this period")} />}
+        />
+      )}
     </Card>
   );
 }
@@ -167,13 +194,7 @@ function Slow() {
       <CardHeader
         title={tr("المواد الراكدة", "Slow-moving items")}
         subtitle={tr("مواد لديها مخزون ولم تُبع منذ مدة", "Items in stock that haven't sold for a while")}
-        action={
-          <Segmented
-            value={String(days)}
-            onChange={(v) => setDays(Number(v))}
-            options={[14, 21, 30, 60].map((d) => ({ value: String(d), label: tr(`${d} يوم`, `${d} days`) }))}
-          />
-        }
+        action={<Segmented value={String(days)} onChange={(v) => setDays(Number(v))} options={[14, 21, 30, 60].map((d) => ({ value: String(d), label: tr(`${d} يوم`, `${d} days`) }))} />}
       />
       {rows.state.status === "loading" ? (
         <LoadingRows rows={3} />
@@ -205,13 +226,7 @@ function Expiry() {
     <Card>
       <CardHeader
         title={tr("المواد القريبة من الانتهاء والمنتهية", "Expiring and expired stock")}
-        action={
-          <Segmented
-            value={String(days)}
-            onChange={(v) => setDays(Number(v))}
-            options={[15, 30, 60, 90].map((d) => ({ value: String(d), label: tr(`${d} يوم`, `${d} days`) }))}
-          />
-        }
+        action={<Segmented value={String(days)} onChange={(v) => setDays(Number(v))} options={[15, 30, 60, 90].map((d) => ({ value: String(d), label: tr(`${d} يوم`, `${d} days`) }))} />}
       />
       {rows.state.status === "loading" ? (
         <LoadingRows rows={3} />
@@ -226,7 +241,12 @@ function Expiry() {
             { key: "e", head: tr("الصلاحية", "Expiry"), cell: (r) => <span className="num">{r.batch.expiry_date}</span> },
             { key: "q", head: tr("الكمية", "Qty"), cell: (r) => qty(r.batch.qty_left, itemById.get(r.batch.item_id)?.pieces_per_carton ?? 1) },
             { key: "s", head: tr("الحالة", "Status"), cell: (r) => <BatchStatusBadge status={r.batch.status} days={r.days_left} /> },
-            { key: "c", head: tr("قيمة الشراء", "Cost value"), cell: (r) => <Money value={r.batch.purchase_price !== undefined ? r.batch.purchase_price * r.batch.qty_left : undefined} />, align: "end" },
+            {
+              key: "c",
+              head: tr("قيمة الشراء", "Cost value"),
+              cell: (r) => <Money value={r.batch.purchase_price !== undefined ? r.batch.purchase_price * r.batch.qty_left : undefined} />,
+              align: "end",
+            },
           ]}
           empty={<Empty title={tr("لا شيء قريب الانتهاء", "Nothing expiring")} />}
         />
@@ -242,7 +262,14 @@ function Debts() {
   const total = (rows.data ?? []).reduce((s, r) => s + (r.customer.balance ?? 0), 0);
   return (
     <Card>
-      <CardHeader title={tr("ديون الزبائن", "Customer debts")} subtitle={<span>{tr("المجموع", "Total")} <Money value={total} className="font-semibold text-text" /></span>} />
+      <CardHeader
+        title={tr("ديون الزبائن", "Customer debts")}
+        subtitle={
+          <span>
+            {tr("المجموع", "Total")} <Money value={total} className="font-semibold text-text" />
+          </span>
+        }
+      />
       {rows.state.status === "loading" ? (
         <LoadingRows />
       ) : (
@@ -272,11 +299,13 @@ function Debts() {
           empty={<Empty title={tr("لا توجد ديون", "No debts")} />}
         />
       )}
-      <p className="border-t border-line px-4 py-2 text-xs text-muted">
-        <Link href="/customers" className="underline">
-          {tr("كل الزبائن", "All customers")}
-        </Link>
-      </p>
+      <Link
+        href="/customers"
+        className="flex items-center justify-between border-t border-line px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-card-2 hover:text-text active:bg-primary-soft"
+      >
+        {tr("كل الزبائن", "All customers")}
+        <GoIcon />
+      </Link>
     </Card>
   );
 }

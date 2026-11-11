@@ -10,7 +10,7 @@ import { motion } from "motion/react";
 import { AlertTriangle, ArrowUpLeft, ArrowUpRight, ClipboardList, Headset, PackageCheck, Truck, Warehouse } from "lucide-react";
 import { DeliveryChip } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
-import { Button, Card, Skeleton } from "@/components/ui";
+import { Button, Card, RefLink, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -40,10 +40,16 @@ export default function StaffHome() {
   const stockAlerts = [
     ...(expiring.data ?? [])
       .filter((r) => !user.warehouse_id || r.batch.warehouse_id === user.warehouse_id)
-      .map((r) => ({ key: `b${r.batch.id}`, item: items.find((i) => i.id === r.batch.item_id)?.name ?? "", text: r.days_left < 0 ? tr("منتهية", "Expired") : tr(`تنتهي بعد ${r.days_left} يوم`, `${r.days_left} days left`), bad: r.days_left < 0 })),
+      .map((r) => ({
+        key: `b${r.batch.id}`,
+        id: r.batch.item_id,
+        item: items.find((i) => i.id === r.batch.item_id)?.name ?? "",
+        text: r.days_left < 0 ? tr("منتهية", "Expired") : tr(`تنتهي بعد ${r.days_left} يوم`, `${r.days_left} days left`),
+        bad: r.days_left < 0,
+      })),
     ...items
       .filter((i) => i.active && (i.stock.by_warehouse.find((w) => w.warehouse_id === user.warehouse_id)?.qty ?? 0) < i.min_stock / 2)
-      .map((i) => ({ key: `l${i.id}`, item: i.name, text: tr("مخزون قليل", "Low stock"), bad: false })),
+      .map((i) => ({ key: `l${i.id}`, id: i.id, item: i.name, text: tr("مخزون قليل", "Low stock"), bad: false })),
   ].slice(0, 6);
   const loading = !threads.data || !orders.data;
 
@@ -141,9 +147,9 @@ export default function StaffHome() {
             <Card className="p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="font-bold">{tr("طلبات تنتظر التجهيز", "Orders to prepare")}</h2>
-                <Link href="/orders" className="flex items-center gap-1 text-xs font-semibold text-muted hover:text-text">
+                <Button size="sm" variant="ghost" href="/orders">
                   {tr("الكل", "All")} <Arrow className="size-3.5" />
-                </Link>
+                </Button>
               </div>
               {loading ? (
                 <Skeleton className="h-24" />
@@ -153,7 +159,7 @@ export default function StaffHome() {
                 <ul className="divide-y divide-line">
                   {toPrepare.slice(0, 5).map((o) => (
                     <li key={o.id}>
-                      <Link href={`/orders/${o.id}`} className="flex items-center justify-between gap-2 py-2.5 hover:text-primary-ink">
+                      <Link href={`/orders/${o.id}`} className="-mx-2 flex items-center justify-between gap-2 rounded-xl px-2 py-2.5 transition-colors hover:bg-card-2 active:bg-primary-soft">
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold">{cust.get(o.customer_id)?.name}</span>
                           <span className="num text-xs text-muted" dir="ltr">
@@ -176,11 +182,13 @@ export default function StaffHome() {
               {!stockAlerts.length ? (
                 <p className="py-4 text-center text-sm text-muted">{tr("لا توجد تنبيهات", "No alerts")}</p>
               ) : (
-                <ul className="space-y-1.5">
+                <ul className="space-y-0.5">
                   {stockAlerts.map((a) => (
-                    <li key={a.key} className="flex items-center gap-2 text-sm">
+                    <li key={a.key} className="box-row -mx-2 flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm">
                       <AlertTriangle className={cn("size-4 shrink-0", a.bad ? "text-danger" : "text-warning")} />
-                      <span className="min-w-0 flex-1 truncate">{a.item}</span>
+                      <RefLink main href={`/items/${a.id}`} className="min-w-0 flex-1 truncate">
+                        {a.item}
+                      </RefLink>
                       <span className={cn("shrink-0 text-xs font-semibold", a.bad ? "text-danger" : "text-warning")}>{a.text}</span>
                     </li>
                   ))}
@@ -198,7 +206,12 @@ function Tile({ icon: Icon, label, value, href, loading, tone }: { icon: typeof 
   const { num } = useFmt();
   return (
     <Link href={href} className="rounded-2xl border border-line bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-      <span className={cn("flex size-9 items-center justify-center rounded-xl", tone === "action" ? "bg-action/15 text-action" : tone === "danger" ? "bg-danger-soft text-danger" : "bg-card-2 text-primary-ink")}>
+      <span
+        className={cn(
+          "flex size-9 items-center justify-center rounded-xl",
+          tone === "action" ? "bg-action/15 text-action" : tone === "danger" ? "bg-danger-soft text-danger" : "bg-card-2 text-primary-ink",
+        )}
+      >
         <Icon className="size-4" />
       </span>
       <p className="num mt-3 text-2xl font-bold">{loading ? "…" : num(value)}</p>

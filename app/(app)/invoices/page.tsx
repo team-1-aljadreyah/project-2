@@ -6,7 +6,7 @@ import { Download, Printer, ReceiptText } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { InvoiceStatusBadge } from "@/components/status";
-import { Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, PageHeader, SearchBox, Segmented, type Column } from "@/components/ui";
+import { Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, PageHeader, RefLink, SearchBox, Segmented, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Invoice, InvoiceStatus } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -33,7 +33,7 @@ export default function InvoicesPage() {
   const columns: Column<Invoice>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (i) => <span className="num">{i.number}</span> },
     { key: "d", head: tr("التاريخ", "Date"), cell: (i) => date(i.date) },
-    { key: "c", head: tr("الزبون", "Customer"), cell: (i) => cName(i.customer_id) },
+    { key: "c", head: tr("الزبون", "Customer"), cell: (i) => <RefLink href={`/customers/${i.customer_id}`}>{cName(i.customer_id)}</RefLink> },
     { key: "r", head: tr("المندوب", "Rep"), cell: (i) => rName(i.rep_id) },
     { key: "t", head: tr("المبلغ", "Total"), cell: (i) => <Money value={i.total} />, align: "end" },
     { key: "p", head: tr("المسدد", "Paid"), cell: (i) => <Money value={i.paid + i.returned} className="text-muted" />, align: "end" },
@@ -44,7 +44,12 @@ export default function InvoicesPage() {
       key: "print",
       head: <span className="sr-only">{tr("طباعة", "Print")}</span>,
       cell: (i) => (
-        <Link href={`/invoices/${i.id}?print=1`} aria-label={tr(`طباعة الفاتورة ${i.number}`, `Print invoice ${i.number}`)} title={tr("طباعة", "Print")} className="inline-flex size-8 items-center justify-center rounded-lg text-muted hover:bg-card-2 hover:text-text">
+        <Link
+          href={`/invoices/${i.id}?print=1`}
+          aria-label={tr(`طباعة الفاتورة ${i.number}`, `Print invoice ${i.number}`)}
+          title={tr("طباعة", "Print")}
+          className="inline-flex size-8 items-center justify-center rounded-lg text-muted hover:bg-card-2 hover:text-text"
+        >
           <Printer className="size-4" />
         </Link>
       ),

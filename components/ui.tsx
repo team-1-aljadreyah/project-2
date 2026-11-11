@@ -4,14 +4,15 @@
 // Keeping them in one place means every screen looks and behaves the same.
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
+import { useSession } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
 import { ordered, saveSite, useCustomizing, useSite } from "@/lib/site";
 import { cn } from "@/lib/utils";
-import { pageTitle } from "./nav";
+import { canOpen, pageTitle } from "./nav";
 import { SortArea, SortItem, toggleIn } from "./sortable";
 
 // ---------- Button ----------
@@ -244,6 +245,74 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
 
 // ---------- Layout ----------
 
+// ---------- Links to other pages ----------
+// The rule of the whole site: what looks like one thing is one click. A row, a notice or a line with a
+// link in it opens that link from anywhere inside it, not only from the underlined words.
+
+/** May the logged-in person open this address? (Phone numbers and other sites: always.) */
+export function useMayOpen() {
+  const user = useSession()?.user;
+  return (href: string | null | undefined): href is string => !!href && (!href.startsWith("/") || (!!user && canOpen(user.role, href.split(/[?#]/)[0], user.rep_kinds)));
+}
+
+/** The small arrow that says "this opens something". It points the way the language reads. */
+export function GoIcon({ className }: { className?: string }) {
+  return <ChevronRight className={cn("box-go size-4 shrink-0 rtl:rotate-180", className)} aria-hidden />;
+}
+
+/**
+ * A name or a number that opens its own page: a customer, an invoice, an item…
+ * For a job that may not open that page, it is plain text.
+ * `main`: the link fills the whole box around it, so a click anywhere in the box opens it
+ * (the box needs the class "box-link", see globals.css).
+ */
+export function RefLink({ href, main, className, children }: { href: string | null | undefined; main?: boolean; className?: string; children: ReactNode }) {
+  const may = useMayOpen();
+  if (!may(href)) return className ? <span className={className}>{children}</span> : <>{children}</>;
+  const cls = cn("text-primary-ink underline-offset-2 hover:underline", main && "box-link-main", className);
+  if (href.startsWith("/"))
+    return (
+      <Link href={href} className={cls}>
+        {children}
+      </Link>
+    );
+  // A phone number opens the dialer here; another site opens in a new tab.
+  const outside = href.startsWith("http");
+  return (
+    <a href={href} className={cls} target={outside ? "_blank" : undefined} rel={outside ? "noreferrer" : undefined}>
+      {children}
+    </a>
+  );
+}
+
+/** Did this click land on something inside a row that does its own job (a link, a button, a field), or did it select text? */
+function ownClick(e: React.MouseEvent) {
+  return !!(e.target as Element).closest("a,button,input,select,textarea,label,[data-cz]") || !!window.getSelection()?.toString();
+}
+
+/** Open a row's page: here, or in a new tab with Ctrl, ⌘ or the mouse wheel (as a real link does). */
+function openFor(e: React.MouseEvent, href: string, push: (href: string) => void) {
+  if (e.ctrlKey || e.metaKey || e.button === 1) window.open(href, "_blank");
+  else push(href);
+}
+
+/**
+ * A hand-made table row that opens a page from anywhere in it: the same rule as the rows of DataTable.
+ * (A <tr> can't be put inside a link.) Keep a real link in it, a RefLink on the name, for the keyboard.
+ * For a job that may not open the page, it is a plain row.
+ */
+export function ClickRow({ href, className, children }: { href: string | null | undefined; className?: string; children: ReactNode }) {
+  const router = useRouter();
+  const may = useMayOpen();
+  if (!may(href)) return <tr className={className}>{children}</tr>;
+  const open = (e: React.MouseEvent) => !ownClick(e) && openFor(e, href, router.push);
+  return (
+    <tr className={cn("cursor-pointer transition-colors hover:bg-card-2 active:bg-primary-soft", className)} onClick={open} onAuxClick={(e) => e.button === 1 && open(e)}>
+      {children}
+    </tr>
+  );
+}
+
 export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div className={cn("rounded-card border border-line bg-card shadow-card", className)} {...props}>
@@ -302,9 +371,29 @@ export function Badge({ tone = "neutral", children, className }: { tone?: Tone; 
   return <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-medium", tones[tone], className)}>{children}</span>;
 }
 
-export function Stat({ label, value, hint, tone, icon, href }: { label: ReactNode; value: ReactNode; hint?: ReactNode; tone?: Tone; icon?: ReactNode; href?: string }) {
+export function Stat({
+  label,
+  value,
+  hint,
+  tone,
+  icon,
+  href,
+  onClick,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  hint?: ReactNode;
+  tone?: Tone;
+  icon?: ReactNode;
+  /** The page the card opens. */
+  href?: string;
+  /** Or what it does on this page (show a tab, filter the list under it). */
+  onClick?: () => void;
+}) {
+  // A card that opens or does something answers the mouse: it lifts a little, and goes back down when pressed.
+  const opens = !!href || !!onClick;
   const body = (
-    <Card className={cn("flex h-full flex-col gap-1 p-4", href && "transition hover:border-line-strong")}>
+    <Card className={cn("flex h-full flex-col gap-1 p-4", opens && "transition duration-150 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md active:translate-y-0 active:shadow-none")}>
       <div className="flex items-center justify-between gap-2 text-sm text-muted">
         <span>{label}</span>
         {icon && <span className={cn("flex size-8 items-center justify-center rounded-lg", tone ? tones[tone] : "bg-card-2")}>{icon}</span>}
@@ -313,13 +402,19 @@ export function Stat({ label, value, hint, tone, icon, href }: { label: ReactNod
       {hint && <div className="text-xs text-faint">{hint}</div>}
     </Card>
   );
-  return href ? (
-    <Link href={href} className="block">
-      {body}
-    </Link>
-  ) : (
-    body
-  );
+  if (href)
+    return (
+      <Link href={href} className="block rounded-card">
+        {body}
+      </Link>
+    );
+  if (onClick)
+    return (
+      <button type="button" onClick={onClick} className="block w-full rounded-card text-start">
+        {body}
+      </button>
+    );
+  return body;
 }
 
 export function Empty({ icon, title, body, action }: { icon?: ReactNode; title: ReactNode; body?: ReactNode; action?: ReactNode }) {
@@ -373,16 +468,37 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
   );
 }
 
-export function Notice({ tone = "warning", title, children, action }: { tone?: Tone; title?: ReactNode; children?: ReactNode; action?: ReactNode }) {
+export function Notice({
+  tone = "warning",
+  title,
+  children,
+  action,
+  href,
+}: {
+  tone?: Tone;
+  title?: ReactNode;
+  children?: ReactNode;
+  action?: ReactNode;
+  /** The whole notice opens this page: a click anywhere on it, not only on a word. */
+  href?: string;
+}) {
+  const { tr } = useFmt();
+  const may = useMayOpen();
   const Icon = tone === "danger" ? XCircle : tone === "success" ? CheckCircle2 : tone === "primary" ? Info : AlertTriangle;
+  const open = may(href) ? href : undefined;
   return (
-    <div className={cn("flex items-start gap-3 rounded-xl border p-3", tones[tone])}>
+    <div className={cn("flex items-start gap-3 rounded-xl border p-3", tones[tone], open && "box-link transition hover:brightness-95 active:brightness-90")}>
       <Icon className="mt-0.5 size-5 shrink-0" aria-hidden />
       <div className="min-w-0 flex-1 text-sm">
         {title && <p className="font-semibold">{title}</p>}
         {children && <div className="mt-0.5 opacity-90">{children}</div>}
       </div>
       {action}
+      {open && (
+        <Link href={open} aria-label={tr("فتح", "Open")} className="box-link-main shrink-0 self-center">
+          <GoIcon className="size-5" />
+        </Link>
+      )}
     </div>
   );
 }
@@ -404,6 +520,7 @@ export function DataTable<T>({
   columns,
   rowKey,
   onRowHref,
+  rowAction,
   mobile,
   empty,
   footer,
@@ -411,7 +528,10 @@ export function DataTable<T>({
   rows: T[];
   columns: Column<T>[];
   rowKey: (r: T) => string | number;
+  /** The page a row opens. A click anywhere in the row opens it (Ctrl-click or the wheel: in a new tab). */
   onRowHref?: (r: T) => string | undefined;
+  /** For a row that opens something on this page (a dialog) instead of another page: what a click on it does. Nothing = the row opens nothing. */
+  rowAction?: (r: T) => (() => void) | undefined;
   mobile?: (r: T) => ReactNode;
   empty?: ReactNode;
   footer?: ReactNode;
@@ -426,7 +546,14 @@ export function DataTable<T>({
   const mode = useCustomizing();
   const layId = `table:${usePathname().replace(/\/\d+/g, "/_")}`;
   const lay = useSite().layouts[layId];
+  const router = useRouter();
   if (!rows.length) return <>{empty}</>;
+  // A click anywhere in a row opens it. A link, a button or a field inside the row keeps its own job.
+  const rowClick = (href: string | undefined, action?: () => void) => (e: React.MouseEvent) => {
+    if (ownClick(e)) return;
+    if (href) openFor(e, href, router.push);
+    else action?.();
+  };
   const hiddenCols = lay?.hidden ?? [];
   const sorted = ordered(columns, lay?.order ?? [], (c) => c.key);
   const cols = mode ? sorted : sorted.filter((c) => !hiddenCols.includes(c.key));
@@ -456,8 +583,15 @@ export function DataTable<T>({
             <tbody>
               {shown.map((r) => {
                 const href = onRowHref?.(r);
+                const action = href ? undefined : rowAction?.(r);
+                const opens = !!href || !!action;
                 return (
-                  <tr key={rowKey(r)} className={cn("border-b border-line last:border-0", href && "cursor-pointer hover:bg-card-2")}>
+                  <tr
+                    key={rowKey(r)}
+                    className={cn("border-b border-line last:border-0", opens && "cursor-pointer transition-colors hover:bg-card-2 active:bg-primary-soft")}
+                    onClick={opens ? rowClick(href, action) : undefined}
+                    onAuxClick={href ? (e) => e.button === 1 && rowClick(href)(e) : undefined}
+                  >
                     {cols.map((c, i) => (
                       <td
                         key={c.key}
@@ -484,12 +618,17 @@ export function DataTable<T>({
         <ul className="divide-y divide-line md:hidden">
           {shown.map((r) => {
             const href = onRowHref?.(r);
+            const action = href ? undefined : rowAction?.(r);
             return (
               <li key={rowKey(r)}>
                 {href ? (
                   <Link href={href} className="block px-4 py-3 active:bg-card-2">
                     {mobile(r)}
                   </Link>
+                ) : action ? (
+                  <div className="cursor-pointer px-4 py-3 active:bg-card-2" onClick={rowClick(undefined, action)}>
+                    {mobile(r)}
+                  </div>
                 ) : (
                   <div className="px-4 py-3">{mobile(r)}</div>
                 )}
@@ -729,7 +868,40 @@ export function Money({ value, className, tone }: { value: number | undefined | 
   );
 }
 
-export function KV({ k, v, className }: { k: ReactNode; v: ReactNode; className?: string }) {
+export function KV({
+  k,
+  v,
+  className,
+  href,
+}: {
+  k: ReactNode;
+  v: ReactNode;
+  className?: string;
+  /** The whole line opens this page (or calls this "tel:" number): a click anywhere on it. */
+  href?: string | null;
+}) {
+  const may = useMayOpen();
+  if (may(href)) {
+    const cls = cn("group -mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-card-2 active:bg-primary-soft", className);
+    const inside = (
+      <>
+        <span className="text-muted">{k}</span>
+        <span className="flex items-center gap-1 text-end font-medium text-primary-ink underline-offset-2 group-hover:underline">
+          {v}
+          <GoIcon className="text-faint" />
+        </span>
+      </>
+    );
+    return href.startsWith("/") ? (
+      <Link href={href} className={cls}>
+        {inside}
+      </Link>
+    ) : (
+      <a href={href} className={cls}>
+        {inside}
+      </a>
+    );
+  }
   return (
     <div className={cn("flex items-center justify-between gap-3 py-1.5 text-sm", className)}>
       <span className="text-muted">{k}</span>

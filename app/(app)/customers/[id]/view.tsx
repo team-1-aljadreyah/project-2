@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Phone, ShoppingCart, Wallet } from "lucide-react";
+import { MapPinned, Pencil, Phone, ShoppingCart, Wallet } from "lucide-react";
 import { useState } from "react";
 import { CustomerForm } from "@/components/customer-form";
 import { useApp } from "@/components/shell";
@@ -121,26 +121,39 @@ export default function CustomerView() {
           {bal < 0 && (
             <div className="mt-3">
               <Notice tone="success" action={(user.role === "accountant" || user.role === "manager") && <RefundButton customerId={x.id} credit={-bal} onDone={c.reload} />}>
-                {tr(`للزبون رصيد ${money(-bal)} عندنا (مرتجع على فاتورة مسددة، أو تعويض عن خطأ، أو دفع أكثر من المطلوب)`, `The shop has ${money(-bal)} credit with us (a return on a paid invoice, a credit note, or paying too much)`)}
+                {tr(
+                  `للزبون رصيد ${money(-bal)} عندنا (مرتجع على فاتورة مسددة، أو تعويض عن خطأ، أو دفع أكثر من المطلوب)`,
+                  `The shop has ${money(-bal)} credit with us (a return on a paid invoice, a credit note, or paying too much)`,
+                )}
               </Notice>
             </div>
           )}
         </Card>
         <Card className="p-4">
-          <KV k={tr("الهاتف", "Phone")} v={<span dir="ltr">{x.phone}</span>} />
+          <KV k={tr("الهاتف", "Phone")} href={`tel:${x.phone}`} v={<span dir="ltr">{x.phone}</span>} />
           <KV k={tr("العنوان", "Address")} v={x.address} />
           {x.address_info && (
             <div className="mt-2 space-y-1.5">
               <p className="text-xs text-muted">
-                {[x.address_info.building && `${tr("بناية", "bldg")} ${x.address_info.building}`, x.address_info.floor && `${tr("طابق", "floor")} ${x.address_info.floor}`, x.address_info.apartment && `${tr("شقة", "apt")} ${x.address_info.apartment}`].filter(Boolean).join(" · ")}
-                {" "}
+                {[
+                  x.address_info.building && `${tr("بناية", "bldg")} ${x.address_info.building}`,
+                  x.address_info.floor && `${tr("طابق", "floor")} ${x.address_info.floor}`,
+                  x.address_info.apartment && `${tr("شقة", "apt")} ${x.address_info.apartment}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}{" "}
                 <span dir="ltr">· +964 {x.address_info.phone.replace(/^0/, "")}</span>
               </p>
               {x.address_info.lat !== undefined && (
                 <>
                   <MapPin lat={x.address_info.lat} lng={x.address_info.lng} className="h-36" />
-                  <a href={`https://www.google.com/maps?q=${x.address_info.lat},${x.address_info.lng}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary-ink underline">
-                    {tr("افتح الموقع في الخرائط", "Open in Maps")}
+                  <a
+                    href={`https://www.google.com/maps?q=${x.address_info.lat},${x.address_info.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line-strong text-xs font-semibold text-text transition hover:bg-card-2 active:scale-[0.98]"
+                  >
+                    <MapPinned className="size-4" /> {tr("افتح الموقع في الخرائط", "Open in Maps")}
                   </a>
                 </>
               )}
@@ -158,27 +171,27 @@ export default function CustomerView() {
           <StatementView customerId={x.id} />
         </div>
         <div className="space-y-4 self-start">
-        <SpecialPrices customer={x} />
-        <Card>
-          <CardHeader title={tr("آخر الطلبات", "Latest orders")} />
-          <ul className="divide-y divide-line text-sm">
-            {mine.map((o) => (
-              <li key={o.id}>
-                <Link href={`/orders/${o.id}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-card-2">
-                  <span>
-                    <span className="num block font-medium">{o.number}</span>
-                    <span className="text-xs text-muted">{ago(o.created_at)}</span>
-                  </span>
-                  <span className="text-end">
-                    <Money value={o.total} className="block" />
-                    <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
-                  </span>
-                </Link>
-              </li>
-            ))}
-            {!mine.length && <li className="p-4 text-center text-muted">{tr("لا توجد طلبات", "No orders")}</li>}
-          </ul>
-        </Card>
+          <SpecialPrices customer={x} />
+          <Card>
+            <CardHeader title={tr("آخر الطلبات", "Latest orders")} />
+            <ul className="divide-y divide-line text-sm">
+              {mine.map((o) => (
+                <li key={o.id}>
+                  <Link href={`/orders/${o.id}`} className="flex items-center justify-between gap-2 px-4 py-2.5 hover:bg-card-2">
+                    <span>
+                      <span className="num block font-medium">{o.number}</span>
+                      <span className="text-xs text-muted">{ago(o.created_at)}</span>
+                    </span>
+                    <span className="text-end">
+                      <Money value={o.total} className="block" />
+                      <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+              {!mine.length && <li className="p-4 text-center text-muted">{tr("لا توجد طلبات", "No orders")}</li>}
+            </ul>
+          </Card>
         </div>
       </div>
       {edit && <CustomerForm open customer={x} onClose={() => setEdit(false)} onSaved={() => c.reload()} />}
