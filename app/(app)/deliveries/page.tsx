@@ -17,7 +17,7 @@ import { QrScanner } from "@/components/delivery/scanner";
 import { DeliveryChip } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
-import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, PageHeader, Segmented, errorText, useToast } from "@/components/ui";
+import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, PageHeader, Segmented, Stepper, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Order } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -241,8 +241,13 @@ export default function DeliveriesPage() {
 
 /** At the shop: 1) photo of the packages, 2) the shop owner's PIN. Both are needed. */
 function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClose: () => void }) {
-  const { tr } = useFmt();
+  const { tr, name } = useFmt();
+  const { itemById } = useApp();
   const toast = useToast();
+  // What the shop takes: everything by default; less if it refuses part of it (the invoice is for what it took).
+  const [got, setGot] = useState<Record<string, number>>(() => Object.fromEntries(order.lines.map((l) => [`${l.item_id}-${l.unit}`, l.qty])));
+  const [rest, setRest] = useState<"keep" | "cancel">("keep");
+  const partial = order.lines.some((l) => (got[`${l.item_id}-${l.unit}`] ?? l.qty) < l.qty);
   const [photo, setPhoto] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
@@ -254,7 +259,11 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
     setBusy(true);
     setMsg(null);
     try {
-      const r = await api.deliverOrder(order.id, { pin, photo });
+      const r = await api.deliverOrder(order.id, {
+        pin,
+        photo,
+        ...(partial ? { lines: order.lines.map((l) => ({ item_id: l.item_id, unit: l.unit, qty: got[`${l.item_id}-${l.unit}`] ?? l.qty })), rest } : {}),
+      });
       if (r.ok) {
         setDone(true);
         toast("success", tr(`تم تسليم ${order.number} إلى ${shop}`, `${order.number} delivered to ${shop}`));
@@ -291,7 +300,7 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center gap-2 py-8 text-center">
           <CheckCircle2 className="size-14 text-success" />
           <p className="text-lg font-bold">{tr("تم التسليم", "Delivered")}</p>
-          <p className="text-sm text-muted">{tr("سُجّل الرمز والصورة والوقت.", "The PIN, the photo and the time are recorded.")}</p>
+          <p className="text-sm text-muted">{tr("سُجّل الرمز والصورة والوقت، وصدرت الفاتورة على ما استُلم.", "The PIN, the photo and the time are recorded; the invoice is made for what was taken.")}</p>
         </motion.div>
       ) : (
         <div className="space-y-5">
@@ -322,6 +331,45 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
               />
             </div>
             <p className="mt-1 text-xs text-muted">{tr("صاحب المحل يرى الرمز في تطبيقه فقط. اطلبه بعد أن يتأكد من البضاعة.", "Only the shop owner sees it in his app. Ask for it after he checks the goods.")}</p>
+          </section>
+          <section>
+            <p className="mb-2 flex items-center gap-2 text-sm font-bold">
+              <span className="flex size-6 items-center justify-center rounded-full bg-action text-xs text-on-action">3</span>
+              {tr("ما استلمه المحل", "What the shop took")}
+            </p>
+            <ul className="divide-y divide-line rounded-xl border border-line">
+              {order.lines.map((l) => {
+                const k = `${l.item_id}-${l.unit}`;
+                return (
+                  <li key={k} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <span className="min-w-0 text-sm">
+                      <span className="block truncate font-medium">{name(itemById.get(l.item_id))}</span>
+                      <span className="text-xs text-muted">
+                        {tr("المطلوب", "Ordered")} <span className="num">{l.qty}</span> {l.unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc")}
+                      </span>
+                    </span>
+                    <Stepper value={got[k] ?? l.qty} onChange={(v) => setGot((g) => ({ ...g, [k]: v }))} min={0} max={l.qty} />
+                  </li>
+                );
+              })}
+            </ul>
+            {partial && (
+              <div className="mt-2 rounded-xl bg-warning-soft p-3 text-sm">
+                <p className="font-semibold text-warning">{tr("تسليم جزئي: الفاتورة على ما استُلم فقط. والباقي؟", "Partial: the invoice is for what was taken. And the rest?")}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["keep", tr("يبقى طلباً مفتوحاً", "Stays an open order")],
+                      ["cancel", tr("يُلغى برغبة المحل", "Cancel it (shop's wish)")],
+                    ] as const
+                  ).map(([v, t]) => (
+                    <button key={v} type="button" onClick={() => setRest(v)} aria-pressed={rest === v} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", rest === v ? "border-action bg-card text-text" : "border-line text-muted")}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
           {msg && <p className={cn("rounded-xl p-3 text-sm font-medium", msg.tone === "danger" ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning")}>{msg.text}</p>}
         </div>

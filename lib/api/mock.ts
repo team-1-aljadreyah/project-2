@@ -40,7 +40,12 @@ import {
   commissionLines,
   setUsdRate,
   usdRateOn,
-  confirmOrder,
+  acceptOrder,
+  holdBatch,
+  releaseBatch,
+  traceBatch,
+  prepPlan,
+  prepareOrder,
   createOrder,
   createPayment,
   createReceipt,
@@ -546,7 +551,10 @@ export const mockApi: Api = {
       need(a, ["manager", "warehouse"]);
       return db.stocktakes.find((s) => s.id === id) ?? notFound();
     }),
-  createStocktake: (warehouseId) => write((db, a, now) => createStocktake(db, a, warehouseId, now)),
+  createStocktake: (warehouseId, category) => write((db, a, now) => createStocktake(db, a, warehouseId, now, category || undefined)),
+  holdBatch: (id, reason) => write((db, a, now) => batchView(db, holdBatch(db, a, id, reason, now), a, now)),
+  releaseBatch: (id) => write((db, a, now) => batchView(db, releaseBatch(db, a, id, now), a, now)),
+  traceBatch: (id) => read((db, a) => traceBatch(db, a, id)),
   saveStocktake: (id, lines) => write((db, a, now) => saveStocktake(db, a, id, lines, now)),
   closeStocktake: (id) => write((db, a, now) => closeStocktake(db, a, id, now)),
   listDamaged: () =>
@@ -682,11 +690,9 @@ export const mockApi: Api = {
       return db.delivery_photos?.[id] ?? null;
     }),
   createOrder: (input) => write((db, a, now) => createOrder(db, a, input, now)),
-  confirmOrder: (id) =>
-    write((db, a, now) => {
-      const inv = confirmOrder(db, a, id, now);
-      return invoiceView(db, inv, seesProfit(a));
-    }),
+  acceptOrder: (id) => write((db, a, now) => orderView(acceptOrder(db, a, id, now), a)),
+  prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
+  prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),
   updateOrder: (id, input) => write((db, a, now) => orderView(updateOrder(db, a, id, input, now), a)),
   setOrderDiscount: (id, percent) => write((db, a, now) => orderView(setOrderDiscount(db, a, id, percent, now), a)),

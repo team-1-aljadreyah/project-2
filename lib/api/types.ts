@@ -111,6 +111,20 @@ export interface Batch {
   received_by: Person;
   receipt_id?: number;
   status: BatchStatus;
+  /** A batch with a problem (a complaint, a recall): nothing more of it is sold, in any warehouse. */
+  held?: { reason: string; at: string; by: Person };
+}
+
+/** Which shops got pieces of a batch, and how many (to call them back). */
+export interface BatchTrace {
+  customer_id: number;
+  customer: string;
+  phone: string;
+  invoice_id: number;
+  invoice_number: string;
+  date: string;
+  pieces: number;
+  returned: number;
 }
 
 export interface ReceiptLine {
@@ -149,10 +163,17 @@ export interface Customer {
   last_order_at?: string;
 }
 
-export type OrderStatus = "pending" | "needs_approval" | "confirmed" | "cancelled" | "expired";
+/** pending: sent, held 24 h, waits for the accountant / manager to approve it.
+ *  needs_approval: over the debt limit or a big discount: waits for the manager.
+ *  approved: approved, held until it is delivered; the warehouse keeper prepares it.
+ *  confirmed: delivered to the shop: the invoice is made, the stock leaves, the debt counts.
+ *  cancelled / expired: nothing held, nothing owed. */
+export type OrderStatus = "pending" | "needs_approval" | "approved" | "confirmed" | "cancelled" | "expired";
 export type OrderSource = "rep" | "shop" | "office";
 
 export interface OrderLine {
+  /** The warehouse this line is taken from (the keeper chooses it when preparing; else the order's). */
+  warehouse_id?: number;
   item_id: number;
   unit: Unit;
   qty: number;
@@ -174,11 +195,21 @@ export interface Order {
   total: number;
   /** The lines before the discount (only when there is a discount). */
   subtotal?: number;
+  /** The total is rounded to the nearest 250 IQD: what that changed (+ or -). */
+  rounding?: number;
   discount?: OrderDiscount;
   /** Why the order waits for the manager: over the debt limit, a discount above 3%, or both. */
   approval_for?: ("debt" | "discount")[];
   /** The shop owner changed it after sending (before it was confirmed). */
   edited_at?: string;
+  /** Approved by the accountant / manager (the warehouse can prepare it). */
+  accepted_by?: Person;
+  accepted_at?: string;
+  /** Partly delivered: what wasn't delivered, and the order that carries it on (if the shop still wants it). */
+  short_lines?: OrderLine[];
+  rest_order_id?: number;
+  /** This order carries on the rest of another one. */
+  parent_id?: number;
   reserved_until?: string;
   note?: string;
   cancel_reason?: string;
@@ -244,6 +275,21 @@ export interface DeliverInput {
   pin: string;
   /** The photo of the packages, as a small JPEG data URL (made smaller on the phone before sending). */
   photo: string;
+  /** Only some of it was delivered: what the shop took. Missing = everything. */
+  lines?: { item_id: number; unit: Unit; qty: number }[];
+  /** What happens to what wasn't delivered: stays as an open order, or is cancelled (the shop decides). */
+  rest?: "keep" | "cancel";
+}
+
+/** Preparing an order: from which warehouse each line is taken. */
+export interface PrepLine {
+  item_id: number;
+  unit: Unit;
+  qty: number;
+  /** The warehouse the system suggests: enough stock and the oldest expiry first. */
+  suggested_warehouse_id: number | null;
+  /** Free pieces in each warehouse (not held by other orders). */
+  free: { warehouse_id: number; pieces: number; nearest_expiry?: string }[];
 }
 
 export interface InvoiceBatchUse {
@@ -271,6 +317,7 @@ export interface Invoice {
   date: string;
   lines: InvoiceLine[];
   total: number;
+  rounding?: number;
   /** The dollar rate of the day it was made (to show it in dollars too). */
   usd_rate?: number;
   /** Before the discount, and the discount itself (from the order). */
@@ -397,6 +444,8 @@ export interface Stocktake {
   id: number;
   number: string;
   warehouse_id: number;
+  /** Counting only some items (a category): only those stop selling in this warehouse until it ends. */
+  category?: string;
   status: "open" | "done";
   lines: StocktakeLine[];
   created_at: string;
@@ -508,7 +557,7 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem" | "commission_earned" | "usd_rate";
+export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem" | "commission_earned" | "usd_rate" | "order_accepted" | "order_rejected" | "order_review";
 
 export interface AppNotification {
   id: number;
@@ -599,7 +648,7 @@ export interface NewOrder {
   warehouse_id?: number;
   lines: { item_id: number; unit: Unit; qty: number }[];
   note?: string;
-  /** Delivery rep / manager only. Above 3% (rep) the order waits for the manager. */
+  /** Rep / accountant / manager. Above 3% (not the manager) the order waits for the manager. */
   discount_percent?: number;
 }
 
@@ -609,7 +658,8 @@ export interface OrderEdit {
   note?: string;
 }
 
-/** The delivery rep and the warehouse keeper give up to this by themselves; more needs the manager. */
+/** The rep and the accountant give up to this by themselves; more needs the manager. The warehouse keeper
+ *  gives no discounts (his work is the stock, not the prices). */
 export const STAFF_DISCOUNT_MAX = 3;
 /** Nobody gives more than this on one order. */
 export const DISCOUNT_MAX = 30;

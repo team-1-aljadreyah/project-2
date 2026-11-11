@@ -39,11 +39,13 @@ export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   const { tr } = useFmt();
   switch (status) {
     case "pending":
-      return <Badge tone="primary">{tr("بانتظار التثبيت", "Waiting")}</Badge>;
+      return <Badge tone="primary">{tr("بانتظار الاعتماد", "Waiting approval")}</Badge>;
+    case "approved":
+      return <Badge tone="primary">{tr("معتمد", "Approved")}</Badge>;
     case "needs_approval":
       return <Badge tone="warning">{tr("يحتاج موافقة المدير", "Needs approval")}</Badge>;
     case "confirmed":
-      return <Badge tone="success">{tr("مثبّت", "Confirmed")}</Badge>;
+      return <Badge tone="success">{tr("سُلِّم", "Delivered")}</Badge>;
     case "cancelled":
       return <Badge>{tr("ملغي", "Cancelled")}</Badge>;
     case "expired":

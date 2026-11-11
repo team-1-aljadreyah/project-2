@@ -32,7 +32,7 @@ export default function StaffHome() {
 
   const waitingChats = (threads.data ?? []).filter((t) => t.waiting);
   const mine = (orders.data ?? []).filter((o) => !user.warehouse_id || o.warehouse_id === user.warehouse_id);
-  const toPrepare = mine.filter((o) => o.status === "pending");
+  const toPrepare = mine.filter((o) => o.status === "approved" && !o.delivery);
   const ready = mine.filter((o) => o.delivery?.status === "ready");
   const onWay = mine.filter((o) => o.delivery?.status === "out");
   const stockAlerts = [

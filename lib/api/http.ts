@@ -42,6 +42,8 @@ import type {
   DeliverInput,
   ProblemInput,
   OrderEdit,
+  PrepLine,
+  BatchTrace,
   UsdRate,
   CommissionLine,
   RepKind,
@@ -107,7 +109,12 @@ export const httpApi = {
 
   listStocktakes: () => get<Stocktake[]>("/stocktakes"),
   getStocktake: (id: number) => get<Stocktake>(`/stocktakes/${id}`),
-  createStocktake: (warehouseId: number) => post<Stocktake>("/stocktakes", { warehouse_id: warehouseId }),
+  /** category: count only that category (only those items stop selling there meanwhile). */
+  createStocktake: (warehouseId: number, category?: string) => post<Stocktake>("/stocktakes", { warehouse_id: warehouseId, ...(category ? { category } : {}) }),
+  /** Stop selling the rest of a batch (both warehouses), put it back on sale, and see who got it. */
+  holdBatch: (id: number, reason: string) => post<Batch>(`/batches/${id}/hold`, { reason }),
+  releaseBatch: (id: number) => post<Batch>(`/batches/${id}/release`),
+  traceBatch: (id: number) => get<BatchTrace[]>(`/batches/${id}/trace`),
   saveStocktake: (id: number, lines: StocktakeLine[]) => patch<Stocktake>(`/stocktakes/${id}`, { lines }),
   closeStocktake: (id: number) => post<Stocktake>(`/stocktakes/${id}/close`),
   listDamaged: () => get<DamagedRecord[]>("/damaged"),
@@ -144,7 +151,12 @@ export const httpApi = {
   returnToWarehouse: (id: number) => post<Order>(`/orders/${id}/delivery/return`),
   getDeliveryPhoto: (id: number) => get<string | null>(`/orders/${id}/delivery/photo`),
   createOrder: (input: NewOrder) => post<Order>("/orders", input, input.client_ref),
-  confirmOrder: (id: number) => post<Invoice>(`/orders/${id}/confirm`),
+  /** The accountant / manager approves the order (it stays held until delivered). */
+  acceptOrder: (id: number) => post<Order>(`/orders/${id}/accept`),
+  /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
+  prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
+  /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */
+  prepareOrder: (id: number, warehouses: Record<number, number>) => post<Order>(`/orders/${id}/prepare`, { warehouses }),
   approveOrder: (id: number) => post<Order>(`/orders/${id}/approve`),
   /** The shop owner changes his order before it is confirmed. */
   updateOrder: (id: number, input: OrderEdit) => patch<Order>(`/orders/${id}`, input),

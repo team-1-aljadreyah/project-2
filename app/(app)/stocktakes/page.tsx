@@ -18,6 +18,7 @@ export default function StocktakesPage() {
   const list = useLoad(() => api.listStocktakes(), []);
   const [open, setOpen] = useState(false);
   const [wh, setWh] = useState(user.warehouse_id ?? lookups.warehouses[0].id);
+  const [cat, setCat] = useState("");
   const [busy, setBusy] = useState(false);
   const diffs = (s: Stocktake) => s.lines.filter((l) => l.counted_qty !== null && l.counted_qty !== l.system_qty).length;
   const counted = (s: Stocktake) => s.lines.filter((l) => l.counted_qty !== null).length;
@@ -64,7 +65,7 @@ export default function StocktakesPage() {
               onClick={async () => {
                 setBusy(true);
                 try {
-                  const s = await api.createStocktake(wh);
+                  const s = await api.createStocktake(wh, cat || undefined);
                   router.push(`/stocktakes/${s.id}`);
                 } catch (e) {
                   toast("danger", errorText(e, tr));
@@ -82,6 +83,16 @@ export default function StocktakesPage() {
             {lookups.warehouses.map((w) => (
               <option key={w.id} value={w.id}>
                 {name(w)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={tr("ماذا تجرد؟", "What to count")} hint={tr("المواد التي تُجرد لا تُباع من هذا المخزن حتى ينتهي جردها، والباقي يستمر بيعه.", "Counted items aren't sold from this warehouse until their count ends; the rest keeps selling.")} className="mt-3">
+          <Select value={cat} onChange={(e) => setCat(e.target.value)}>
+            <option value="">{tr("كل المواد", "All items")}</option>
+            {lookups.categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
               </option>
             ))}
           </Select>

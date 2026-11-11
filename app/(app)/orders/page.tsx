@@ -21,7 +21,7 @@ export default function OrdersPage() {
   const orders = useLoad(() => api.listOrders(), []);
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
   const queue = useQueue();
-  const [filter, setFilter] = useState<Filter>(user.role === "warehouse" ? "pending" : "open");
+  const [filter, setFilter] = useState<Filter>(user.role === "warehouse" ? "approved" : user.role === "accountant" ? "pending" : "open");
   const [q, setQ] = useState("");
 
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
@@ -98,9 +98,10 @@ export default function OrdersPage() {
             onChange={setFilter}
             options={[
               { value: "open", label: tr("المفتوحة", "Open"), count: count("open") },
-              { value: "pending", label: tr("بانتظار التثبيت", "Waiting"), count: count("pending") },
+              { value: "pending", label: tr("بانتظار الاعتماد", "To approve"), count: count("pending") },
+              { value: "approved", label: tr("معتمدة", "Approved"), count: count("approved") },
               { value: "needs_approval", label: tr("تحتاج موافقة", "Need approval"), count: count("needs_approval") },
-              { value: "confirmed", label: tr("مثبّتة", "Confirmed"), count: count("confirmed") },
+              { value: "confirmed", label: tr("سُلِّمت", "Delivered"), count: count("confirmed") },
               { value: "all", label: tr("الكل", "All"), count: all.length },
             ]}
           />
@@ -148,6 +149,6 @@ export default function OrdersPage() {
 
 function pass(o: Order, f: Filter) {
   if (f === "all") return true;
-  if (f === "open") return o.status === "pending" || o.status === "needs_approval";
+  if (f === "open") return o.status === "pending" || o.status === "needs_approval" || o.status === "approved";
   return o.status === f;
 }

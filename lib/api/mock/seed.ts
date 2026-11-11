@@ -161,7 +161,7 @@ export function makeSeed(now = new Date()): Db {
     damaged: [],
     audit: [],
     notifications: [],
-    settings: { reservation_hours: 2, near_expiry_days: 30, slow_moving_days: 21, auto_confirm_rep_orders: false },
+    settings: { reservation_hours: 24, near_expiry_days: 30, slow_moving_days: 21, auto_confirm_rep_orders: false },
     closed_months: {},
     notified_batches: [],
     notified_low: [],
@@ -401,6 +401,21 @@ export function makeSeed(now = new Date()): Db {
   if (firstToday) {
     const rep = db.users.find((u) => u.id === firstToday.delivery!.rep?.id);
     Object.assign(firstToday.delivery!, { status: "out", out_at: addDays(now, 0).toISOString(), out_by: rep && { id: rep.id, name: rep.name } });
+  }
+
+  // Today's shipments aren't delivered yet: under the rule "invoice at delivery" they have no invoice yet.
+  // (The history was built the quick way, all at once; give their goods back to the shelf and drop the invoice.)
+  for (const o of db.orders) {
+    if (o.status !== "confirmed" || !o.delivery || o.delivery.status === "delivered" || !o.invoice_id) continue;
+    const inv = db.invoices.find((i) => i.id === o.invoice_id);
+    if (!inv || inv.paid || inv.returned) continue;
+    for (const l of inv.lines) for (const u of l.batches) {
+      const b = db.batches.find((x) => x.id === u.batch_id);
+      if (b) b.qty_left += u.qty;
+    }
+    db.invoices = db.invoices.filter((i) => i.id !== inv.id);
+    o.status = "approved";
+    o.invoice_id = undefined;
   }
 
   // The dollar rate of the last week (today's is left for the accountant to fix in the morning).

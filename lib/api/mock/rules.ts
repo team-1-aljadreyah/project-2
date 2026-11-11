@@ -20,6 +20,8 @@ import type {
   MyChat,
   DeliverInput,
   OrderEdit,
+  PrepLine,
+  BatchTrace,
   CommissionLine,
   UsdRate,
   RepKind,
@@ -121,15 +123,15 @@ export function shelfQty(db: Db, itemId: number, warehouseId: number) {
 }
 
 const holdsStock = (o: Order, nowIso: string) =>
-  (o.status === "pending" || o.status === "needs_approval") && !!o.reserved_until && o.reserved_until > nowIso;
+  o.status === "approved" || ((o.status === "pending" || o.status === "needs_approval") && !!o.reserved_until && o.reserved_until > nowIso);
 
 /** Pieces held by orders that are not confirmed yet. */
 export function reservedQty(db: Db, itemId: number, warehouseId: number | undefined, nowIso: string, exceptOrderId?: number) {
   let n = 0;
   for (const o of db.orders) {
     if (o.id === exceptOrderId || !holdsStock(o, nowIso)) continue;
-    if (warehouseId && o.warehouse_id !== warehouseId) continue;
     for (const l of o.lines) {
+      if (warehouseId && (l.warehouse_id ?? o.warehouse_id) !== warehouseId) continue;
       if (l.item_id === itemId) n += piecesOf(itemOf(db, l.item_id), l.unit, l.qty);
     }
   }
@@ -137,19 +139,36 @@ export function reservedQty(db: Db, itemId: number, warehouseId: number | undefi
 }
 
 export function sellableQty(db: Db, itemId: number, warehouseId: number | undefined, now: Date, exceptOrderId?: number) {
-  const free = physicalQty(db, itemId, warehouseId, dayOf(now)) - reservedQty(db, itemId, warehouseId, now.toISOString(), exceptOrderId);
+  const today = dayOf(now);
+  let free = physicalQty(db, itemId, warehouseId, today) - reservedQty(db, itemId, warehouseId, now.toISOString(), exceptOrderId);
+  // Held batches (a problem) aren't sold anywhere.
+  free -= db.batches.filter((b) => b.held && b.item_id === itemId && (!warehouseId || b.warehouse_id === warehouseId) && b.qty_left > 0 && b.expiry_date >= today).reduce((s, b) => s + b.qty_left, 0);
+  // An item being counted isn't sold from that warehouse until its count ends.
+  for (const w of db.warehouses) {
+    if (warehouseId && w.id !== warehouseId) continue;
+    if (countLocked(db, itemId, w.id)) free -= Math.max(0, physicalQty(db, itemId, w.id, today) - db.batches.filter((b) => b.held && b.item_id === itemId && b.warehouse_id === w.id && b.qty_left > 0 && b.expiry_date >= today).reduce((s, b) => s + b.qty_left, 0));
+  }
   return Math.max(0, free);
+}
+
+/** Is this item in an open stocktake of this warehouse? (Then it isn't sold from there for now.) */
+export function countLocked(db: Db, itemId: number, warehouseId: number) {
+  return db.stocktakes.some((s) => s.status === "open" && s.warehouse_id === warehouseId && s.lines.some((l) => l.item_id === itemId));
 }
 
 /** Batches to sell from, nearest expiry first (FEFO). Expired batches are skipped. */
 function fefoBatches(db: Db, itemId: number, warehouseId: number, today: string) {
   return db.batches
-    .filter((b) => b.item_id === itemId && b.warehouse_id === warehouseId && b.qty_left > 0 && b.expiry_date >= today)
+    .filter((b) => b.item_id === itemId && b.warehouse_id === warehouseId && b.qty_left > 0 && b.expiry_date >= today && !b.held)
     .sort((a, b) => a.expiry_date.localeCompare(b.expiry_date) || a.id - b.id);
 }
 
 /** Take pieces from the batches, oldest expiry first. Returns which batches were used. */
 function takeFefo(db: Db, itemId: number, warehouseId: number, pieces: number, today: string): DbBatchUse[] {
+  if (countLocked(db, itemId, warehouseId)) {
+    const item = itemOf(db, itemId);
+    fail(409, "OUT_OF_STOCK", `${item.name} قيد الجرد في هذا المخزن: يُباع بعد انتهاء الجرد`, `${item.name_en} is being counted in this warehouse`);
+  }
   const used: DbBatchUse[] = [];
   let left = pieces;
   for (const b of fefoBatches(db, itemId, warehouseId, today)) {
@@ -419,7 +438,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
 
   const subtotal = lines.reduce((s, l) => s + l.total, 0);
   const discount = makeDiscount(actor, subtotal, input.discount_percent ?? 0, now);
-  const total = subtotal - (discount?.amount ?? 0);
+  const [total, rounding] = roundTotal(subtotal - (discount?.amount ?? 0));
   const overLimit = committedDebt(db, customer.id, now.toISOString()) + total > customer.debt_limit;
   const approval_for = [...(overLimit ? (["debt"] as const) : []), ...(discount?.needs_approval ? (["discount"] as const) : [])];
   const src: Order["source"] = source ?? (actor.role === "shop" ? "shop" : actor.role === "rep" ? "rep" : "office");
@@ -436,6 +455,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     lines,
     total,
     ...(discount ? { subtotal, discount } : {}),
+    ...(rounding ? { rounding } : {}),
     ...(approval_for.length ? { approval_for: [...approval_for] } : {}),
     reserved_until: new Date(now.getTime() + db.settings.reservation_hours * 3_600_000).toISOString(),
     note: input.note?.trim() || undefined,
@@ -445,6 +465,9 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   db.orders.push(order);
   audit(db, actor, "create", "order", id, `طلب جديد ${order.number} لـ ${customer.name}`, `New order ${order.number} for ${customer.name}`, now);
 
+  if (discount) {
+    audit(db, actor, "update", "order", id, `خصم ${discount.percent}% (${discount.amount.toLocaleString("en")} د.ع) على ${order.number} أعطاه ${actor.name}`, `${discount.percent}% discount on ${order.number} by ${actor.name}`, now);
+  }
   if (discount?.needs_approval) notifyDiscount(db, order, customer.name, now);
   if (overLimit) {
     notify(
@@ -473,8 +496,24 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     notify(db, { ...msgBase, roles: ["manager"] }, now);
     notify(db, { ...msgBase, roles: ["rep"], user_id: customer.rep_id }, now);
   }
-  if (order.status === "pending" && src === "rep" && db.settings.auto_confirm_rep_orders) {
-    confirmOrder(db, actor, id, now, true);
+  // Every order (rep or shop) waits for the accountant or the manager to approve it.
+  if (order.status === "pending") {
+    notify(
+      db,
+      { type: "order_review", roles: ["accountant"], title: `طلب بانتظار الاعتماد: ${customer.name}`, title_en: `Order to approve: ${customer.name}`, body: `${order.number} · ${order.total.toLocaleString("en")} د.ع`, body_en: `${order.number}`, link: `/orders/${id}` },
+      now,
+    );
+  }
+  // Over the debt limit: the shop is told it is being reviewed (not refused).
+  if (overLimit) {
+    const owner = shopOwnerOf(db, customer.id);
+    if (owner) {
+      notify(
+        db,
+        { type: "order_review", roles: ["shop"], user_id: owner.id, title: `طلبك ${order.number} قيد المراجعة`, title_en: `Your order ${order.number} is being reviewed`, body: "تجاوز سقف دينك، وتراجعه الإدارة. الكمية محجوزة لك حتى ذلك الحين.", body_en: "It passes your debt limit; the company is reviewing it. The goods are held for you.", link: `/orders/${id}` },
+        now,
+      );
+    }
   }
   return order;
 }
@@ -484,9 +523,12 @@ export function approveOrder(db: Db, actor: DbUser, id: number, now: Date): Orde
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status !== "needs_approval") fail(409, "BAD_STATE", "هذا الطلب لا يحتاج موافقة", "This order doesn't need approval");
   checkStock(db, o.warehouse_id, o.lines, now, o.id);
-  o.status = "pending";
+  // His OK is for this order only (the shop's limit stays the same), and it approves the order too.
+  o.status = "approved";
   o.approved_by = person(actor);
-  o.reserved_until = new Date(now.getTime() + db.settings.reservation_hours * 3_600_000).toISOString();
+  o.accepted_by = person(actor);
+  o.accepted_at = now.toISOString();
+  o.reserved_until = undefined;
   const why = o.approval_for ?? ["debt"];
   if (o.discount?.needs_approval) {
     delete o.discount.needs_approval;
@@ -498,6 +540,62 @@ export function approveOrder(db: Db, actor: DbUser, id: number, now: Date): Orde
   return o;
 }
 
+// ---------- a batch with a problem ----------
+
+/** Stop selling what is left of a batch, in every warehouse, at once. */
+export function holdBatch(db: Db, actor: DbUser, batchId: number, reason: string, now: Date) {
+  need(actor, ["manager", "warehouse"]);
+  const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
+  if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب الإيقاف", "Write the reason", { reason: msg("السبب مطلوب", "Required") });
+  const item = itemOf(db, b.item_id);
+  // The same batch number may sit in both warehouses (a transfer splits it): stop every part of it.
+  const same = db.batches.filter((x) => x.id === b.id || (x.item_id === b.item_id && x.expiry_date === b.expiry_date && x.receipt_id && x.receipt_id === b.receipt_id));
+  for (const x of same) x.held = { reason: reason.trim(), at: now.toISOString(), by: person(actor) };
+  audit(db, actor, "update", "batch", b.id, `إيقاف بيع الدفعة #${b.id} (${item.name}): ${reason.trim()}`, `Stopped selling batch #${b.id}: ${reason.trim()}`, now);
+  notify(db, { type: "expired", roles: ["manager", "warehouse"], title: `أُوقف بيع دفعة: ${item.name} #${b.id}`, title_en: `Batch stopped: ${item.name_en} #${b.id}`, body: reason.trim(), body_en: reason.trim(), link: `/items/${item.id}` }, now);
+  return b;
+}
+
+export function releaseBatch(db: Db, actor: DbUser, batchId: number, now: Date) {
+  need(actor, ["manager"]);
+  const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
+  for (const x of db.batches.filter((x) => x.held && (x.id === b.id || (x.item_id === b.item_id && x.expiry_date === b.expiry_date && x.receipt_id === b.receipt_id)))) delete x.held;
+  audit(db, actor, "update", "batch", b.id, `إعادة بيع الدفعة #${b.id}`, `Batch #${b.id} back on sale`, now);
+  return b;
+}
+
+/** Which shops got pieces of this batch (from the invoices), how many, and how many came back. */
+export function traceBatch(db: Db, actor: DbUser, batchId: number) {
+  need(actor, ["manager", "warehouse", "accountant"]);
+  const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
+  const ids = new Set(db.batches.filter((x) => x.id === b.id || (x.item_id === b.item_id && x.expiry_date === b.expiry_date && x.receipt_id && x.receipt_id === b.receipt_id)).map((x) => x.id));
+  const out: BatchTrace[] = [];
+  for (const inv of db.invoices) {
+    for (const l of inv.lines) {
+      for (const u of l.batches) {
+        if (!ids.has(u.batch_id)) continue;
+        const c = db.customers.find((x) => x.id === inv.customer_id);
+        out.push({ customer_id: inv.customer_id, customer: c?.name ?? "", phone: c?.phone ?? "", invoice_id: inv.id, invoice_number: inv.number, date: inv.date, pieces: u.qty, returned: u.returned });
+      }
+    }
+  }
+  return out.sort((x, y) => y.date.localeCompare(x.date));
+}
+
+// ---------- rounding ----------
+// The total of an order (and its invoice) is rounded to the nearest 250 IQD, the smallest note in use.
+
+export function roundTotal(raw: number): [number, number] {
+  const total = Math.round(raw / 250) * 250;
+  return [total, total - raw];
+}
+function setTotal(o: Order, raw: number) {
+  const [total, rounding] = roundTotal(raw);
+  o.total = total;
+  if (rounding) o.rounding = rounding;
+  else delete o.rounding;
+}
+
 // ---------- discounts ----------
 // The delivery rep (his own shops) and the warehouse keeper (his warehouse's orders) give up to 3% by themselves.
 // More than that, the order waits for the manager. The manager gives any discount up to 30% with no approval.
@@ -505,7 +603,7 @@ export function approveOrder(db: Db, actor: DbUser, id: number, now: Date): Orde
 function makeDiscount(actor: DbUser, subtotal: number, percent: number, now: Date): Order["discount"] {
   const p = Math.round((Number(percent) || 0) * 10) / 10;
   if (p === 0) return undefined;
-  if (!["manager", "rep", "warehouse"].includes(actor.role)) fail(403, "FORBIDDEN", "لا تستطيع إعطاء خصم", "You can't give a discount");
+  if (!["manager", "rep", "accountant"].includes(actor.role)) fail(403, "FORBIDDEN", "لا تستطيع إعطاء خصم", "You can't give a discount");
   if (p < 0 || p > DISCOUNT_MAX) fail(422, "VALIDATION", `الخصم بين 0 و ${DISCOUNT_MAX}%`, `The discount is between 0 and ${DISCOUNT_MAX}%`, { discount_percent: msg(`حتى ${DISCOUNT_MAX}%`, `Up to ${DISCOUNT_MAX}%`) });
   const needsOk = actor.role !== "manager" && p > STAFF_DISCOUNT_MAX;
   return {
@@ -556,7 +654,7 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
     o.discount = { ...o.discount, amount: Math.round((subtotal * o.discount.percent) / 100) };
     o.subtotal = subtotal;
   }
-  o.total = subtotal - (o.discount?.amount ?? 0);
+  setTotal(o, subtotal - (o.discount?.amount ?? 0));
   if (input.note !== undefined) o.note = input.note.trim() || undefined;
   const overLimit = committedDebt(db, customer.id, now.toISOString(), o.id) + o.total > customer.debt_limit;
   const reasons = [...(overLimit ? (["debt"] as const) : []), ...(o.discount?.needs_approval ? (["discount"] as const) : [])];
@@ -589,11 +687,10 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
 
 /** Give, change or remove (0) the discount of an order that isn't confirmed yet. */
 export function setOrderDiscount(db: Db, actor: DbUser, id: number, percent: number, now: Date): Order {
-  need(actor, ["manager", "rep", "warehouse"]);
+  need(actor, ["manager", "rep", "accountant"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status !== "pending" && o.status !== "needs_approval") fail(409, "BAD_STATE", "لا يتغير خصم طلب مثبّت", "A confirmed order's discount can't change");
   if (actor.role === "rep" && o.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذا الطلب ليس لأحد زبائنك", "This order isn't for one of your shops");
-  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== o.warehouse_id) fail(403, "FORBIDDEN", "هذا الطلب من مخزن آخر", "This order is for another warehouse");
   const customer = db.customers.find((c) => c.id === o.customer_id)!;
   const subtotal = o.lines.reduce((s, l) => s + l.total, 0);
   const discount = makeDiscount(actor, subtotal, percent, now);
@@ -604,7 +701,7 @@ export function setOrderDiscount(db: Db, actor: DbUser, id: number, percent: num
     delete o.discount;
     delete o.subtotal;
   }
-  o.total = subtotal - (discount?.amount ?? 0);
+  setTotal(o, subtotal - (discount?.amount ?? 0));
   // Ask again why the order would wait: the new total may be under (or over) the debt limit now.
   const overLimit = committedDebt(db, customer.id, now.toISOString(), o.id) + o.total > customer.debt_limit;
   const debtWasOk = o.approved_by && !(o.approval_for ?? []).includes("debt");
@@ -616,7 +713,7 @@ export function setOrderDiscount(db: Db, actor: DbUser, id: number, percent: num
     o.status = "pending";
     delete o.approval_for;
   }
-  audit(db, actor, "update", "order", o.id, discount ? `خصم ${discount.percent}% على ${o.number}` : `إلغاء خصم ${o.number}`, discount ? `${discount.percent}% discount on ${o.number}` : `Removed the discount of ${o.number}`, now);
+  audit(db, actor, "update", "order", o.id, discount ? `خصم ${discount.percent}% (${discount.amount.toLocaleString("en")} د.ع) على ${o.number} أعطاه ${actor.name}` : `إلغاء خصم ${o.number}`, discount ? `${discount.percent}% discount on ${o.number}` : `Removed the discount of ${o.number}`, now);
   if (discount?.needs_approval) notifyDiscount(db, o, customer.name, now);
   return o;
 }
@@ -624,23 +721,139 @@ export function setOrderDiscount(db: Db, actor: DbUser, id: number, percent: num
 export function cancelOrder(db: Db, actor: DbUser, id: number, reason: string, now: Date): Order {
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   const own = o.created_by.id === actor.id;
-  if (!(actor.role === "manager" || (own && (o.status === "pending" || o.status === "needs_approval")))) {
+  const notDelivered = o.status === "pending" || o.status === "needs_approval" || o.status === "approved" || o.status === "expired";
+  if (!(actor.role === "manager" || actor.role === "accountant" || (own && (o.status === "pending" || o.status === "needs_approval")))) {
     fail(403, "FORBIDDEN", "لا تستطيع إلغاء هذا الطلب", "You can't cancel this order");
   }
-  if (o.status !== "pending" && o.status !== "needs_approval") fail(409, "BAD_STATE", "لا يمكن إلغاء طلب مثبّت", "A confirmed order can't be cancelled");
+  if (!notDelivered) fail(409, "BAD_STATE", "سُلِّم هذا الطلب: ما يعود منه يُسجَّل مرتجعاً", "This order was delivered: what comes back is a return");
+  if (o.delivery?.status === "out" && actor.role !== "manager") fail(409, "BAD_STATE", "الشحنة في الطريق: يلغيها المدير فقط", "The shipment is on the way: only the manager can cancel it");
+  const wasWaiting = o.status === "needs_approval";
   if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب الإلغاء", "Write the reason", { reason: msg("السبب مطلوب", "Reason is required") });
   o.status = "cancelled";
   o.cancel_reason = reason.trim();
-  audit(db, actor, "cancel", "order", o.id, `إلغاء الطلب ${o.number}: ${o.cancel_reason}`, `Cancelled ${o.number}: ${o.cancel_reason}`, now);
+  // Before delivery nothing was owed: the held goods simply go back to the stock.
+  delete o.delivery;
+  audit(db, actor, "cancel", "order", o.id, `${wasWaiting && actor.role === "manager" ? "رفض" : "إلغاء"} الطلب ${o.number}: ${o.cancel_reason}`, `Cancelled ${o.number}: ${o.cancel_reason}`, now);
+  const owner = shopOwnerOf(db, o.customer_id);
+  const n = {
+    type: "order_rejected" as const,
+    title: wasWaiting ? `رُفض الطلب ${o.number}` : `أُلغي الطلب ${o.number}`,
+    title_en: wasWaiting ? `Order ${o.number} was refused` : `Order ${o.number} was cancelled`,
+    body: o.cancel_reason,
+    body_en: o.cancel_reason,
+    link: `/orders/${o.id}`,
+  };
+  if (owner && actor.id !== owner.id) notify(db, { ...n, roles: ["shop"], user_id: owner.id }, now);
+  if (actor.id !== o.rep_id) notify(db, { ...n, roles: ["rep"], user_id: o.rep_id }, now);
   return o;
 }
 
-/** Confirm = issue the goods: take stock oldest expiry first, and make the invoice with the prices of the order. */
+// ---------- the order's way: approve → prepare → deliver (invoice at delivery) ----------
+
+/** The accountant or the manager approves the order (the rep alone can't). It stays held until delivered. */
+export function acceptOrder(db: Db, actor: DbUser, id: number, now: Date): Order {
+  need(actor, ["accountant", "manager"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if (o.status === "needs_approval") fail(409, "BAD_STATE", "الطلب يحتاج موافقة المدير أولاً", "The manager must OK this order first");
+  if (o.status !== "pending" && o.status !== "expired") fail(409, "BAD_STATE", "الطلب ليس بانتظار الاعتماد", "This order isn't waiting for approval");
+  // An expired hold is checked again: the stock may be gone now.
+  checkStock(db, o.warehouse_id, o.lines, now, o.id);
+  o.status = "approved";
+  o.accepted_by = person(actor);
+  o.accepted_at = now.toISOString();
+  o.reserved_until = undefined;
+  audit(db, actor, "approve", "order", o.id, `اعتماد الطلب ${o.number}`, `Approved ${o.number}`, now);
+  const customer = db.customers.find((c) => c.id === o.customer_id);
+  notify(db, { type: "order_accepted", roles: ["warehouse"], title: `طلب معتمد للتجهيز: ${customer?.name ?? ""}`, title_en: `Approved order to prepare: ${customer?.name ?? ""}`, body: o.number, body_en: o.number, link: `/orders/${o.id}` }, now);
+  const owner = shopOwnerOf(db, o.customer_id);
+  if (owner) notify(db, { type: "order_accepted", roles: ["shop"], user_id: owner.id, title: `اعتُمد طلبك ${o.number}`, title_en: `Your order ${o.number} is approved`, body: "يُجهَّز الآن، وتصدر الفاتورة عند التسليم.", body_en: "It is being prepared; the invoice is made on delivery.", link: `/orders/${o.id}` }, now);
+  if (actor.id !== o.rep_id) notify(db, { type: "order_accepted", roles: ["rep"], user_id: o.rep_id, title: `اعتُمد ${o.number}`, title_en: `${o.number} approved`, body: customer?.name ?? "", body_en: customer?.name ?? "", link: `/orders/${o.id}` }, now);
+  return o;
+}
+
+/** For the keeper: each line, the free stock in each warehouse, and the suggested one (oldest expiry first). */
+export function prepPlan(db: Db, actor: DbUser, id: number, now: Date): PrepLine[] {
+  need(actor, ["warehouse", "manager"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  const today = dayOf(now);
+  return o.lines.map((l) => {
+    const pieces = piecesOf(itemOf(db, l.item_id), l.unit, l.qty);
+    const free = db.warehouses.map((w) => {
+      const live = db.batches.filter((b) => b.item_id === l.item_id && b.warehouse_id === w.id && b.qty_left > 0 && b.expiry_date >= today && !b.held);
+      return { warehouse_id: w.id, pieces: sellableQty(db, l.item_id, w.id, now, o.id), nearest_expiry: live.map((b) => b.expiry_date).sort()[0] };
+    });
+    const ok = free.filter((f) => f.pieces >= pieces && f.nearest_expiry).sort((a, b) => a.nearest_expiry!.localeCompare(b.nearest_expiry!));
+    return { item_id: l.item_id, unit: l.unit, qty: l.qty, suggested_warehouse_id: ok[0]?.warehouse_id ?? null, free };
+  });
+}
+
+/** The keeper prepared it: each line from the warehouse he chose (one order can come from both).
+ *  The shipment label (QR) and the shop's PIN are made now. Nothing is invoiced yet. */
+export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Record<number, number>, now: Date): Order {
+  need(actor, ["warehouse", "manager"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if (o.status !== "approved") fail(409, "BAD_STATE", o.status === "pending" ? "الطلب لم يُعتمد بعد: يعتمده المحاسب أو المدير" : "الطلب ليس معتمداً للتجهيز", "The order isn't approved for preparing");
+  if (o.delivery) fail(409, "BAD_STATE", "جُهّز هذا الطلب من قبل", "This order is already prepared");
+  const ids = new Set(db.warehouses.map((w) => w.id));
+  const next = o.lines.map((l) => ({ ...l, warehouse_id: ids.has(warehouses?.[l.item_id]) ? warehouses[l.item_id] : (l.warehouse_id ?? o.warehouse_id) }));
+  // Enough free stock in each chosen warehouse (its own hold doesn't count against it).
+  for (const w of db.warehouses) {
+    const mine = next.filter((l) => l.warehouse_id === w.id);
+    if (mine.length) checkStock(db, w.id, mine, now, o.id);
+  }
+  o.lines = next;
+  o.delivery = newDelivery();
+  const carrier = deliveryRepFor(db, o.rep_id);
+  if (carrier) o.delivery.rep = person(carrier);
+  const from = [...new Set(next.map((l) => db.warehouses.find((w) => w.id === l.warehouse_id)?.name ?? ""))].join(" + ");
+  audit(db, actor, "update", "order", o.id, `تجهيز الطلب ${o.number} من ${from}`, `Prepared ${o.number}`, now);
+  return o;
+}
+
+/** At delivery: the invoice for what the shop took, the stock leaves (oldest expiry first), the debt counts. */
+function invoiceDelivery(db: Db, actor: DbUser, o: Order, delivered: Order["lines"], now: Date): DbInvoice {
+  const today = dayOf(now);
+  const lines = delivered.map((l) => {
+    const item = itemOf(db, l.item_id);
+    const pieces = piecesOf(item, l.unit, l.qty);
+    const batches = takeFefo(db, l.item_id, l.warehouse_id ?? o.warehouse_id, pieces, today);
+    return { ...l, pieces, returned_pieces: 0, batches };
+  });
+  const cost = lines.reduce((s, l) => s + l.batches.reduce((a, b) => a + b.qty * b.purchase_price, 0), 0);
+  const subtotal = lines.reduce((s, l) => s + l.total, 0);
+  const discount = o.discount ? Math.round((subtotal * o.discount.percent) / 100) : 0;
+  const [total, rounding] = roundTotal(subtotal - discount);
+  const invId = nextId(db, "invoice");
+  const inv: DbInvoice = {
+    id: invId,
+    number: `INV-${now.getFullYear()}-${pad(invId)}`,
+    order_id: o.id,
+    customer_id: o.customer_id,
+    rep_id: o.rep_id,
+    warehouse_id: o.warehouse_id,
+    date: now.toISOString(),
+    lines,
+    total,
+    ...(o.discount ? { subtotal, discount, discount_percent: o.discount.percent } : {}),
+    ...(rounding ? { rounding } : {}),
+    ...(usdRateOn(db, today) ? { usd_rate: usdRateOn(db, today)!.rate } : {}),
+    paid: 0,
+    returned: 0,
+    cost,
+    created_by: person(actor),
+  };
+  db.invoices.push(inv);
+  for (const l of lines) checkLowStock(db, l.item_id, now);
+  return inv;
+}
+
+/** Confirm = issue the goods: take stock oldest expiry first, and make the invoice with the prices of the order.
+ *  Used only to build the demo history at once (approve + prepare + invoice); people go through the steps above. */
 export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto = false): DbInvoice {
   if (!auto) need(actor, ["manager", "warehouse", "accountant"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status === "needs_approval") fail(409, "BAD_STATE", "الطلب يحتاج موافقة المدير أولاً", "The manager must approve this order first");
-  if (o.status !== "pending" && o.status !== "expired") fail(409, "BAD_STATE", "الطلب ليس بانتظار التثبيت", "This order isn't waiting for confirmation");
+  if (o.status !== "pending" && o.status !== "expired" && o.status !== "approved") fail(409, "BAD_STATE", "الطلب ليس بانتظار التثبيت", "This order isn't waiting for confirmation");
   if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== o.warehouse_id) {
     fail(403, "FORBIDDEN", "هذا الطلب من مخزن آخر", "This order is for another warehouse");
   }
@@ -666,6 +879,7 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
     lines,
     total: o.total,
     ...(o.discount ? { subtotal: o.subtotal, discount: o.discount.amount, discount_percent: o.discount.percent } : {}),
+    ...(o.rounding ? { rounding: o.rounding } : {}),
     ...(usdRateOn(db, dayOf(now)) ? { usd_rate: usdRateOn(db, dayOf(now))!.rate } : {}),
     paid: 0,
     returned: 0,
@@ -1003,7 +1217,7 @@ export function createTransfer(db: Db, actor: DbUser, input: NewTransfer, now: D
 
 // ---------- stocktake ----------
 
-export function createStocktake(db: Db, actor: DbUser, warehouseId: number, now: Date): Stocktake {
+export function createStocktake(db: Db, actor: DbUser, warehouseId: number, now: Date, category?: string): Stocktake {
   need(actor, ["manager", "warehouse"]);
   if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== warehouseId) {
     fail(403, "FORBIDDEN", "تستطيع جرد مخزنك فقط", "You can only count your own warehouse");
@@ -1012,13 +1226,16 @@ export function createStocktake(db: Db, actor: DbUser, warehouseId: number, now:
     fail(409, "BAD_STATE", "يوجد جرد مفتوح لهذا المخزن", "There is already an open count for this warehouse");
   }
   const id = nextId(db, "stocktake");
+  // A whole warehouse, or one category: only the counted items stop selling there until the count ends.
   const lines: StocktakeLine[] = db.items
-    .filter((i) => i.active)
+    .filter((i) => i.active && (!category || i.category === category))
     .map((i) => ({ item_id: i.id, system_qty: shelfQty(db, i.id, warehouseId), counted_qty: null }));
+  if (!lines.length) fail(422, "VALIDATION", "لا توجد مواد في هذا الصنف", "No items in this category");
   const s: Stocktake = {
     id,
     number: `CNT-${pad(id, 4)}`,
     warehouse_id: warehouseId,
+    ...(category ? { category } : {}),
     status: "open",
     lines,
     created_at: now.toISOString(),
@@ -1654,10 +1871,67 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
     return { ok: false, left, locked: !!d.locked };
   }
 
+  // What the shop took: everything, or less (never more than the order).
+  const wanted = input.lines ?? o.lines;
+  const delivered: Order["lines"] = [];
+  const short: Order["lines"] = [];
+  for (const l of o.lines) {
+    const got = Math.max(0, Math.min(l.qty, wanted.find((x) => x.item_id === l.item_id && x.unit === l.unit)?.qty ?? 0));
+    if (got > 0) delivered.push({ ...l, qty: got, total: got * l.unit_price });
+    if (got < l.qty) short.push({ ...l, qty: l.qty - got, total: (l.qty - got) * l.unit_price });
+  }
+  if (!delivered.length) fail(422, "VALIDATION", "لم يُسلَّم شيء: إذا رفض المحل البضاعة، استخدم «تعذّر التسليم»", "Nothing delivered: if the shop refused it, use “Can't deliver”");
+
   Object.assign(d, { status: "delivered", delivered_at: now.toISOString(), delivered_by: person(actor), has_photo: true });
   delete d.problem;
   db.delivery_photos[o.id] = input.photo;
   const customer = db.customers.find((c) => c.id === o.customer_id);
+  // The invoice is made now, for what was delivered; the debt counts from now.
+  if (!o.invoice_id) {
+    const inv = invoiceDelivery(db, actor, o, delivered, now);
+    o.invoice_id = inv.id;
+  }
+  o.status = "confirmed";
+  if (short.length) {
+    o.short_lines = short;
+    o.lines = delivered;
+    const subtotal = delivered.reduce((s, l) => s + l.total, 0);
+    if (o.discount) {
+      o.discount = { ...o.discount, amount: Math.round((subtotal * o.discount.percent) / 100) };
+      o.subtotal = subtotal;
+    }
+    setTotal(o, subtotal - (o.discount?.amount ?? 0));
+    if (input.rest === "keep") {
+      // The rest stays an open (approved) order: prepared and delivered later, held meanwhile.
+      const rid = nextId(db, "order");
+      const rsub = short.reduce((s, l) => s + l.total, 0);
+      const rest: Order = {
+        id: rid,
+        number: `ORD-${pad(rid)}`,
+        client_ref: `rest-${o.id}`,
+        customer_id: o.customer_id,
+        rep_id: o.rep_id,
+        warehouse_id: o.warehouse_id,
+        source: o.source,
+        status: "approved",
+        lines: short,
+        total: rsub,
+        ...(o.discount ? { discount: { ...o.discount, amount: Math.round((rsub * o.discount.percent) / 100) }, subtotal: rsub } : {}),
+        note: `باقي الطلب ${o.number}`,
+        parent_id: o.id,
+        accepted_by: o.accepted_by,
+        accepted_at: now.toISOString(),
+        created_at: now.toISOString(),
+        created_by: person(actor),
+      };
+      setTotal(rest, rsub - (rest.discount?.amount ?? 0));
+      db.orders.push(rest);
+      o.rest_order_id = rid;
+      audit(db, actor, "create", "order", rid, `باقي الطلب ${o.number} بقي طلباً مفتوحاً (${rest.number})`, `The rest of ${o.number} stays open as ${rest.number}`, now);
+    } else {
+      audit(db, actor, "cancel", "order", o.id, `أُلغي ما لم يُسلَّم من ${o.number} برغبة المحل`, `What wasn't delivered of ${o.number} was cancelled`, now);
+    }
+  }
   audit(db, actor, "update", "order", o.id, `تسليم ${o.number} إلى ${customer?.name ?? ""} برمز الاستلام وصورة`, `${o.number} delivered with PIN and photo`, now);
   const shopUser = shopOwnerOf(db, o.customer_id);
   if (shopUser) {
