@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus, Undo2 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
-import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, PageHeader, SearchBox, type Column } from "@/components/ui";
+import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, PageHeader, RefLink, SearchBox, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Return } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -26,8 +26,16 @@ export default function ReturnsPage() {
     const bad = r.lines.length - good;
     return (
       <span className="flex gap-1">
-        {good > 0 && <Badge tone="success">{tr("سليم", "Good")} {good}</Badge>}
-        {bad > 0 && <Badge tone="danger">{tr("تالف", "Damaged")} {bad}</Badge>}
+        {good > 0 && (
+          <Badge tone="success">
+            {tr("سليم", "Good")} {good}
+          </Badge>
+        )}
+        {bad > 0 && (
+          <Badge tone="danger">
+            {tr("تالف", "Damaged")} {bad}
+          </Badge>
+        )}
       </span>
     );
   };
@@ -35,7 +43,7 @@ export default function ReturnsPage() {
   const columns: Column<Return>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (r) => <span className="num">{r.number}</span> },
     { key: "d", head: tr("الوقت", "Time"), cell: (r) => dateTime(r.created_at) },
-    { key: "c", head: tr("الزبون", "Customer"), cell: (r) => cName(r.customer_id) },
+    { key: "c", head: tr("الزبون", "Customer"), cell: (r) => <RefLink href={`/customers/${r.customer_id}`}>{cName(r.customer_id)}</RefLink> },
     { key: "i", head: tr("المواد", "Items"), cell: (r) => r.lines.map((l) => itemById.get(l.item_id)?.name).join("، ") },
     { key: "k", head: tr("الحالة", "Condition"), cell: conditions },
     { key: "a", head: tr("المبلغ", "Amount"), cell: (r) => <Money value={r.amount} className="font-semibold" />, align: "end" },
@@ -45,7 +53,10 @@ export default function ReturnsPage() {
     <>
       <PageHeader
         title={tr("المرتجعات", "Returns")}
-        subtitle={tr("السليم يعود إلى المخزون، والتالف يُسجَّل تالفاً ولا يُباع. ويُخصم المرتجع من دين الزبون ومن عمولة المندوب.", "Good stock goes back on the shelf, damaged is written off. A return lowers the customer's debt and the delivery rep's commission.")}
+        subtitle={tr(
+          "السليم يعود إلى المخزون، والتالف يُسجَّل تالفاً ولا يُباع. ويُخصم المرتجع من دين الزبون ومن عمولة المندوب.",
+          "Good stock goes back on the shelf, damaged is written off. A return lowers the customer's debt and the delivery rep's commission.",
+        )}
         actions={
           canCreate && (
             <Button variant="primary" href="/returns/new">

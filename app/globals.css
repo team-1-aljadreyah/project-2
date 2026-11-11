@@ -358,3 +358,19 @@ html[data-vt="fade"]::view-transition-new(root) {
 
 /* Customize mode: the text under the mouse that a click will rewrite (components/customize.tsx). */
 [data-cz-hover] { outline: 1px dashed var(--action); outline-offset: 2px; border-radius: 4px; cursor: text; }
+
+/* "The whole box is the link": a click anywhere in a box opens its main link, not only on the underlined words.
+   .box-link goes on the box (a row, a notice, a card) and .box-link-main on the main link inside it: the link
+   is stretched over the box. Other links, buttons and fields in the box stay on top, so they keep their own job.
+   (In the components layer, so a class like "absolute" on a button still wins.) */
+@layer components {
+  .box-link, .box-row { position: relative; }
+  .box-link-main::after { content: ""; position: absolute; inset: 0; }
+  :is(.box-link, .box-row) :is(a, button, input, select, textarea, label, summary):not(.box-link-main) { position: relative; z-index: 1; }
+  /* .box-row: a row of a list. It answers the mouse like a table row does. */
+  .box-row { transition: background-color 0.15s; }
+  .box-row:has(.box-link-main:hover) { background-color: var(--card-2); }
+  .box-row:has(.box-link-main:active) { background-color: var(--primary-soft); }
+  /* The small "opens something" arrow hides when the box has no link (a job that may not open the page). */
+  :is(.box-link, .box-row):not(:has(.box-link-main)) .box-go { display: none; }
+}

@@ -3,18 +3,41 @@
 // Supply orders: the accountant (or the manager) orders goods from a supplier for one warehouse.
 // That warehouse's keeper is told, downloads the order as an Excel or CSV file (to check the delivery with
 // the supplier's driver), and receives the goods against it when they come: the receiving form opens filled in.
-import Link from "next/link";
 import { useState } from "react";
 import { Ban, FileDown, FileSpreadsheet, PackagePlus, Plus, Trash2, Truck } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { useWarehouseFilter, inWarehouse } from "@/components/warehouse-filter";
-import { Badge, Button, Card, DataTable, Dialog, Empty, ErrorBox, Field, Input, LoadingRows, Money, NumberInput, PageHeader, Segmented, Select, Textarea, errorText, useToast, type Column } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  Dialog,
+  Empty,
+  ErrorBox,
+  errorText,
+  Field,
+  Input,
+  KV,
+  LoadingRows,
+  Money,
+  Notice,
+  NumberInput,
+  PageHeader,
+  RefLink,
+  Segmented,
+  Select,
+  Textarea,
+  useMayOpen,
+  useToast,
+  type Column,
+} from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { Item, NewSupplyOrder, SupplyOrder, SupplyStatus, Unit, Warehouse } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useBrand } from "@/lib/site";
 import { useLoad } from "@/lib/use-load";
-import { downloadCsv, today } from "@/lib/utils";
+import { cn, downloadCsv, today } from "@/lib/utils";
 import { downloadXlsx, type Cell } from "@/lib/xlsx";
 
 export default function SupplyPage() {
@@ -24,15 +47,26 @@ export default function SupplyPage() {
   const wh = useWarehouseFilter();
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState<SupplyOrder | null>(null);
+  // The order whose details are open (by id, so the box shows the fresh order after a change).
+  const [openId, setOpenId] = useState<number | null>(null);
   const [status, setStatus] = useState<"open" | "done" | "all">("open");
   const canOrder = user.role === "accountant" || user.role === "manager";
   const all = (list.data ?? []).filter((o) => inWarehouse(wh, o.warehouse_id));
   const open = (o: SupplyOrder) => o.status === "sent" || o.status === "partial";
   const rows = all.filter((o) => (status === "all" ? true : status === "open" ? open(o) : !open(o)));
   const whName = (id: number) => name(lookups.warehouses.find((w) => w.id === id));
+  const opened = (list.data ?? []).find((o) => o.id === openId);
 
   const columns: Column<SupplyOrder>[] = [
-    { key: "n", head: tr("الرقم", "No."), cell: (o) => <span className="num font-semibold">{o.number}</span> },
+    {
+      key: "n",
+      head: tr("الرقم", "No."),
+      cell: (o) => (
+        <button type="button" onClick={() => setOpenId(o.id)} className="num font-semibold text-primary-ink underline-offset-2 hover:underline">
+          {o.number}
+        </button>
+      ),
+    },
     { key: "w", head: tr("المخزن", "Warehouse"), cell: (o) => whName(o.warehouse_id) },
     { key: "s", head: tr("المورّد", "Supplier"), cell: (o) => o.supplier },
     { key: "l", head: tr("المواد", "Items"), cell: (o) => <span className="num">{o.lines.length}</span>, align: "center" },
@@ -48,7 +82,10 @@ export default function SupplyPage() {
         title={tr("طلبات التوريد", "Supply orders")}
         subtitle={
           canOrder
-            ? tr("اطلب البضاعة من المورّد لمخزن معيّن، فيصل الطلب لأمين المخزن ملفاً (Excel أو CSV) ويستلم البضاعة عليه.", "Order goods from a supplier for a warehouse; its keeper gets it as a file (Excel or CSV) and receives the goods against it.")
+            ? tr(
+                "اطلب البضاعة من المورّد لمخزن معيّن، فيصل الطلب لأمين المخزن ملفاً (Excel أو CSV) ويستلم البضاعة عليه.",
+                "Order goods from a supplier for a warehouse; its keeper gets it as a file (Excel or CSV) and receives the goods against it.",
+              )
             : tr("طلبات البضاعة القادمة إلى مخزنك: نزّل الملف، وعند وصول البضاعة اضغط «استلام».", "Goods coming to your warehouse: download the file, and press “Receive” when they arrive.")
         }
         actions={
@@ -80,6 +117,7 @@ export default function SupplyPage() {
             rows={rows}
             columns={columns}
             rowKey={(o) => o.id}
+            rowAction={(o) => () => setOpenId(o.id)}
             mobile={(o) => (
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
@@ -102,6 +140,7 @@ export default function SupplyPage() {
         )}
       </Card>
       {creating && <NewSupply onClose={() => setCreating(false)} onDone={list.reload} />}
+      {opened && <SupplyDetails order={opened} warehouse={lookups.warehouses.find((w) => w.id === opened.warehouse_id)} onClose={() => setOpenId(null)} onCancel={() => setCancelling(opened)} />}
       {cancelling && <CancelSupply order={cancelling} onClose={() => setCancelling(null)} onDone={list.reload} />}
     </>
   );
@@ -116,7 +155,14 @@ function SupplyBadge({ status }: { status: SupplyStatus }) {
 }
 
 /** The order as rows for the files: a header block, then the items table, then the total. */
-function fileRows(o: SupplyOrder, warehouse: Warehouse | undefined, items: Map<number, Item>, tr: (a: string, e: string) => string, date: (s: string) => string, company: string): { rows: Cell[][]; bold: number[] } {
+function fileRows(
+  o: SupplyOrder,
+  warehouse: Warehouse | undefined,
+  items: Map<number, Item>,
+  tr: (a: string, e: string) => string,
+  date: (s: string) => string,
+  company: string,
+): { rows: Cell[][]; bold: number[] } {
   const head: Cell[][] = [
     [company],
     [tr("طلب توريد", "Supply order"), o.number],
@@ -131,7 +177,16 @@ function fileRows(o: SupplyOrder, warehouse: Warehouse | undefined, items: Map<n
   const tableHead = head.length;
   const body: Cell[][] = o.lines.map((l, i) => {
     const it = items.get(l.item_id);
-    return [i + 1, it ? tr(it.name, it.name_en) : `#${l.item_id}`, it?.barcode ?? "", l.unit === "carton" ? tr("كارتون", "Carton") : tr("قطعة", "Piece"), l.qty, l.price, l.qty * l.price, l.received_qty || ""];
+    return [
+      i + 1,
+      it ? tr(it.name, it.name_en) : `#${l.item_id}`,
+      it?.barcode ?? "",
+      l.unit === "carton" ? tr("كارتون", "Carton") : tr("قطعة", "Piece"),
+      l.qty,
+      l.price,
+      l.qty * l.price,
+      l.received_qty || "",
+    ];
   });
   return {
     rows: [
@@ -168,7 +223,10 @@ function RowActions({ order, warehouse, onCancel }: { order: SupplyOrder; wareho
         size="sm"
         onClick={() => {
           const { rows } = fileRows(order, warehouse, itemById, tr, date, brand.company);
-          downloadCsv(order.number, rows.map((r) => r.map((c) => (c === null || c === undefined ? "" : c))));
+          downloadCsv(
+            order.number,
+            rows.map((r) => r.map((c) => (c === null || c === undefined ? "" : c))),
+          );
         }}
         title={tr("نزّل الطلب ملف CSV", "Download as CSV")}
       >
@@ -185,6 +243,92 @@ function RowActions({ order, warehouse, onCancel }: { order: SupplyOrder; wareho
         </Button>
       )}
     </div>
+  );
+}
+
+// ---------- a click on a row: the whole order ----------
+
+/** The order's items (and how much of each arrived), the supplier, and the receipts that brought the goods in. */
+function SupplyDetails({ order, warehouse, onClose, onCancel }: { order: SupplyOrder; warehouse?: Warehouse; onClose: () => void; onCancel: () => void }) {
+  const { tr, date, name, num } = useFmt();
+  const { itemById } = useApp();
+  const may = useMayOpen();
+  return (
+    <Dialog
+      open
+      wide
+      onClose={onClose}
+      title={
+        <span className="flex flex-wrap items-center gap-2">
+          {tr("طلب توريد", "Supply order")} <span className="num">{order.number}</span> <SupplyBadge status={order.status} />
+        </span>
+      }
+      footer={<RowActions order={order} warehouse={warehouse} onCancel={onCancel} />}
+    >
+      <div className="grid gap-x-8 sm:grid-cols-2">
+        <KV k={tr("المخزن", "Warehouse")} v={name(warehouse)} />
+        <KV k={tr("المورّد", "Supplier")} v={order.supplier} />
+        {order.supplier_phone && (
+          <KV
+            k={tr("هاتف المورّد", "Supplier phone")}
+            href={`tel:${order.supplier_phone}`}
+            v={
+              <span className="num" dir="ltr">
+                {order.supplier_phone}
+              </span>
+            }
+          />
+        )}
+        <KV k={tr("التاريخ", "Date")} v={date(order.created_at)} />
+        <KV k={tr("يصل", "Expected")} v={order.expected_date ? date(order.expected_date) : "-"} />
+        <KV k={tr("كتبه", "Ordered by")} v={order.created_by.name} />
+      </div>
+      {order.note && <p className="mt-2 rounded-xl bg-card-2 p-3 text-sm">{order.note}</p>}
+      {order.cancel_reason && (
+        <div className="mt-2">
+          <Notice tone="danger" title={tr("سبب الإلغاء", "Why it was cancelled")}>
+            {order.cancel_reason}
+          </Notice>
+        </div>
+      )}
+      <ul className="mt-3 divide-y divide-line overflow-hidden rounded-xl border border-line text-sm">
+        {order.lines.map((l) => {
+          const it = itemById.get(l.item_id);
+          return (
+            <li key={`${l.item_id}-${l.unit}`} className="box-row flex items-center justify-between gap-3 px-3 py-2.5">
+              <span className="min-w-0">
+                <RefLink main href={`/items/${l.item_id}`} className="block truncate font-medium">
+                  {it ? name(it) : `#${l.item_id}`}
+                </RefLink>
+                <span className="text-xs text-muted">
+                  <span className="num">{num(l.qty)}</span> {l.unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc")} × <Money value={l.price} />
+                </span>
+              </span>
+              <span className="shrink-0 text-end">
+                <Money value={l.qty * l.price} className="block font-semibold" />
+                <span className={cn("text-xs", l.received_qty >= l.qty ? "text-success" : l.received_qty ? "text-warning" : "text-muted")}>
+                  {tr(`وصل ${num(l.received_qty)} من ${num(l.qty)}`, `${num(l.received_qty)} of ${num(l.qty)} arrived`)}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mt-3 flex items-center justify-between text-sm">
+        <span className="text-muted">{tr("المجموع", "Total")}</span>
+        <Money value={order.total} className="text-base font-bold" />
+      </div>
+      {order.receipt_ids.length > 0 && may("/receipts/1") && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+          <span className="text-xs font-medium text-muted">{tr("وصولات الاستلام:", "Receipts:")}</span>
+          {order.receipt_ids.map((id) => (
+            <Button key={id} size="sm" href={`/receipts/${id}`}>
+              {tr(`استلام #${id}`, `Receipt #${id}`)}
+            </Button>
+          ))}
+        </div>
+      )}
+    </Dialog>
   );
 }
 
@@ -232,7 +376,9 @@ function NewSupply({ onClose, onDone }: { onClose: () => void; onDone: () => voi
         supplier_phone: phone,
         expected_date: expected || undefined,
         note,
-        lines: lines.filter((l) => l.item_id).map((l) => ({ item_id: l.item_id as number, unit: l.unit, qty: typeof l.qty === "number" ? l.qty : 0, price: typeof l.price === "number" ? l.price : 0 })),
+        lines: lines
+          .filter((l) => l.item_id)
+          .map((l) => ({ item_id: l.item_id as number, unit: l.unit, qty: typeof l.qty === "number" ? l.qty : 0, price: typeof l.price === "number" ? l.price : 0 })),
       };
       const o = await api.createSupplyOrder(input);
       toast("success", tr(`أُرسل ${o.number} إلى أمين المخزن`, `${o.number} was sent to the warehouse keeper`));
@@ -375,10 +521,7 @@ function CancelSupply({ order, onClose, onDone }: { order: SupplyOrder; onClose:
         <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
       </Field>
       <p className="mt-2 text-xs text-muted">
-        <Link href="/supply" className="underline">
-          {order.number}
-        </Link>{" "}
-        · {order.supplier}
+        <span className="num">{order.number}</span> · {order.supplier}
       </p>
     </Dialog>
   );

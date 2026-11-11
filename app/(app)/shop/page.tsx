@@ -59,12 +59,20 @@ function PendingAccount({ customer }: { customer: Customer }) {
     <div className="mx-auto max-w-xl py-6">
       <Card className="relative overflow-hidden p-6 sm:p-8">
         <div className="hazard absolute inset-x-0 top-0 h-1.5" aria-hidden />
-        <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 260, damping: 18 }} className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-warning-soft text-warning">
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-warning-soft text-warning"
+        >
           <Clock className="size-8" />
         </motion.div>
         <h1 className="mt-4 text-center text-2xl font-bold">{tr("حسابك قيد المراجعة", "Your account is being checked")}</h1>
         <p className="mx-auto mt-2 max-w-md text-center text-sm text-muted">
-          {tr("تم تسجيلك بنجاح. تراجع شركة النهرين معلومات محلك وتحدد أسعارك، ثم يمكنك الطلب مباشرة. تتحدّث هذه الصفحة تلقائياً.", "You're registered. Al-Nahrain checks your shop's details and sets your prices, then you can order right away. This page updates by itself.")}
+          {tr(
+            "تم تسجيلك بنجاح. تراجع شركة النهرين معلومات محلك وتحدد أسعارك، ثم يمكنك الطلب مباشرة. تتحدّث هذه الصفحة تلقائياً.",
+            "You're registered. Al-Nahrain checks your shop's details and sets your prices, then you can order right away. This page updates by itself.",
+          )}
         </p>
 
         <ol className="mt-8 space-y-0">
@@ -115,12 +123,10 @@ function MyShipments({ customer }: { customer: Customer }) {
     <div className="mx-auto mb-4 max-w-5xl space-y-2">
       {coming.map((o) => (
         <motion.div key={o.id} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="grid items-center gap-3 rounded-3xl border border-line bg-card p-4 sm:grid-cols-[1fr_auto]">
-          <div>
-            <p className="font-bold">
-              {o.delivery!.status === "out" ? tr("طلبك في الطريق إليك", "Your order is on its way") : tr("طلبك يُجهَّز للشحن", "Your order is being packed")}
-            </p>
+          <div className="box-row -m-2 rounded-2xl p-2">
+            <p className="font-bold">{o.delivery!.status === "out" ? tr("طلبك في الطريق إليك", "Your order is on its way") : tr("طلبك يُجهَّز للشحن", "Your order is being packed")}</p>
             <p className="text-sm text-muted">
-              <Link href={`/orders/${o.id}`} className="num font-semibold hover:underline" dir="ltr">
+              <Link href={`/orders/${o.id}`} className="box-link-main num font-semibold underline-offset-2 hover:underline" dir="ltr">
                 {o.number}
               </Link>
               {o.delivery!.out_by && <> · {tr(`مع ${o.delivery!.out_by.name}`, `with ${o.delivery!.out_by.name}`)}</>}

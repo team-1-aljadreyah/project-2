@@ -77,6 +77,7 @@ export default function DashboardPage() {
               hint={tr(`${x.today_invoices} فاتورة`, `${x.today_invoices} invoices`)}
               icon={<TrendingUp className="size-4" />}
               tone="primary"
+              href="/reports"
             />
           ),
         },
@@ -110,7 +111,7 @@ export default function DashboardPage() {
                 href="/reports"
               />
             ) : (
-              <Stat label={T("s_month_sales", "مبيعات الشهر", "Sales this month")} value={<Money value={x.month_sales} />} />
+              <Stat label={T("s_month_sales", "مبيعات الشهر", "Sales this month")} value={<Money value={x.month_sales} />} href="/reports" />
             ),
         },
         { id: "s_pending", el: <Stat label={T("s_pending", "طلبات بانتظار التثبيت", "Orders waiting")} value={x.pending_orders} icon={<ClipboardList className="size-4" />} href="/orders" /> },

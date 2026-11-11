@@ -4,7 +4,26 @@ import { useState } from "react";
 import { ArrowLeftRight, Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { useWarehouseFilter } from "@/components/warehouse-filter";
-import { Badge, Button, Card, DataTable, Dialog, Empty, ErrorBox, Field, LoadingRows, Notice, PageHeader, Segmented, Select, Stepper, Textarea, errorText, useToast, type Column } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  Dialog,
+  Empty,
+  ErrorBox,
+  Field,
+  LoadingRows,
+  Notice,
+  PageHeader,
+  Segmented,
+  Select,
+  Stepper,
+  Textarea,
+  errorText,
+  useToast,
+  type Column,
+} from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { Transfer, Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -20,6 +39,8 @@ export default function TransfersPage() {
   const wh = useWarehouseFilter();
   const [open, setOpen] = useState(false);
   const wName = (id: number) => name(lookups.warehouses.find((w) => w.id === id));
+  /** A transfer on the road that this person may receive (the manager, or the keeper it goes to). */
+  const canReceive = (t: Transfer) => t.status === "sent" && (user.role === "manager" || (user.role === "warehouse" && user.warehouse_id === t.to_warehouse_id));
   const columns: Column<Transfer>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (t) => <span className="num">{t.number}</span> },
     { key: "d", head: tr("الوقت", "Time"), cell: (t) => dateTime(t.created_at) },
@@ -45,7 +66,7 @@ export default function TransfersPage() {
       head: "",
       align: "end",
       cell: (t) =>
-        t.status === "sent" && (user.role === "manager" || (user.role === "warehouse" && user.warehouse_id === t.to_warehouse_id)) ? (
+        canReceive(t) ? (
           <Button size="sm" variant="action" onClick={() => setReceiving(t)}>
             {tr("استلام", "Receive")}
           </Button>
@@ -70,7 +91,10 @@ export default function TransfersPage() {
     <>
       <PageHeader
         title={tr("التحويل بين المخازن", "Transfers between warehouses")}
-        subtitle={tr("الإرسال والاستلام خطوتان: ما في الطريق لا يُباع ولا يُحسب في أي مخزن حتى يستلمه أمين المخزن المستلم.", "Sending and receiving are two steps: what is on the road isn't sold or counted anywhere until the receiving keeper takes it in.")}
+        subtitle={tr(
+          "الإرسال والاستلام خطوتان: ما في الطريق لا يُباع ولا يُحسب في أي مخزن حتى يستلمه أمين المخزن المستلم.",
+          "Sending and receiving are two steps: what is on the road isn't sold or counted anywhere until the receiving keeper takes it in.",
+        )}
         actions={
           <Button variant="action" onClick={() => setOpen(true)}>
             <Plus className="size-4" /> {tr("تحويل جديد", "New transfer")}
@@ -83,7 +107,13 @@ export default function TransfersPage() {
         ) : list.state.status === "error" ? (
           <ErrorBox error={list.state.error} onRetry={list.reload} />
         ) : (
-          <DataTable rows={(list.data ?? []).filter((t) => !wh || t.from_warehouse_id === wh || t.to_warehouse_id === wh)} columns={columns} rowKey={(t) => t.id} empty={<Empty icon={<ArrowLeftRight className="size-6" />} title={tr("لا يوجد تحويل بعد", "No transfers yet")} />} />
+          <DataTable
+            rows={(list.data ?? []).filter((t) => !wh || t.from_warehouse_id === wh || t.to_warehouse_id === wh)}
+            columns={columns}
+            rowKey={(t) => t.id}
+            rowAction={(t) => (canReceive(t) ? () => setReceiving(t) : undefined)}
+            empty={<Empty icon={<ArrowLeftRight className="size-6" />} title={tr("لا يوجد تحويل بعد", "No transfers yet")} />}
+          />
         )}
       </Card>
       {open && <TransferDialog onClose={() => setOpen(false)} onDone={list.reload} />}
@@ -180,7 +210,12 @@ function TransferDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
                     ))}
                 </Select>
                 {lines.length > 1 && (
-                  <button type="button" aria-label={tr("حذف", "Remove")} onClick={() => setLines((x) => x.filter((_, j) => j !== i))} className="flex size-11 shrink-0 items-center justify-center rounded-xl text-faint hover:bg-danger-soft hover:text-danger">
+                  <button
+                    type="button"
+                    aria-label={tr("حذف", "Remove")}
+                    onClick={() => setLines((x) => x.filter((_, j) => j !== i))}
+                    className="flex size-11 shrink-0 items-center justify-center rounded-xl text-faint hover:bg-danger-soft hover:text-danger"
+                  >
                     <Trash2 className="size-4" />
                   </button>
                 )}
@@ -195,7 +230,11 @@ function TransferDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
                   ]}
                 />
                 <Stepper value={l.qty} min={0} onChange={(v) => setLines((x) => x.map((y, j) => (j === i ? { ...y, qty: v } : y)))} />
-                {it && <span className="text-xs text-muted">{tr("المتوفر", "Available")} {qty(avail(it.id), it.pieces_per_carton)}</span>}
+                {it && (
+                  <span className="text-xs text-muted">
+                    {tr("المتوفر", "Available")} {qty(avail(it.id), it.pieces_per_carton)}
+                  </span>
+                )}
               </div>
               {err[`lines.${i}.qty`] && <p className="mt-1 text-xs text-danger">{err[`lines.${i}.qty`]}</p>}
             </div>
@@ -237,7 +276,10 @@ function ReceiveDialog({ transfer, onClose, onDone }: { transfer: Transfer; onCl
             setBusy(true);
             try {
               await api.receiveTransfer(transfer.id, got, reason);
-              toast("success", short ? tr("استُلم ناقصاً، ويراجعه المدير", "Received short; the manager reviews it") : tr("استُلم كاملاً وأُضيف إلى مخزنك", "Received in full and added to your warehouse"));
+              toast(
+                "success",
+                short ? tr("استُلم ناقصاً، ويراجعه المدير", "Received short; the manager reviews it") : tr("استُلم كاملاً وأُضيف إلى مخزنك", "Received in full and added to your warehouse"),
+              );
               onDone();
               onClose();
             } catch (e) {
@@ -251,7 +293,9 @@ function ReceiveDialog({ transfer, onClose, onDone }: { transfer: Transfer; onCl
         </Button>
       }
     >
-      <p className="mb-3 text-sm text-muted">{tr("اكتب بالقطعة ما وصل فعلاً. يدخل مخزنك بنفس الصلاحية وسعر الشراء.", "Write in pieces what really arrived. It enters your warehouse with the same expiry and cost.")}</p>
+      <p className="mb-3 text-sm text-muted">
+        {tr("اكتب بالقطعة ما وصل فعلاً. يدخل مخزنك بنفس الصلاحية وسعر الشراء.", "Write in pieces what really arrived. It enters your warehouse with the same expiry and cost.")}
+      </p>
       <ul className="space-y-2">
         {transfer.lines.map((l) => {
           const it = itemById.get(l.item_id);

@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { Printer } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { Button, Card, ErrorBox, KV, LoadingRows, Money, PageHeader } from "@/components/ui";
+import { Button, Card, ClickRow, ErrorBox, KV, LoadingRows, Money, PageHeader, RefLink } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -21,7 +20,11 @@ export default function ReceiptView() {
     <>
       <PageHeader
         back="/receipts"
-        title={<span>{tr("استلام", "Receipt")} <span className="num">{x.number}</span></span>}
+        title={
+          <span>
+            {tr("استلام", "Receipt")} <span className="num">{x.number}</span>
+          </span>
+        }
         subtitle={`${dateTime(x.created_at)} · ${x.created_by.name}`}
         actions={
           <Button onClick={() => window.print()}>
@@ -49,11 +52,9 @@ export default function ReceiptView() {
             {x.lines.map((l) => {
               const it = itemById.get(l.item_id);
               return (
-                <tr key={l.batch_id} className="border-b border-line last:border-0">
+                <ClickRow key={l.batch_id} href={`/items/${l.item_id}`} className="border-b border-line last:border-0">
                   <td className="px-4 py-3">
-                    <Link href={`/items/${l.item_id}`} className="text-primary-ink hover:underline">
-                      {name(it)}
-                    </Link>
+                    <RefLink href={`/items/${l.item_id}`}>{name(it)}</RefLink>
                   </td>
                   <td className="num px-4 py-3">#{l.batch_id}</td>
                   <td className="px-4 py-3">{it && qty(l.pieces, it.pieces_per_carton)}</td>
@@ -61,7 +62,7 @@ export default function ReceiptView() {
                   <td className="px-4 py-3 text-end">
                     <Money value={l.purchase_price} />
                   </td>
-                </tr>
+                </ClickRow>
               );
             })}
           </tbody>

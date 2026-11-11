@@ -5,7 +5,7 @@ import { ClipboardList, Clock, Plus, RotateCw, Trash2, WifiOff } from "lucide-re
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { OrderStatusBadge, SourceBadge } from "@/components/status";
-import { Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, Notice, PageHeader, SearchBox, Segmented, type Column } from "@/components/ui";
+import { Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, Notice, PageHeader, RefLink, SearchBox, Segmented, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Order, OrderStatus } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -36,7 +36,7 @@ export default function OrdersPage() {
 
   const columns: Column<Order>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (o) => <span className="num">{o.number}</span> },
-    { key: "c", head: tr("الزبون", "Customer"), cell: (o) => cName(o.customer_id) },
+    { key: "c", head: tr("الزبون", "Customer"), cell: (o) => <RefLink href={`/customers/${o.customer_id}`}>{cName(o.customer_id)}</RefLink> },
     { key: "r", head: tr("المندوب", "Rep"), cell: (o) => rName(o.rep_id), hideOnMobile: true },
     { key: "s", head: tr("المصدر", "Source"), cell: (o) => <SourceBadge source={o.source} /> },
     { key: "t", head: tr("المبلغ", "Amount"), cell: (o) => <Money value={o.total} className="font-medium" />, align: "end" },
@@ -49,7 +49,13 @@ export default function OrdersPage() {
       <PageHeader
         title={tr("الطلبات", "Orders")}
         subtitle={user.role === "warehouse" ? tr("الطلبات التي تنتظر التجهيز من مخزنك", "Orders waiting to be issued from your warehouse") : undefined}
-        actions={canCreate && <Button variant="primary" href="/orders/new"><Plus className="size-4" /> {tr("طلب جديد", "New order")}</Button>}
+        actions={
+          canCreate && (
+            <Button variant="primary" href="/orders/new">
+              <Plus className="size-4" /> {tr("طلب جديد", "New order")}
+            </Button>
+          )
+        }
       />
 
       {queue.length > 0 && (
@@ -64,7 +70,9 @@ export default function OrdersPage() {
                   <p className="font-medium">
                     {j.kind === "order" ? tr("طلب", "Order") : tr("تسديد", "Payment")} · {j.label}
                   </p>
-                  <p className="text-xs text-muted">{tr("تم الحفظ", "Saved")} {ago(j.saved_at)}</p>
+                  <p className="text-xs text-muted">
+                    {tr("تم الحفظ", "Saved")} {ago(j.saved_at)}
+                  </p>
                   {j.error && <p className="mt-1 text-xs text-danger">{j.error}</p>}
                 </div>
                 {j.error ? (
@@ -89,7 +97,15 @@ export default function OrdersPage() {
 
       {count("needs_approval") > 0 && user.role === "manager" && filter !== "needs_approval" && (
         <div className="mb-4">
-          <Notice tone="warning" title={tr(`${count("needs_approval")} طلب يتجاوز سقف الدين ينتظر موافقتك`, `${count("needs_approval")} order(s) over the debt limit wait for you`)} action={<Button size="sm" onClick={() => setFilter("needs_approval")}>{tr("عرض", "Show")}</Button>} />
+          <Notice
+            tone="warning"
+            title={tr(`${count("needs_approval")} طلب يتجاوز سقف الدين ينتظر موافقتك`, `${count("needs_approval")} order(s) over the debt limit wait for you`)}
+            action={
+              <Button size="sm" onClick={() => setFilter("needs_approval")}>
+                {tr("عرض", "Show")}
+              </Button>
+            }
+          />
         </div>
       )}
 
@@ -133,7 +149,13 @@ export default function OrdersPage() {
                 </div>
               </div>
             )}
-            empty={<Empty icon={<ClipboardList className="size-6" />} title={tr("لا توجد طلبات هنا", "No orders here")} body={filter === "pending" ? tr("كل الطلبات تم تجهيزها", "Every order has been handled") : undefined} />}
+            empty={
+              <Empty
+                icon={<ClipboardList className="size-6" />}
+                title={tr("لا توجد طلبات هنا", "No orders here")}
+                body={filter === "pending" ? tr("كل الطلبات تم تجهيزها", "Every order has been handled") : undefined}
+              />
+            }
           />
         )}
         {rows.length > 0 && (

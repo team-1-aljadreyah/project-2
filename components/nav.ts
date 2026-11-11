@@ -125,6 +125,8 @@ export function pageTitle(title: string, path: string, labels: SiteCustom["nav"]
 // Pages that are not in the menu but need a role check (detail pages follow their list page).
 const EXTRA: { prefix: string; roles: Role[] }[] = [
   { prefix: "/payments/", roles: ["manager", "accountant", "rep"] },
+  // An item's own page shows its batches, which reps and shops don't get (the items list has no link for them either).
+  { prefix: "/items/", roles: ["manager", "warehouse", "accountant", "staff"] },
   { prefix: "/notifications", roles: ["manager", "warehouse", "rep", "accountant", "shop"] },
   { prefix: "/invoices/", roles: ["manager", "accountant", "rep", "shop", "warehouse"] },
   { prefix: "/returns/", roles: ["manager", "accountant", "rep", "warehouse", "shop"] },

@@ -49,8 +49,7 @@ export default function DeliveriesPage() {
   const locations = useRepLocations();
 
   const withDelivery = (orders.data ?? []).filter((o) => o.delivery && inWarehouse(whFilter, o.warehouse_id));
-  const list = (t: Tab) =>
-    withDelivery.filter((o) => o.delivery!.status === t && (t !== "delivered" || dayOfIso(o.delivery!.delivered_at ?? "") >= today(-6)));
+  const list = (t: Tab) => withDelivery.filter((o) => o.delivery!.status === t && (t !== "delivered" || dayOfIso(o.delivery!.delivered_at ?? "") >= today(-6)));
   // Shipments with a problem first, so nobody misses them.
   const shown = list(tab).sort((a, b) => Number(!!b.delivery!.problem) - Number(!!a.delivery!.problem));
   const pg = usePages(shown, 12);
@@ -134,14 +133,7 @@ export default function DeliveriesPage() {
         </div>
       )}
 
-      {stops.length > 0 && !picking && (
-        <TripPanel
-          stops={stops}
-          onDeliver={setHanding}
-          onProblem={setReporting}
-          onEnd={() => saveTrip(user.id, [])}
-        />
-      )}
+      {stops.length > 0 && !picking && <TripPanel stops={stops} onDeliver={setHanding} onProblem={setReporting} onEnd={() => saveTrip(user.id, [])} />}
 
       <Segmented
         className="mb-4"
@@ -156,14 +148,19 @@ export default function DeliveriesPage() {
 
       {/* Pick several shops for one trip */}
       {/* Pick several shops for one trip: always in sight for a delivery rep */}
-      {isRep && (tab === "out" || tab === "ready") && !picking && (
-        tripShops.size > 1 ? (
+      {isRep &&
+        (tab === "out" || tab === "ready") &&
+        !picking &&
+        (tripShops.size > 1 ? (
           <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-action/40 bg-action/10 p-3">
             <Route className="size-5 shrink-0 text-action" />
             <p className="min-w-0 flex-1 text-sm">
               {stops.length
                 ? tr("جولتك جاهزة في الأعلى. يمكنك تغيير محلاتها.", "Your trip is above. You can change its shops.")
-                : tr(`عندك شحنات لـ ${num(tripShops.size)} محلات: اخترها لجولة واحدة مرتبة منطقةً بعد منطقة.`, `You have shipments for ${num(tripShops.size)} shops: pick them for one trip, area by area.`)}
+                : tr(
+                    `عندك شحنات لـ ${num(tripShops.size)} محلات: اخترها لجولة واحدة مرتبة منطقةً بعد منطقة.`,
+                    `You have shipments for ${num(tripShops.size)} shops: pick them for one trip, area by area.`,
+                  )}
             </p>
             <Button variant="action" onClick={() => setPicking(stops.length ? trip.filter((id) => tripShops.has(id)) : [])}>
               {stops.length ? tr("عدّل محلات الجولة", "Change the trip's shops") : tr("اختر محلات الجولة", "Pick the trip's shops")}
@@ -174,15 +171,20 @@ export default function DeliveriesPage() {
             <Route className="size-4 shrink-0" />
             {tr("عندما تكون عندك شحنات لمحلين أو أكثر، تستطيع اختيارها هنا لجولة توصيل واحدة.", "When you have shipments for two shops or more, you can pick them here for one delivery trip.")}
           </p>
-        )
-      )}
+        ))}
 
       {orders.state.status === "loading" ? (
         <LoadingRows />
       ) : !shown.length ? (
         <Empty
           icon={tab === "ready" ? <Warehouse className="size-6" /> : tab === "out" ? <Truck className="size-6" /> : <PackageCheck className="size-6" />}
-          title={tab === "ready" ? tr("لا توجد شحنات بانتظار الاستلام", "No shipments waiting") : tab === "out" ? tr("لا توجد شحنات في الطريق", "Nothing on the way") : tr("لا توجد شحنات مُسلَّمة", "No deliveries yet")}
+          title={
+            tab === "ready"
+              ? tr("لا توجد شحنات بانتظار الاستلام", "No shipments waiting")
+              : tab === "out"
+                ? tr("لا توجد شحنات في الطريق", "Nothing on the way")
+                : tr("لا توجد شحنات مُسلَّمة", "No deliveries yet")
+          }
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -196,14 +198,22 @@ export default function DeliveriesPage() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.04 } }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className={cn("rounded-2xl border bg-card p-4", d.locked || d.problem ? "border-danger/40" : picking?.includes(o.customer_id) ? "border-action ring-2 ring-action/30" : "border-line")}
+                  // The whole card opens the order (its buttons and the map link keep their own job). Not while choosing shops for a trip.
+                  className={cn(
+                    "rounded-2xl border bg-card p-4",
+                    !picking && "box-link transition hover:shadow-md",
+                    d.locked || d.problem ? "border-danger/40" : picking?.includes(o.customer_id) ? "border-action ring-2 ring-action/30" : "border-line hover:border-line-strong",
+                  )}
                 >
                   {picking && (d.status === "out" || d.status === "ready") && (
                     <button
                       type="button"
                       onClick={() => toggle(o.customer_id)}
                       aria-pressed={picking.includes(o.customer_id)}
-                      className={cn("mb-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold", picking.includes(o.customer_id) ? "bg-action/15 text-text" : "bg-card-2 text-muted")}
+                      className={cn(
+                        "mb-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold",
+                        picking.includes(o.customer_id) ? "bg-action/15 text-text" : "bg-card-2 text-muted",
+                      )}
                     >
                       {picking.includes(o.customer_id) ? <CheckSquare className="size-5 text-action" /> : <Square className="size-5" />}
                       {picking.includes(o.customer_id) ? tr("ضمن الجولة", "In the trip") : tr("أضِفه إلى الجولة", "Add to the trip")}
@@ -211,11 +221,14 @@ export default function DeliveriesPage() {
                   )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <Link href={`/orders/${o.id}`} className="font-bold hover:underline">
+                      <Link href={`/orders/${o.id}`} className={cn("font-bold underline-offset-2 hover:underline", !picking && "box-link-main")}>
                         {c?.name ?? `#${o.customer_id}`}
                       </Link>
                       <p className="flex items-center gap-1 text-xs text-muted">
-                        <MapPin className="size-3" /> {c?.area ?? ""} · <span className="num" dir="ltr">{o.number}</span>
+                        <MapPin className="size-3" /> {c?.area ?? ""} ·{" "}
+                        <span className="num" dir="ltr">
+                          {o.number}
+                        </span>
                       </p>
                       {c?.address_info?.lat !== undefined && (
                         <a
@@ -253,7 +266,9 @@ export default function DeliveriesPage() {
                       </Button>
                     </div>
                   )}
-                  {isRep && d.status === "ready" && <p className="mt-3 rounded-lg bg-card-2 px-3 py-2 text-xs text-muted">{tr("امسح QR الملصق عند استلامها من المخزن", "Scan the label's QR when you take it")}</p>}
+                  {isRep && d.status === "ready" && (
+                    <p className="mt-3 rounded-lg bg-card-2 px-3 py-2 text-xs text-muted">{tr("امسح QR الملصق عند استلامها من المخزن", "Scan the label's QR when you take it")}</p>
+                  )}
                 </motion.article>
               );
             })}
@@ -354,7 +369,9 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center gap-2 py-8 text-center">
           <CheckCircle2 className="size-14 text-success" />
           <p className="text-lg font-bold">{tr("تم التسليم", "Delivered")}</p>
-          <p className="text-sm text-muted">{tr("سُجّل الرمز والصورة والوقت، وصدرت الفاتورة على ما استُلم.", "The PIN, the photo and the time are recorded; the invoice is made for what was taken.")}</p>
+          <p className="text-sm text-muted">
+            {tr("سُجّل الرمز والصورة والوقت، وصدرت الفاتورة على ما استُلم.", "The PIN, the photo and the time are recorded; the invoice is made for what was taken.")}
+          </p>
         </motion.div>
       ) : (
         <div className="space-y-5">
@@ -378,13 +395,22 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
                 autoComplete="off"
                 maxLength={4}
                 value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/[٠-٩]/g, (x) => String("٠١٢٣٤٥٦٧٨٩".indexOf(x))).replace(/\D/g, "").slice(0, 4))}
+                onChange={(e) =>
+                  setPin(
+                    e.target.value
+                      .replace(/[٠-٩]/g, (x) => String("٠١٢٣٤٥٦٧٨٩".indexOf(x)))
+                      .replace(/\D/g, "")
+                      .slice(0, 4),
+                  )
+                }
                 placeholder="• • • •"
                 className="num h-14 ps-11 text-center text-2xl tracking-[0.6em]"
                 aria-label={tr("رمز الاستلام", "Delivery PIN")}
               />
             </div>
-            <p className="mt-1 text-xs text-muted">{tr("صاحب المحل يرى الرمز في تطبيقه فقط. اطلبه بعد أن يتأكد من البضاعة.", "Only the shop owner sees it in his app. Ask for it after he checks the goods.")}</p>
+            <p className="mt-1 text-xs text-muted">
+              {tr("صاحب المحل يرى الرمز في تطبيقه فقط. اطلبه بعد أن يتأكد من البضاعة.", "Only the shop owner sees it in his app. Ask for it after he checks the goods.")}
+            </p>
           </section>
           <section>
             <p className="mb-2 flex items-center gap-2 text-sm font-bold">
@@ -417,7 +443,13 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
                       ["cancel", tr("يُلغى برغبة المحل", "Cancel it (shop's wish)")],
                     ] as const
                   ).map(([v, t]) => (
-                    <button key={v} type="button" onClick={() => setRest(v)} aria-pressed={rest === v} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", rest === v ? "border-action bg-card text-text" : "border-line text-muted")}>
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setRest(v)}
+                      aria-pressed={rest === v}
+                      className={cn("rounded-full border px-3 py-1 text-xs font-semibold", rest === v ? "border-action bg-card text-text" : "border-line text-muted")}
+                    >
                       {t}
                     </button>
                   ))}

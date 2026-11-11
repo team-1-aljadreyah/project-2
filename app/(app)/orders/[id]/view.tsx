@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Ban, CheckCircle2, Clock, FileText, PackageCheck, Pencil, ShieldCheck } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { OrderStatusBadge, SourceBadge } from "@/components/status";
-import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, RefLink, Textarea, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Batch } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -54,8 +54,7 @@ export default function OrderView() {
     o.status === "approved" && !o.delivery && (o.prep_parts ? myPartWaits : user.role === "manager" || (user.role === "warehouse" && (!user.warehouse_id || user.warehouse_id === o.warehouse_id)));
   const canApprove = user.role === "manager" && o.status === "needs_approval";
   const canCancel = (beforeDelivery && (user.role === "manager" || user.role === "accountant")) || (open && o.created_by.id === user.id);
-  const canEditDiscount =
-    open && (user.role === "manager" || (user.role === "rep" && o.rep_id === user.id) || user.role === "accountant");
+  const canEditDiscount = open && (user.role === "manager" || (user.role === "rep" && o.rep_id === user.id) || user.role === "accountant");
   const waitsFor = o.approval_for ?? ["debt"];
   // The shop owner changes his own order until the warehouse confirms it.
   const canEditLines = open && user.role === "shop" && user.customer_id === o.customer_id;
@@ -125,30 +124,33 @@ export default function OrderView() {
               </Button>
             )}
             {canApprove && (
-              <Button variant="action" loading={busy === "approve"} onClick={() => act("approve", () => api.approveOrder(o.id), tr("تمت الموافقة، وأصبح الطلب بانتظار التثبيت", "Approved. The order now waits to be confirmed"))}>
+              <Button
+                variant="action"
+                loading={busy === "approve"}
+                onClick={() => act("approve", () => api.approveOrder(o.id), tr("تمت الموافقة، وأصبح الطلب بانتظار التثبيت", "Approved. The order now waits to be confirmed"))}
+              >
                 <ShieldCheck className="size-4" /> {waitsFor.includes("debt") ? tr("موافقة على تجاوز السقف", "Approve over limit") : tr("موافقة على الخصم", "Approve the discount")}
               </Button>
             )}
             {canAccept && (
-              <Button variant="action" loading={busy === "accept"} onClick={() => act("accept", () => api.acceptOrder(o.id), tr("اعتُمد الطلب، ويجهزه المخزن الآن", "Approved. The warehouse prepares it now"))}>
+              <Button
+                variant="action"
+                loading={busy === "accept"}
+                onClick={() => act("accept", () => api.acceptOrder(o.id), tr("اعتُمد الطلب، ويجهزه المخزن الآن", "Approved. The warehouse prepares it now"))}
+              >
                 <CheckCircle2 className="size-4" /> {tr("اعتماد الطلب", "Approve the order")}
               </Button>
             )}
-            {canPrepare && (
-              o.prep_parts ? (
-                <Button
-                  variant="action"
-                  loading={busy === "part"}
-                  onClick={() => act("part", () => api.prepareOrder(o.id, {}), tr("جُهّز جزء مخزنك", "Your warehouse's part is prepared"))}
-                >
+            {canPrepare &&
+              (o.prep_parts ? (
+                <Button variant="action" loading={busy === "part"} onClick={() => act("part", () => api.prepareOrder(o.id, {}), tr("جُهّز جزء مخزنك", "Your warehouse's part is prepared"))}>
                   <PackageCheck className="size-4" /> {tr("جهّزتُ جزء مخزني", "My warehouse's part is ready")}
                 </Button>
               ) : (
                 <Button variant="action" onClick={() => setPreparing(true)}>
                   <PackageCheck className="size-4" /> {tr("تجهيز الطلب", "Prepare the order")}
                 </Button>
-              )
-            )}
+              ))}
           </>
         }
       />
@@ -168,20 +170,32 @@ export default function OrderView() {
                     : tr("هذا الطلب يتجاوز سقف دين الزبون", "This order passes the customer's debt limit")
               }
             >
-              {user.role === "manager" ? tr("وافق عليه إذا كنت تثق بالزبون، أو ألغِه.", "Approve it if you trust the customer, or cancel it.") : tr("ينتظر موافقة المدير، والكمية محجوزة حتى ذلك الحين.", "Waiting for the manager. The stock stays held until then.")}
+              {user.role === "manager"
+                ? tr("وافق عليه إذا كنت تثق بالزبون، أو ألغِه.", "Approve it if you trust the customer, or cancel it.")
+                : tr("ينتظر موافقة المدير، والكمية محجوزة حتى ذلك الحين.", "Waiting for the manager. The stock stays held until then.")}
             </Notice>
           )}
           {o.status === "expired" && o.waiting_stock && (
             <Notice tone="warning" title={tr("بانتظار توفر البضاعة", "Waiting for the goods")}>
-              {tr("سُجّل بدون إنترنت، ولم تكن البضاعة متوفرة عند المزامنة، فلم يُحجز شيء. يعتمده المحاسب أو المدير عندما تصل البضاعة.", "Written offline; the goods weren't there when it synced, so nothing is held. The accountant or manager approves it when the goods come.")}
+              {tr(
+                "سُجّل بدون إنترنت، ولم تكن البضاعة متوفرة عند المزامنة، فلم يُحجز شيء. يعتمده المحاسب أو المدير عندما تصل البضاعة.",
+                "Written offline; the goods weren't there when it synced, so nothing is held. The accountant or manager approves it when the goods come.",
+              )}
             </Notice>
           )}
           {o.status === "expired" && !o.waiting_stock && (
             <Notice tone="danger" title={tr("انتهى وقت الحجز", "The hold time ended")}>
-              {tr("مرّت 24 ساعة دون اعتماد، فعادت الكمية إلى المخزون. يمكن اعتماده إذا كانت البضاعة لا تزال موجودة.", "24 hours passed without approval, so the stock was released. It can still be approved if the goods are there.")}
+              {tr(
+                "مرّت 24 ساعة دون اعتماد، فعادت الكمية إلى المخزون. يمكن اعتماده إذا كانت البضاعة لا تزال موجودة.",
+                "24 hours passed without approval, so the stock was released. It can still be approved if the goods are there.",
+              )}
             </Notice>
           )}
-          {o.status === "cancelled" && <Notice tone="danger" title={tr("الطلب ملغي", "Cancelled")}>{o.cancel_reason}</Notice>}
+          {o.status === "cancelled" && (
+            <Notice tone="danger" title={tr("الطلب ملغي", "Cancelled")}>
+              {o.cancel_reason}
+            </Notice>
+          )}
           {o.status === "pending" && (
             <Notice tone="primary" title={tr("بانتظار الاعتماد", "Waiting for approval")}>
               {tr("يعتمده المحاسب أو المدير، والكمية محجوزة حتى ينتهي وقت الحجز.", "The accountant or the manager approves it. The goods are held until the hold time ends.")}
@@ -198,22 +212,24 @@ export default function OrderView() {
             <Notice tone="warning" title={tr("يُجهَّز من المخزنين", "Prepared from both warehouses")}>
               {o.prep_parts.map((p) => (
                 <span key={p.warehouse_id} className="me-3 inline-block">
-                  {name(lookups.warehouses.find((w) => w.id === p.warehouse_id))}: {p.prepared_by ? tr(`جاهز (${p.prepared_by.name})`, `ready (${p.prepared_by.name})`) : tr("ينتظر أمينه", "waits for its keeper")}
+                  {name(lookups.warehouses.find((w) => w.id === p.warehouse_id))}:{" "}
+                  {p.prepared_by ? tr(`جاهز (${p.prepared_by.name})`, `ready (${p.prepared_by.name})`) : tr("ينتظر أمينه", "waits for its keeper")}
                 </span>
               ))}
-              <span className="block text-xs">{tr("كل أمين يجهّز جزء مخزنه فقط، ويُصنع ملصق الشحنة عندما يجهز الجزآن.", "Each keeper prepares only his own part; the label is made when both are ready.")}</span>
+              <span className="block text-xs">
+                {tr("كل أمين يجهّز جزء مخزنه فقط، ويُصنع ملصق الشحنة عندما يجهز الجزآن.", "Each keeper prepares only his own part; the label is made when both are ready.")}
+              </span>
             </Notice>
           )}
           {o.short_lines && o.short_lines.length > 0 && (
-            <Notice tone="warning" title={tr("سُلِّم جزء من الطلب", "Part of the order was delivered")}>
+            <Notice tone="warning" title={tr("سُلِّم جزء من الطلب", "Part of the order was delivered")} href={o.rest_order_id ? `/orders/${o.rest_order_id}` : undefined}>
               {tr("الفاتورة على ما سُلِّم فقط. ", "The invoice is for what was delivered only. ")}
-              {o.rest_order_id ? (
-                <a href={`/orders/${o.rest_order_id}`} className="font-semibold underline">
-                  {tr("الباقي في طلب مفتوح", "The rest is an open order")}
-                </a>
-              ) : (
-                tr("وأُلغي الباقي برغبة المحل.", "The rest was cancelled at the shop's wish.")
-              )}
+              {o.rest_order_id ? <b>{tr("الباقي في طلب مفتوح", "The rest is an open order")}</b> : tr("وأُلغي الباقي برغبة المحل.", "The rest was cancelled at the shop's wish.")}
+            </Notice>
+          )}
+          {o.parent_id && (
+            <Notice tone="primary" href={`/orders/${o.parent_id}`}>
+              {tr("هذا الطلب هو باقي طلب سابق سُلِّم جزء منه.", "This order carries on the rest of an earlier order that was partly delivered.")}
             </Notice>
           )}
           {open && o.reserved_until && <Countdown until={o.reserved_until} />}
@@ -224,13 +240,22 @@ export default function OrderView() {
               {plan.map(({ line: l, use, short }) => {
                 const it = itemById.get(l.item_id);
                 return (
-                  <li key={`${l.item_id}-${l.unit}`} className="px-4 py-3">
+                  <li key={`${l.item_id}-${l.unit}`} className="box-row px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-medium">{name(it)}</p>
+                        <p className="font-medium">
+                          <RefLink main href={`/items/${l.item_id}`}>
+                            {name(it)}
+                          </RefLink>
+                        </p>
                         <p className="text-xs text-muted">
                           <span className="num">{l.qty}</span> {l.unit === "carton" ? tr("كارتون", "carton") : tr("قطعة", "piece")} × <span className="num">{money(l.unit_price)}</span>
-                          {it && l.unit === "carton" && <span> · {it.pieces_per_carton * l.qty} {tr("قطعة", "pcs")}</span>}
+                          {it && l.unit === "carton" && (
+                            <span>
+                              {" "}
+                              · {it.pieces_per_carton * l.qty} {tr("قطعة", "pcs")}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <Money value={l.total} className="font-semibold" />
@@ -252,7 +277,9 @@ export default function OrderView() {
             <OrderTotals order={o} role={user.role} canEdit={canEditDiscount} onChanged={order.reload} />
           </Card>
           {seesBatches && open && (
-            <p className="text-xs text-muted">{tr("الدفعات المعروضة هي التي ستُصرف عند التثبيت: الأقدم صلاحية أولاً، والمنتهية لا تُصرف أبداً.", "The batches shown will leave on confirm: oldest expiry first, expired never.")}</p>
+            <p className="text-xs text-muted">
+              {tr("الدفعات المعروضة هي التي ستُصرف عند التثبيت: الأقدم صلاحية أولاً، والمنتهية لا تُصرف أبداً.", "The batches shown will leave on confirm: oldest expiry first, expired never.")}
+            </p>
           )}
           {o.note && (
             <Card className="p-4">
@@ -264,13 +291,23 @@ export default function OrderView() {
 
         <div className="space-y-4">
           <Card className="p-4">
-            <p className="text-xs text-muted">{tr("الزبون", "Customer")}</p>
-            <p className="text-lg font-semibold">{c?.name ?? "…"}</p>
-            {c && (
-              <p className="text-sm text-muted">
-                {c.owner_name} · <span dir="ltr">{c.phone}</span>
+            {/* The name block opens the customer's file from anywhere in it; the phone calls. */}
+            <div className="box-row -m-2 rounded-xl p-2">
+              <p className="text-xs text-muted">{tr("الزبون", "Customer")}</p>
+              <p className="text-lg font-semibold">
+                <RefLink main href={c && `/customers/${c.id}`}>
+                  {c?.name ?? "…"}
+                </RefLink>
               </p>
-            )}
+              {c && (
+                <p className="text-sm text-muted">
+                  {c.owner_name} ·{" "}
+                  <RefLink href={user.role === "shop" ? undefined : `tel:${c.phone}`} className="text-muted">
+                    <span dir="ltr">{c.phone}</span>
+                  </RefLink>
+                </p>
+              )}
+            </div>
             <div className="mt-3 border-t border-line pt-2">
               <KV k={tr("المنطقة", "Area")} v={c?.area} />
               <KV k={tr("نوع السعر", "Price tier")} v={name(lookups.tiers.find((t) => t.id === c?.tier_id))} />
@@ -312,10 +349,15 @@ export default function OrderView() {
               loading={busy === "cancel"}
               disabled={!reason.trim()}
               onClick={() =>
-                act("cancel", () => api.cancelOrder(o.id, reason), tr("أُلغي الطلب وعادت الكمية إلى المخزون", "Cancelled. Stock released"), () => {
-                  setCancel(false);
-                  setReason("");
-                })
+                act(
+                  "cancel",
+                  () => api.cancelOrder(o.id, reason),
+                  tr("أُلغي الطلب وعادت الكمية إلى المخزون", "Cancelled. Stock released"),
+                  () => {
+                    setCancel(false);
+                    setReason("");
+                  },
+                )
               }
             >
               {tr("تأكيد الإلغاء", "Confirm cancel")}
@@ -357,4 +399,3 @@ function Countdown({ until }: { until: string }) {
     </div>
   );
 }
-

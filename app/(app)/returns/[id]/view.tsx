@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useApp } from "@/components/shell";
-import { Badge, Card, ErrorBox, KV, LoadingRows, Money, PageHeader } from "@/components/ui";
+import { Badge, Card, ErrorBox, KV, LoadingRows, Money, PageHeader, RefLink } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -19,16 +18,28 @@ export default function ReturnView() {
   if (r.state.status === "error" || !ret) return <ErrorBox error={r.state.status === "error" ? r.state.error : null} onRetry={r.reload} />;
   return (
     <>
-      <PageHeader back="/returns" title={<span>{tr("مرتجع", "Return")} <span className="num">{ret.number}</span></span>} subtitle={`${dateTime(ret.created_at)} · ${ret.created_by.name}`} />
+      <PageHeader
+        back="/returns"
+        title={
+          <span>
+            {tr("مرتجع", "Return")} <span className="num">{ret.number}</span>
+          </span>
+        }
+        subtitle={`${dateTime(ret.created_at)} · ${ret.created_by.name}`}
+      />
       <div className="grid max-w-4xl gap-4 lg:grid-cols-[1fr_300px]">
         <Card>
           <ul className="divide-y divide-line">
             {ret.lines.map((l, i) => {
               const it = itemById.get(l.item_id);
               return (
-                <li key={i} className="flex items-center justify-between gap-3 px-4 py-3">
+                <li key={i} className="box-row flex items-center justify-between gap-3 px-4 py-3">
                   <div>
-                    <p className="font-medium">{name(it)}</p>
+                    <p className="font-medium">
+                      <RefLink main href={`/items/${l.item_id}`}>
+                        {name(it)}
+                      </RefLink>
+                    </p>
                     <p className="text-xs text-muted">{it && qty(l.pieces, it.pieces_per_carton)}</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -45,8 +56,8 @@ export default function ReturnView() {
           </div>
         </Card>
         <Card className="self-start p-4">
-          <KV k={tr("الزبون", "Customer")} v={customer.data?.name ?? "…"} />
-          <KV k={tr("الفاتورة", "Invoice")} v={<Link className="text-primary-ink hover:underline" href={`/invoices/${ret.invoice_id}`}>#{ret.invoice_id}</Link>} />
+          <KV k={tr("الزبون", "Customer")} href={customer.data && `/customers/${customer.data.id}`} v={customer.data?.name ?? "…"} />
+          <KV k={tr("الفاتورة", "Invoice")} href={`/invoices/${ret.invoice_id}`} v={<span className="num">#{ret.invoice_id}</span>} />
           {ret.note && <KV k={tr("السبب", "Reason")} v={ret.note} />}
         </Card>
       </div>

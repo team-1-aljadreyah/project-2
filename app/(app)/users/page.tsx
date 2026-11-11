@@ -5,7 +5,7 @@ import { Pencil, Plus } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { jobName, roleName } from "@/components/status";
 import { cn } from "@/lib/utils";
-import { Badge, Button, Card, DataTable, Dialog, ErrorBox, Field, Input, LoadingRows, PageHeader, Select, Switch, errorText, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Card, DataTable, Dialog, ErrorBox, errorText, Field, Input, LoadingRows, PageHeader, RefLink, Select, Switch, useToast, type Column } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { Role, User, UserInput } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -21,13 +21,27 @@ export default function UsersPage() {
   const [edit, setEdit] = useState<User | "new" | null>(null);
   const columns: Column<User>[] = [
     { key: "n", head: tr("الاسم", "Name"), cell: (u) => <span className="font-medium">{u.name}</span> },
-    { key: "p", head: tr("الهاتف", "Phone"), cell: (u) => <span dir="ltr" className="num">{u.phone}</span> },
+    {
+      key: "p",
+      head: tr("الهاتف", "Phone"),
+      cell: (u) => (
+        <RefLink href={`tel:${u.phone}`} className="num">
+          <span dir="ltr">{u.phone}</span>
+        </RefLink>
+      ),
+    },
     { key: "r", head: tr("الدور", "Role"), cell: (u) => <Badge tone="primary">{jobName(u, tr)}</Badge> },
     {
       key: "x",
       head: tr("مرتبط بـ", "Linked to"),
       cell: (u) =>
-        (u.role === "warehouse" || u.role === "staff") ? name(lookups.warehouses.find((w) => w.id === u.warehouse_id)) : u.role === "shop" ? customers.data?.find((c) => c.id === u.customer_id)?.name ?? "-" : "-",
+        u.role === "warehouse" || u.role === "staff" ? (
+          name(lookups.warehouses.find((w) => w.id === u.warehouse_id))
+        ) : u.role === "shop" && u.customer_id ? (
+          <RefLink href={`/customers/${u.customer_id}`}>{customers.data?.find((c) => c.id === u.customer_id)?.name ?? "-"}</RefLink>
+        ) : (
+          "-"
+        ),
     },
     { key: "s", head: tr("الحالة", "Status"), cell: (u) => (u.active ? <Badge tone="success">{tr("فعّال", "Active")}</Badge> : <Badge>{tr("موقوف", "Disabled")}</Badge>) },
     {
@@ -62,6 +76,7 @@ export default function UsersPage() {
             rows={users.data ?? []}
             columns={columns}
             rowKey={(u) => u.id}
+            rowAction={(u) => () => setEdit(u)}
             mobile={(u) => (
               <button type="button" className="flex w-full items-center justify-between gap-2 text-start" onClick={() => setEdit(u)}>
                 <span>
@@ -173,7 +188,10 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
           </Field>
         )}
         {f.role === "rep" && (f.rep_kinds ?? []).includes("sales") && (
-          <Field label={tr("الأصناف التي يبيعها", "Categories he sells")} hint={tr("بدون اختيار = كل الأصناف. المادة خارج أصنافه لا تظهر له أصلاً.", "None picked = all. Items outside them don't show to him at all.")}>
+          <Field
+            label={tr("الأصناف التي يبيعها", "Categories he sells")}
+            hint={tr("بدون اختيار = كل الأصناف. المادة خارج أصنافه لا تظهر له أصلاً.", "None picked = all. Items outside them don't show to him at all.")}
+          >
             <div className="flex flex-wrap gap-1.5">
               {lookups.categories.map((c) => {
                 const on = f.rep_categories?.includes(c) ?? false;

@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { Download, Lock } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { Badge, Button, Card, CardHeader, DataTable, Empty, ErrorBox, LoadingRows, Money, Notice, PageHeader, Select, errorText, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, DataTable, Empty, ErrorBox, errorText, LoadingRows, Money, Notice, PageHeader, RefLink, Select, useToast, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { CommissionLine, CommissionRow } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -46,7 +45,10 @@ export default function CommissionsPage() {
     <>
       <PageHeader
         title={user.role === "rep" ? tr("عمولتي", "My commission") : tr("عمولات المندوبين", "Rep commission")}
-        subtitle={tr("نسبة لكل مادة، تُحسب على المبالغ المدفوعة فعلاً. ولا يُحسب البيع الآجل إلا بعد أن يسدد الزبون.", "A rate per item, counted on money actually paid. Credit sales count only after the customer pays.")}
+        subtitle={tr(
+          "نسبة لكل مادة، تُحسب على المبالغ المدفوعة فعلاً. ولا يُحسب البيع الآجل إلا بعد أن يسدد الزبون.",
+          "A rate per item, counted on money actually paid. Credit sales count only after the customer pays.",
+        )}
         actions={
           <>
             <Select value={month} onChange={(e) => setMonth(e.target.value)} className="w-48">
@@ -130,10 +132,18 @@ export default function CommissionsPage() {
                 <tfoot>
                   <tr className="border-t-2 border-line bg-card-2 font-semibold">
                     <td className="px-4 py-3">{tr("المجموع", "Total")}</td>
-                    <td className="px-4 py-3 text-end"><Money value={total("paid_sales")} /></td>
-                    <td className="px-4 py-3 text-end"><Money value={total("commission")} /></td>
-                    <td className="px-4 py-3 text-end"><Money value={-total("returns_deducted")} /></td>
-                    <td className="px-4 py-3 text-end"><Money value={total("net")} /></td>
+                    <td className="px-4 py-3 text-end">
+                      <Money value={total("paid_sales")} />
+                    </td>
+                    <td className="px-4 py-3 text-end">
+                      <Money value={total("commission")} />
+                    </td>
+                    <td className="px-4 py-3 text-end">
+                      <Money value={-total("returns_deducted")} />
+                    </td>
+                    <td className="px-4 py-3 text-end">
+                      <Money value={total("net")} />
+                    </td>
                   </tr>
                 </tfoot>
               ) : undefined
@@ -156,15 +166,23 @@ function PaymentsCommission({ month, showRep }: { month: string; showRep: boolea
   const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
   const columns: Column<CommissionLine>[] = [
     { key: "d", head: tr("التاريخ", "Date"), cell: (l) => <span className="num">{date(l.date)}</span> },
-    { key: "c", head: tr("المحل", "Shop"), cell: (l) => <span className="font-medium">{l.customer}</span> },
+    {
+      key: "c",
+      head: tr("المحل", "Shop"),
+      cell: (l) => (
+        <RefLink href={`/customers/${l.customer_id}`} className="font-medium">
+          {l.customer}
+        </RefLink>
+      ),
+    },
     ...(showRep ? [{ key: "r", head: tr("المندوب", "Rep"), cell: (l: CommissionLine) => rName(l.rep_id) }] : []),
     {
       key: "i",
       head: tr("الفاتورة", "Invoice"),
       cell: (l) => (
-        <Link href={`/invoices/${l.invoice_id}`} className="num text-primary-ink hover:underline">
+        <RefLink href={`/invoices/${l.invoice_id}`} className="num">
           {l.invoice_number}
-        </Link>
+        </RefLink>
       ),
     },
     { key: "a", head: tr("المدفوع", "Paid"), cell: (l) => <Money value={l.amount} />, align: "end" },
@@ -184,6 +202,7 @@ function PaymentsCommission({ month, showRep }: { month: string; showRep: boolea
           rows={lines.data ?? []}
           columns={columns}
           rowKey={(l) => `${l.payment_id}-${l.invoice_id}`}
+          onRowHref={(l) => `/payments/${l.payment_id}`}
           mobile={(l) => (
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">

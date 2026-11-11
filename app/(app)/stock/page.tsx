@@ -45,7 +45,11 @@ export default function StockPage() {
   const stockCols: Column<ShelfRow>[] = [
     { key: "n", head: tr("المادة", "Item"), cell: (r) => name(itemById.get(r.item_id)) },
     { key: "s", head: tr("على الرف", "On shelf"), cell: (r) => qty(sum(r, "on_shelf"), itemById.get(r.item_id)?.pieces_per_carton ?? 1) },
-    { key: "res", head: tr("محجوز لطلبات", "Held"), cell: (r) => <span className="text-primary-ink">{sum(r, "reserved") ? qty(sum(r, "reserved"), itemById.get(r.item_id)?.pieces_per_carton ?? 1) : "-"}</span> },
+    {
+      key: "res",
+      head: tr("محجوز لطلبات", "Held"),
+      cell: (r) => <span className="text-primary-ink">{sum(r, "reserved") ? qty(sum(r, "reserved"), itemById.get(r.item_id)?.pieces_per_carton ?? 1) : "-"}</span>,
+    },
     { key: "e", head: tr("منتهي", "Expired"), cell: (r) => (sum(r, "expired") ? <span className="text-danger">{qty(sum(r, "expired"), itemById.get(r.item_id)?.pieces_per_carton ?? 1)}</span> : "-") },
     {
       key: "a",
@@ -73,7 +77,15 @@ export default function StockPage() {
     { key: "t", head: tr("الوقت", "Time"), cell: (d) => dateTime(d.created_at) },
     { key: "n", head: tr("المادة", "Item"), cell: (d) => name(itemById.get(d.item_id)) },
     { key: "q", head: tr("الكمية", "Qty"), cell: (d) => qty(d.pieces, itemById.get(d.item_id)?.pieces_per_carton ?? 1) },
-    { key: "s", head: tr("المصدر", "Source"), cell: (d) => <Badge tone={d.source === "return" ? "warning" : "danger"}>{d.source === "return" ? tr("مرتجع تالف", "Damaged return") : d.source === "stocktake" ? tr("نقص في الجرد", "Count shortage") : tr("منتهي", "Expired")}</Badge> },
+    {
+      key: "s",
+      head: tr("المصدر", "Source"),
+      cell: (d) => (
+        <Badge tone={d.source === "return" ? "warning" : "danger"}>
+          {d.source === "return" ? tr("مرتجع تالف", "Damaged return") : d.source === "stocktake" ? tr("نقص في الجرد", "Count shortage") : tr("منتهي", "Expired")}
+        </Badge>
+      ),
+    },
     { key: "r", head: tr("المرجع", "Ref"), cell: (d) => <span className="text-muted">{d.ref}</span> },
   ];
 
@@ -81,9 +93,12 @@ export default function StockPage() {
     <>
       <PageHeader
         title={tr("المخزون", "Stock")}
-        subtitle={user.role === "warehouse" || user.role === "staff" ? name(lookups.warehouses.find((w) => w.id === user.warehouse_id)) : tr("المخزنين: الصناعة والحر", "Both warehouses: Al-Sinaa and Al-Hur")}
+        subtitle={
+          user.role === "warehouse" || user.role === "staff" ? name(lookups.warehouses.find((w) => w.id === user.warehouse_id)) : tr("المخزنين: الصناعة والحر", "Both warehouses: Al-Sinaa and Al-Hur")
+        }
         actions={
-          user.role !== "accountant" && user.role !== "staff" && (
+          user.role !== "accountant" &&
+          user.role !== "staff" && (
             <>
               <Button href="/stocktakes">
                 <ClipboardCheck className="size-4" /> {tr("جرد", "Count")}
@@ -99,9 +114,31 @@ export default function StockPage() {
         }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label={tr("مواد تحت الحد الأدنى", "Below minimum")} value={lowCount} tone="danger" icon={<AlertTriangle className="size-4" />} href="/items" />
-        <Stat label={tr("دفعات قريبة الانتهاء", "Expiring batches")} value={exp.filter((r) => r.days_left >= 0).length} tone="warning" icon={<AlertTriangle className="size-4" />} />
-        <Stat label={tr("دفعات منتهية (لا تُباع)", "Expired batches")} value={exp.filter((r) => r.days_left < 0).length} tone="danger" icon={<PackageX className="size-4" />} />
+        <Stat
+          label={tr("مواد تحت الحد الأدنى", "Below minimum")}
+          value={lowCount}
+          tone="danger"
+          icon={<AlertTriangle className="size-4" />}
+          onClick={() => {
+            // Show them right here: the quantities list, only what is below its minimum.
+            setTab("stock");
+            setOnlyLow(true);
+          }}
+        />
+        <Stat
+          label={tr("دفعات قريبة الانتهاء", "Expiring batches")}
+          value={exp.filter((r) => r.days_left >= 0).length}
+          tone="warning"
+          icon={<AlertTriangle className="size-4" />}
+          onClick={() => setTab("expiry")}
+        />
+        <Stat
+          label={tr("دفعات منتهية (لا تُباع)", "Expired batches")}
+          value={exp.filter((r) => r.days_left < 0).length}
+          tone="danger"
+          icon={<PackageX className="size-4" />}
+          onClick={() => setTab("expiry")}
+        />
         <Stat label={tr("طلبات تنتظر التجهيز", "Orders to issue")} value={toIssue} icon={<Boxes className="size-4" />} href="/orders" />
       </div>
       <Card>
@@ -151,7 +188,12 @@ export default function StockPage() {
                     <p className="font-medium">{name(it)}</p>
                     <p className="text-xs text-muted">
                       {tr("على الرف", "On shelf")} {qty(sum(r, "on_shelf"), it?.pieces_per_carton ?? 1)}
-                      {sum(r, "expired") > 0 && <span className="text-danger"> · {tr("منتهي", "expired")} {sum(r, "expired")}</span>}
+                      {sum(r, "expired") > 0 && (
+                        <span className="text-danger">
+                          {" "}
+                          · {tr("منتهي", "expired")} {sum(r, "expired")}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <p className={`text-sm font-semibold ${it && it.stock.total < it.min_stock ? "text-danger" : ""}`}>{qty(sum(r, "sellable"), it?.pieces_per_carton ?? 1)}</p>
@@ -161,9 +203,15 @@ export default function StockPage() {
             empty={<Empty title={tr("لا توجد مواد", "No items")} />}
           />
         ) : tab === "expiry" ? (
-          <DataTable rows={exp} columns={expCols} rowKey={(r) => r.batch.id} onRowHref={(r) => `/items/${r.batch.item_id}`} empty={<Empty title={tr("لا توجد دفعات قريبة الانتهاء", "Nothing expiring soon")} />} />
+          <DataTable
+            rows={exp}
+            columns={expCols}
+            rowKey={(r) => r.batch.id}
+            onRowHref={(r) => `/items/${r.batch.item_id}`}
+            empty={<Empty title={tr("لا توجد دفعات قريبة الانتهاء", "Nothing expiring soon")} />}
+          />
         ) : (
-          <DataTable rows={dmg} columns={dmgCols} rowKey={(d) => d.id} empty={<Empty title={tr("لا يوجد تالف", "Nothing damaged")} />} />
+          <DataTable rows={dmg} columns={dmgCols} rowKey={(d) => d.id} onRowHref={(d) => `/items/${d.item_id}`} empty={<Empty title={tr("لا يوجد تالف", "Nothing damaged")} />} />
         )}
       </Card>
     </>

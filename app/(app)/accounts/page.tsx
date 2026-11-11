@@ -3,6 +3,7 @@
 // The accountant's "account file", after the "Accountity" design Yasser chose for the accountant:
 // three numbers at the top, the shop's profile card and details on the side, its invoices as colored tiles,
 // a chart of what it bought against what it paid, and its latest payments. Only the accountant opens it.
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { AlertTriangle, ArrowUpRight, BadgeCheck, Calendar, FileText, MapPin, MessageCircle, Phone, ReceiptText, Store, Truck, User, Wallet, type LucideIcon } from "lucide-react";
@@ -10,7 +11,7 @@ import { CustomerPicker, InvoiceTiles, MoneyChart, PaymentList, monthRows } from
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { UsdRateCard } from "@/components/usd-rate";
-import { Button, Card, ErrorBox, LimitBar, Skeleton } from "@/components/ui";
+import { Button, Card, ErrorBox, LimitBar, RefLink, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -63,11 +64,13 @@ export default function AccountsPage() {
   // ---- The chosen shop ----
   const tier = lookups.tiers.find((t) => t.id === c?.tier_id);
   const rep = lookups.reps.find((r) => r.id === c?.rep_id);
-  const tiles = [...myInvoices].sort((a, b) => {
-    // Unpaid first (oldest first: those need a call), then the latest paid ones.
-    const rank = (s: string) => (s === "paid" ? 1 : 0);
-    return rank(a.status) - rank(b.status) || (a.status === "paid" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
-  }).slice(0, 6);
+  const tiles = [...myInvoices]
+    .sort((a, b) => {
+      // Unpaid first (oldest first: those need a call), then the latest paid ones.
+      const rank = (s: string) => (s === "paid" ? 1 : 0);
+      return rank(a.status) - rank(b.status) || (a.status === "paid" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
+    })
+    .slice(0, 6);
   const rows = monthRows(myInvoices, myPayments, lang);
   const sum = rows.reduce((s, r) => ({ bought: s.bought + r.bought, paid: s.paid + r.paid }), { bought: 0, paid: 0 });
   const ratio = sum.bought ? Math.round((sum.paid / sum.bought) * 100) : null;
@@ -99,9 +102,24 @@ export default function AccountsPage() {
           label={tr("المقبوض هذا الشهر", "Collected this month")}
           badge={change === null ? undefined : `${change >= 0 ? "+" : ""}${change}%`}
           tone={change !== null && change < 0 ? "danger" : "success"}
+          href="/payments"
         />
-        <TopStat icon={AlertTriangle} value={num(overLimit)} label={tr("زبائن فوق سقف الدين", "Customers over the limit")} badge={overLimit ? tr("راجعهم", "Review") : undefined} tone="danger" />
-        <TopStat icon={ReceiptText} value={num(openInv.length)} label={tr("فواتير غير مسددة", "Unpaid invoices")} badge={money(openInv.reduce((s, i) => s + i.remaining, 0))} tone="action" />
+        <TopStat
+          icon={AlertTriangle}
+          value={num(overLimit)}
+          label={tr("زبائن فوق سقف الدين", "Customers over the limit")}
+          badge={overLimit ? tr("راجعهم", "Review") : undefined}
+          tone="danger"
+          href="/customers"
+        />
+        <TopStat
+          icon={ReceiptText}
+          value={num(openInv.length)}
+          label={tr("فواتير غير مسددة", "Unpaid invoices")}
+          badge={money(openInv.reduce((s, i) => s + i.remaining, 0))}
+          tone="action"
+          href="/invoices"
+        />
       </motion.div>
 
       {loading || !c ? (
@@ -118,9 +136,14 @@ export default function AccountsPage() {
                 <div className="hazard absolute inset-x-0 top-0 h-1.5" aria-hidden />
                 <div className="relative mx-auto mt-2 flex size-20 items-center justify-center rounded-full bg-primary text-3xl font-bold text-on-primary ring-4 ring-primary-soft">
                   {c.name.trim()[0]}
-                  <span className={cn("absolute bottom-1 end-1 size-4 rounded-full border-2 border-card", c.active ? "bg-success" : "bg-danger")} title={c.active ? tr("فعّال", "Active") : tr("موقوف", "Stopped")} />
+                  <span
+                    className={cn("absolute bottom-1 end-1 size-4 rounded-full border-2 border-card", c.active ? "bg-success" : "bg-danger")}
+                    title={c.active ? tr("فعّال", "Active") : tr("موقوف", "Stopped")}
+                  />
                 </div>
-                <h2 className="mt-3 text-lg font-bold">{c.name}</h2>
+                <h2 className="mt-3 text-lg font-bold">
+                  <RefLink href={`/customers/${c.id}`}>{c.name}</RefLink>
+                </h2>
                 <p className="text-sm text-muted">{c.owner_name}</p>
                 {tier && (
                   <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-action/15 px-3 py-1 text-xs font-bold text-action dark:text-[#f5b48a]">
@@ -156,7 +179,7 @@ export default function AccountsPage() {
                 <h3 className="mb-3 text-sm font-bold">{tr("التفاصيل", "Details")}</h3>
                 <dl className="space-y-1">
                   <Detail icon={User} k={tr("صاحب المحل", "Owner")} v={c.owner_name} />
-                  <Detail icon={Phone} k={tr("الهاتف", "Phone")} v={<span dir="ltr">{c.phone}</span>} />
+                  <Detail icon={Phone} k={tr("الهاتف", "Phone")} v={<span dir="ltr">{c.phone}</span>} href={`tel:${c.phone}`} />
                   <Detail icon={MapPin} k={tr("المنطقة", "Area")} v={c.area} />
                   <Detail icon={Store} k={tr("العنوان", "Address")} v={c.address || "—"} />
                   <Detail icon={Truck} k={tr("المندوب", "Rep")} v={rep?.name ?? "—"} />
@@ -191,7 +214,8 @@ export default function AccountsPage() {
                   <MoneyChart rows={rows} selected={month} onSelect={setMonth} />
                   {ratio !== null && (
                     <p className="mt-2 text-xs text-muted">
-                      {tr("سدّد", "Paid")} <b className={cn("num", ratio >= 80 ? "text-success" : ratio >= 50 ? "text-warning" : "text-danger")}>{ratio}%</b> {tr("مما اشتراه خلال هذه الفترة", "of what it bought in this period")}
+                      {tr("سدّد", "Paid")} <b className={cn("num", ratio >= 80 ? "text-success" : ratio >= 50 ? "text-warning" : "text-danger")}>{ratio}%</b>{" "}
+                      {tr("مما اشتراه خلال هذه الفترة", "of what it bought in this period")}
                     </p>
                   )}
                 </Card>
@@ -216,41 +240,45 @@ export default function AccountsPage() {
   );
 }
 
-function TopStat({ icon: Icon, value, label, badge, tone }: { icon: LucideIcon; value: string; label: string; badge?: string; tone: "success" | "danger" | "action" }) {
+function TopStat({ icon: Icon, value, label, badge, tone, href }: { icon: LucideIcon; value: string; label: string; badge?: string; tone: "success" | "danger" | "action"; href: string }) {
   const badgeCls = { success: "bg-success text-white dark:text-[#0e1013]", danger: "bg-danger text-white dark:text-[#0e1013]", action: "bg-action text-on-action" }[tone];
   return (
-    <Card className="flex items-center gap-3 p-4">
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-card-2">
-        <Icon className="size-5 text-primary-ink" />
-      </span>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="num text-xl font-bold">{value}</span>
-          {badge && <span className={cn("num rounded-full px-2 py-0.5 text-[10px] font-bold", badgeCls)}>{badge}</span>}
+    <Link href={href} className="block rounded-card">
+      <Card className="flex h-full items-center gap-3 p-4 transition duration-150 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md active:translate-y-0 active:shadow-none">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-card-2">
+          <Icon className="size-5 text-primary-ink" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="num text-xl font-bold">{value}</span>
+            {badge && <span className={cn("num rounded-full px-2 py-0.5 text-[10px] font-bold", badgeCls)}>{badge}</span>}
+          </div>
+          <p className="truncate text-xs text-muted">{label}</p>
         </div>
-        <p className="truncate text-xs text-muted">{label}</p>
-      </div>
-    </Card>
+      </Card>
+    </Link>
   );
 }
 
 function IconLink({ href, icon: Icon, label, external }: { href: string; icon: LucideIcon; label: string; external?: boolean }) {
+  const cls = "flex size-10 items-center justify-center rounded-xl border border-line-strong text-muted transition hover:-translate-y-0.5 hover:border-action hover:text-action active:translate-y-0";
+  // A page of the site opens in place (no full reload); a phone number or WhatsApp is a plain link.
+  if (href.startsWith("/"))
+    return (
+      <Link href={href} title={label} aria-label={label} className={cls}>
+        <Icon className="size-4" />
+      </Link>
+    );
   return (
-    <a
-      href={href}
-      title={label}
-      aria-label={label}
-      {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
-      className="flex size-10 items-center justify-center rounded-xl border border-line-strong text-muted transition hover:-translate-y-0.5 hover:border-action hover:text-action"
-    >
+    <a href={href} title={label} aria-label={label} {...(external ? { target: "_blank", rel: "noreferrer" } : {})} className={cls}>
       <Icon className="size-4" />
     </a>
   );
 }
 
-function Detail({ icon: Icon, k, v }: { icon: LucideIcon; k: string; v: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-card-2">
+function Detail({ icon: Icon, k, v, href }: { icon: LucideIcon; k: string; v: React.ReactNode; /** The whole line is this link (the phone number calls). */ href?: string }) {
+  const inside = (
+    <>
       <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-card-2 text-muted">
         <Icon className="size-4" />
       </span>
@@ -258,6 +286,13 @@ function Detail({ icon: Icon, k, v }: { icon: LucideIcon; k: string; v: React.Re
         <dt className="text-[11px] text-faint">{k}</dt>
         <dd className="truncate text-sm font-semibold">{v}</dd>
       </div>
-    </div>
+    </>
   );
+  if (href)
+    return (
+      <a href={href} className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-card-2 active:bg-primary-soft">
+        {inside}
+      </a>
+    );
+  return <div className="flex items-center gap-3 rounded-xl px-2 py-2">{inside}</div>;
 }

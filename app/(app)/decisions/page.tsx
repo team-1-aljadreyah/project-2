@@ -256,14 +256,15 @@ function DecisionCard({
       exit={{ opacity: 0, y: -60, x: 40, rotate: 12, scale: 0.85, transition: { duration: 0.35 } }}
       whileHover={{ rotate: 0, y: -3 }}
       transition={{ type: "spring", stiffness: 260, damping: 24 }}
-      className="relative rounded-2xl border border-line bg-card p-4 shadow-[0_6px_20px_-12px_rgb(0_0_0/0.35)]"
+      // The whole card opens what it is about (its buttons keep their own job).
+      className="box-link rounded-2xl border border-line bg-card p-4 shadow-[0_6px_20px_-12px_rgb(0_0_0/0.35)]"
     >
       {/* The colored block, like the A / B / C / D squares on the cards in the design */}
       <span className="absolute -top-2 start-4 h-4 w-10 rounded-sm" style={{ background: color }} aria-hidden />
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-bold leading-6">{d.title}</h3>
         {d.href && (
-          <Link href={d.href} aria-label={tr("فتح", "Open")} className="flex size-8 shrink-0 items-center justify-center rounded-full bg-card-2 text-muted hover:text-text">
+          <Link href={d.href} aria-label={tr("فتح", "Open")} className="box-link-main flex size-8 shrink-0 items-center justify-center rounded-full bg-card-2 text-muted hover:text-text">
             <Arrow className="size-4" />
           </Link>
         )}
