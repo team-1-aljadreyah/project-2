@@ -226,9 +226,12 @@ export interface DeliveryProblem {
   by: Person;
 }
 
-/** The most a shop owner can order of one item in one order (cartons or pieces). Bigger orders go
- *  through the delivery rep or the office, who check the stock and the shop's limit first. */
+/** The most a shop owner can order in one order: all the lines together (cartons and pieces counted
+ *  as they are typed). Bigger orders go through his rep or the office, who check the stock and limit first. */
 export const SHOP_MAX_QTY = 100;
+
+/** How much an order holds, for the limit above: the quantities of all its lines added up. */
+export const orderCount = (lines: { qty: number }[]) => lines.reduce((s, l) => s + (l.qty > 0 ? l.qty : 0), 0);
 
 export interface ProblemInput {
   /** The shipments it is about: one, the ones he picked, or all he has on the way (an accident). */
