@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Download, Lock } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, Notice, PageHeader, Select, errorText, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, DataTable, Empty, ErrorBox, LoadingRows, Money, Notice, PageHeader, Select, errorText, useToast, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { CommissionRow } from "@/lib/api/types";
+import type { CommissionLine, CommissionRow } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { downloadCsv, today } from "@/lib/utils";
@@ -141,6 +142,62 @@ export default function CommissionsPage() {
           />
         )}
       </Card>
+
+      {/* Every payment that earned commission: the rep sees the money come in shop by shop */}
+      <PaymentsCommission month={month} showRep={user.role !== "rep"} />
     </>
+  );
+}
+
+function PaymentsCommission({ month, showRep }: { month: string; showRep: boolean }) {
+  const { tr, date, money } = useFmt();
+  const { lookups } = useApp();
+  const lines = useLoad(() => api.commissionLines(month), [month]);
+  const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
+  const columns: Column<CommissionLine>[] = [
+    { key: "d", head: tr("التاريخ", "Date"), cell: (l) => <span className="num">{date(l.date)}</span> },
+    { key: "c", head: tr("المحل", "Shop"), cell: (l) => <span className="font-medium">{l.customer}</span> },
+    ...(showRep ? [{ key: "r", head: tr("المندوب", "Rep"), cell: (l: CommissionLine) => rName(l.rep_id) }] : []),
+    {
+      key: "i",
+      head: tr("الفاتورة", "Invoice"),
+      cell: (l) => (
+        <Link href={`/invoices/${l.invoice_id}`} className="num text-primary-ink hover:underline">
+          {l.invoice_number}
+        </Link>
+      ),
+    },
+    { key: "a", head: tr("المدفوع", "Paid"), cell: (l) => <Money value={l.amount} />, align: "end" },
+    { key: "p", head: tr("النسبة", "Rate"), cell: (l) => <span className="num">{l.rate}%</span>, align: "center" },
+    { key: "m", head: tr("العمولة", "Commission"), cell: (l) => <Money value={l.commission} className="font-semibold text-success" />, align: "end" },
+  ];
+  return (
+    <Card className="mt-4">
+      <CardHeader
+        title={tr("العمولة من كل تسديد", "Commission from each payment")}
+        subtitle={tr("كلما دفع محل، تُحسب عمولة المندوب على ما دُفع فعلاً، بنسبة مواد تلك الفاتورة.", "Each time a shop pays, the rep earns on what was paid, at the rate of that invoice's items.")}
+      />
+      {lines.state.status === "loading" ? (
+        <LoadingRows rows={3} />
+      ) : (
+        <DataTable
+          rows={lines.data ?? []}
+          columns={columns}
+          rowKey={(l) => `${l.payment_id}-${l.invoice_id}`}
+          mobile={(l) => (
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{l.customer}</p>
+                <p className="text-xs text-muted">
+                  <span className="num">{date(l.date)}</span> · {tr("دفع", "paid")} {money(l.amount)} · <span className="num">{l.rate}%</span>
+                </p>
+              </div>
+              <Money value={l.commission} className="font-bold text-success" />
+            </div>
+          )}
+          empty={<Empty title={tr("لا توجد تسديدات هذا الشهر", "No payments this month")} />}
+        />
+      )}
+    </Card>
   );
 }

@@ -271,6 +271,8 @@ export interface Invoice {
   date: string;
   lines: InvoiceLine[];
   total: number;
+  /** The dollar rate of the day it was made (to show it in dollars too). */
+  usd_rate?: number;
   /** Before the discount, and the discount itself (from the order). */
   subtotal?: number;
   discount?: number;
@@ -433,6 +435,31 @@ export interface Statement {
   balance: number;
 }
 
+/** The dollar rate of one day: how many dinars one dollar is. The accountant fixes it each morning. */
+export interface UsdRate {
+  date: string;
+  rate: number;
+  by: Person;
+  at: string;
+}
+
+/** One payment's share of a rep's commission: the money paid on his invoice × the invoice's rate. */
+export interface CommissionLine {
+  payment_id: number;
+  payment_number: string;
+  date: string;
+  customer_id: number;
+  customer: string;
+  invoice_id: number;
+  invoice_number: string;
+  /** What was paid on this invoice by this payment. */
+  amount: number;
+  /** Percent, e.g. 2.4. */
+  rate: number;
+  commission: number;
+  rep_id: number;
+}
+
 export interface CommissionRow {
   rep: Person;
   month: string;
@@ -481,7 +508,7 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem";
+export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem" | "commission_earned" | "usd_rate";
 
 export interface AppNotification {
   id: number;

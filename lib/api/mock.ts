@@ -37,6 +37,9 @@ import {
   closeMonth,
   closeStocktake,
   commissionRows,
+  commissionLines,
+  setUsdRate,
+  usdRateOn,
   confirmOrder,
   createOrder,
   createPayment,
@@ -323,7 +326,19 @@ export const mockApi: Api = {
       reps: db.users.filter((u) => u.role === "rep").map((u) => ({ id: u.id, name: u.name, phone: u.phone, ...(u.rep_kinds?.length ? { kinds: u.rep_kinds } : {}) })),
       categories: [...new Set(db.items.map((i) => i.category))],
       settings: db.settings,
+      usd_rate: usdRateOn(db, dayOf(new Date())) ?? null,
     })),
+  usdRates: () =>
+    read((db, a) => {
+      need(a, ["accountant", "manager"]);
+      return [...(db.usd_rates ?? [])].sort((x, y) => y.date.localeCompare(x.date)).slice(0, 30);
+    }),
+  setUsdRate: (rate) => write((db, a, now) => setUsdRate(db, a, rate, now)),
+  commissionLines: (month) =>
+    read((db, a) => {
+      need(a, ["manager", "accountant", "rep"]);
+      return commissionLines(db, month, a.role === "rep" ? a.id : undefined);
+    }),
 
   // Users
   listUsers: () =>
