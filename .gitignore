@@ -42,3 +42,6 @@ next-env.d.ts
 
 # env example is safe to commit (no secrets)
 !.env.example
+
+# Cloudflare Pages: Wrangler's local files
+.wrangler/

@@ -1,0 +1,5 @@
+# Cloudflare Pages. Used by `npx wrangler pages deploy` (and `npx wrangler pages dev` to try it locally).
+# With the Git integration in the Cloudflare dashboard this file only names the output folder.
+name = "al-nahrain"
+pages_build_output_dir = "out"
+compatibility_date = "2026-11-01"

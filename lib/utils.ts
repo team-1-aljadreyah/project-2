@@ -1,5 +1,5 @@
 import { clsx, type ClassValue } from "clsx";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { twMerge } from "tailwind-merge";
 import type { Item, Unit } from "./api/types";
 
@@ -11,7 +11,12 @@ export function cn(...inputs: ClassValue[]) {
 /** The number in the address, e.g. 12 in /orders/12. */
 export function useIdParam(): number {
   const p = useParams<{ id: string }>();
-  return Number(p.id);
+  const path = usePathname();
+  const id = Number(p.id);
+  if (Number.isFinite(id)) return id;
+  // Static export (Cloudflare Pages): the screen was built once as "_" and is served for every id,
+  // so the real id is the last part of the address (/orders/268/ → 268).
+  return Number(path.split("/").filter(Boolean).pop());
 }
 
 /** Price of one carton or one piece for a price tier. */
