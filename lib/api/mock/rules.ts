@@ -3,7 +3,7 @@
 // The real backend must do the same things (see the client's requirements).
 import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
-import { DISCOUNT_MAX, SHOP_MAX_QTY, STAFF_DISCOUNT_MAX } from "../types";
+import { DISCOUNT_MAX, SHOP_MAX_QTY, STAFF_DISCOUNT_MAX, orderCount } from "../types";
 import type {
   AppNotification,
   RegisterInput,
@@ -408,8 +408,8 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     fail(409, "BAD_STATE", "حساب هذا الزبون موقوف", "This customer is not active");
   }
 
-  if (actor.role === "shop" && input.lines.some((l) => l.qty > SHOP_MAX_QTY)) {
-    fail(422, "VALIDATION", `الحد الأعلى ${SHOP_MAX_QTY} لكل مادة في الطلب الواحد`, `Up to ${SHOP_MAX_QTY} of each item per order`);
+  if (actor.role === "shop" && orderCount(input.lines) > SHOP_MAX_QTY) {
+    fail(422, "VALIDATION", `الحد الأعلى للطلب الواحد ${SHOP_MAX_QTY} (كل المواد معاً)`, `Up to ${SHOP_MAX_QTY} in one order (all items together)`);
   }
   const warehouseId = input.warehouse_id ?? db.warehouses[0].id;
   const lines = orderLines(db, customer.tier_id, input.lines);
@@ -540,8 +540,8 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
   if (o.status !== "pending" && o.status !== "needs_approval") fail(409, "BAD_STATE", "ثُبّت الطلب أو أُلغي، ولا يمكن تعديله الآن", "The order was confirmed or cancelled; it can't change now");
   const wanted = (input.lines ?? []).filter((l) => l.qty > 0);
   if (!wanted.length) fail(422, "VALIDATION", "الطلب فارغ. لإلغائه استخدم زر الإلغاء", "The order is empty. To drop it, cancel it");
-  if (actor.role === "shop" && wanted.some((l) => l.qty > SHOP_MAX_QTY)) {
-    fail(422, "VALIDATION", `الحد الأعلى ${SHOP_MAX_QTY} لكل مادة في الطلب الواحد`, `Up to ${SHOP_MAX_QTY} of each item per order`);
+  if (actor.role === "shop" && orderCount(wanted) > SHOP_MAX_QTY) {
+    fail(422, "VALIDATION", `الحد الأعلى للطلب الواحد ${SHOP_MAX_QTY} (كل المواد معاً)`, `Up to ${SHOP_MAX_QTY} in one order (all items together)`);
   }
   const customer = db.customers.find((c) => c.id === o.customer_id)!;
   const lines = orderLines(db, customer.tier_id, wanted);
