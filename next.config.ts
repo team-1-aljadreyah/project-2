@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
         output: "export" as const,
         // /orders/ → out/orders/index.html: the folder style Cloudflare Pages serves with no rule.
         trailingSlash: true,
+        // The Cloudflare site runs on the demo data (kept in each visitor's browser) unless the
+        // NEXT_PUBLIC_USE_MOCK variable says otherwise (set it to "false" with the real backend).
+        env: { NEXT_PUBLIC_USE_MOCK: process.env.NEXT_PUBLIC_USE_MOCK ?? "true" },
       }
     : {}),
   // Partial pre-rendering needs a Next server: on with `npm run dev` / `next start`, off in the static export.
