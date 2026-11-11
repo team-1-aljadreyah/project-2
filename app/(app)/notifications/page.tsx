@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Bell, CheckCheck, DollarSign, Headset, Percent, Lock, MessageCircle, PackageCheck, PackageX, ShieldAlert, ShoppingBag, CheckCircle2, Truck, UserPlus } from "lucide-react";
+import { AlertTriangle, Bell, CheckCheck, DollarSign, RotateCcw, Headset, Percent, Lock, MessageCircle, PackageCheck, PackageX, ShieldAlert, ShoppingBag, CheckCircle2, Truck, UserPlus } from "lucide-react";
 import { Button, Card, Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { NotificationType } from "@/lib/api/types";
@@ -35,6 +35,8 @@ const icon = (t: NotificationType) => {
       return <Lock className="size-5 text-danger" />;
     case "support_message":
       return <Headset className="size-5 text-action" />;
+    case "refund":
+      return <RotateCcw className="size-5 text-success" />;
     case "commission_earned":
       return <Percent className="size-5 text-success" />;
     case "usd_rate":

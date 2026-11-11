@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Printer, Undo2, Wallet } from "lucide-react";
 import { LogoMark } from "@/components/logo";
+import { CreditNoteButton } from "@/components/refund";
 import { useApp } from "@/components/shell";
 import { InvoiceStatusBadge } from "@/components/status";
 import { Badge, Button, Card, ErrorBox, LoadingRows, Money, PageHeader } from "@/components/ui";
@@ -79,6 +80,7 @@ export default function InvoiceView() {
             <Button variant={user.role === "shop" ? "action" : undefined} onClick={() => window.print()}>
               <Printer className="size-4" /> {tr("طباعة", "Print")}
             </Button>
+            {(user.role === "accountant" || user.role === "manager") && <CreditNoteButton invoice={i} onDone={inv.reload} />}
             {canPay && (
               <Button variant="action" href={`/payments/new?customer=${i.customer_id}`}>
                 <Wallet className="size-4" /> {tr("استلام تسديد", "Take payment")}
@@ -182,6 +184,7 @@ export default function InvoiceView() {
             />
           )}
           {i.returned > 0 && <Row k={tr("المرتجع", "Returns")} v={<Money value={-i.returned} />} />}
+          {!!i.credited && <Row k={tr("تعويض عن خطأ", "Credit for a mistake")} v={<Money value={-i.credited} className="text-success" />} />}
           {seesMoney && (
             <>
               <Row k={tr("المسدد", "Paid")} v={<Money value={-i.paid} />} />

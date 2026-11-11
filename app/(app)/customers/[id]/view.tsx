@@ -8,6 +8,7 @@ import { OrderStatusBadge } from "@/components/status";
 import { StatementView } from "@/components/statement-view";
 import { SpecialPrices } from "@/components/special-prices";
 import { MapPin } from "@/components/map-pin";
+import { RefundButton } from "@/components/refund";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
@@ -119,7 +120,9 @@ export default function CustomerView() {
           )}
           {bal < 0 && (
             <div className="mt-3">
-              <Notice tone="success">{tr(`للزبون رصيد ${money(-bal)} (من مرتجع على فاتورة مسددة)`, `Customer has ${money(-bal)} credit (from a return on a paid invoice)`)}</Notice>
+              <Notice tone="success" action={(user.role === "accountant" || user.role === "manager") && <RefundButton customerId={x.id} credit={-bal} onDone={c.reload} />}>
+                {tr(`للزبون رصيد ${money(-bal)} عندنا (مرتجع على فاتورة مسددة، أو تعويض عن خطأ، أو دفع أكثر من المطلوب)`, `The shop has ${money(-bal)} credit with us (a return on a paid invoice, a credit note, or paying too much)`)}
+              </Notice>
             </div>
           )}
         </Card>

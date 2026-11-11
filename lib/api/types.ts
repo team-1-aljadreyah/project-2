@@ -356,6 +356,8 @@ export interface Invoice {
   lines: InvoiceLine[];
   total: number;
   rounding?: number;
+  /** Taken off for mistakes (credit notes). */
+  credited?: number;
   /** The dollar rate of the day it was made (to show it in dollars too). */
   usd_rate?: number;
   /** Before the discount, and the discount itself (from the order). */
@@ -521,7 +523,35 @@ export interface DamagedRecord {
   created_at: string;
 }
 
-export type StatementType = "opening" | "invoice" | "payment" | "return" | "reversal";
+export type StatementType = "opening" | "invoice" | "payment" | "return" | "reversal" | "credit_note" | "refund";
+
+/** A mistake on an invoice (overcharged, wrong price, goods short or spoiled but not brought back):
+ *  the company takes this much off what the shop owes. If the shop already paid, it becomes the shop's credit. */
+export interface CreditNote {
+  id: number;
+  number: string;
+  invoice_id: number;
+  customer_id: number;
+  amount: number;
+  reason: string;
+  by: Person & { role: Role };
+  at: string;
+}
+
+/** Money given back to the shop (its credit: from a return on a paid invoice, a credit note, paying too much).
+ *  Cash or transfer by hand, or back to the card of an online payment (through the Qi gateway). */
+export interface Refund {
+  id: number;
+  number: string;
+  customer_id: number;
+  amount: number;
+  method: "cash" | "transfer" | "online";
+  /** Online: the payment it goes back to (its card). */
+  payment_id?: number;
+  reason: string;
+  by: Person & { role: Role };
+  at: string;
+}
 
 export interface StatementRow {
   date: string;
@@ -614,7 +644,7 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem" | "commission_earned" | "usd_rate" | "order_accepted" | "order_rejected" | "order_review";
+export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem" | "commission_earned" | "usd_rate" | "order_accepted" | "order_rejected" | "order_review" | "refund";
 
 export interface AppNotification {
   id: number;
