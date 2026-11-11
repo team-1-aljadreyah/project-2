@@ -36,6 +36,8 @@ const icon = (t: NotificationType) => {
       return <Lock className="size-5 text-danger" />;
     case "support_message":
       return <Headset className="size-5 text-action" />;
+    case "supply_order":
+      return <Truck className="size-5 text-action" />;
     case "refund":
       return <RotateCcw className="size-5 text-success" />;
     case "commission_earned":

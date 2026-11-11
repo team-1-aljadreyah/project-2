@@ -1,12 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { Button, Card, Field, Input, Money, NumberInput, Notice, PageHeader, Segmented, Select, errorText, useToast } from "@/components/ui";
+import { Button, Card, Field, Input, LoadingRows, Money, NumberInput, Notice, PageHeader, Segmented, Select, errorText, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import type { Unit } from "@/lib/api/types";
+import type { SupplyOrder, Unit } from "@/lib/api/types";
+import { useLoad } from "@/lib/use-load";
 import { useFmt } from "@/lib/i18n";
 import { cn, today } from "@/lib/utils";
 
@@ -22,14 +23,37 @@ interface Row {
 let k = 0;
 const blank = (): Row => ({ key: ++k, item_id: "", unit: "carton", qty: "", expiry_date: "", price: "" });
 
+// ?supply=<id>: receiving the goods of a supply order. The form opens filled in with what is still missing.
 export default function NewReceiptPage() {
+  return (
+    <Suspense fallback={<LoadingRows />}>
+      <FromSupply />
+    </Suspense>
+  );
+}
+
+function FromSupply() {
+  const id = Number(useSearchParams().get("supply")) || 0;
+  const supply = useLoad(() => (id ? api.getSupplyOrder(id) : Promise.resolve(null)), [id]);
+  if (id && supply.state.status === "loading") return <LoadingRows />;
+  return <NewReceipt key={supply.data?.id ?? 0} supply={supply.data ?? null} />;
+}
+
+function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
   const { tr, name, money } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useRouter();
   const toast = useToast();
-  const [warehouse, setWarehouse] = useState<number>(user.warehouse_id ?? lookups.warehouses[0].id);
-  const [supplier, setSupplier] = useState("");
-  const [rows, setRows] = useState<Row[]>([blank()]);
+  const [warehouse, setWarehouse] = useState<number>(supply?.warehouse_id ?? user.warehouse_id ?? lookups.warehouses[0].id);
+  const [supplier, setSupplier] = useState(supply?.supplier ?? "");
+  // From a supply order: one line per item still missing (the keeper adds the expiry date and checks the count).
+  const [rows, setRows] = useState<Row[]>(() =>
+    supply
+      ? supply.lines
+          .filter((l) => l.received_qty < l.qty)
+          .map((l) => ({ key: ++k, item_id: l.item_id, unit: l.unit, qty: Math.round((l.qty - l.received_qty) * 100) / 100, expiry_date: "", price: l.price }))
+      : [blank()],
+  );
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (key: number, p: Partial<Row>) => setRows((r) => r.map((x) => (x.key === key ? { ...x, ...p } : x)));
@@ -49,6 +73,7 @@ export default function NewReceiptPage() {
       const rec = await api.createReceipt({
         warehouse_id: warehouse,
         supplier,
+        ...(supply ? { supply_order_id: supply.id } : {}),
         lines: filled.map((r) => ({
           item_id: r.item_id as number,
           unit: r.unit,
@@ -70,7 +95,14 @@ export default function NewReceiptPage() {
 
   return (
     <>
-      <PageHeader title={tr("استلام بضاعة", "Receive goods")} back="/receipts" subtitle={tr("كل سطر يصبح دفعة بتاريخ صلاحيته وسعر شرائه", "Each line becomes a batch with its own expiry and cost")} />
+      <PageHeader title={tr("استلام بضاعة", "Receive goods")} back={supply ? "/supply" : "/receipts"} subtitle={tr("كل سطر يصبح دفعة بتاريخ صلاحيته وسعر شرائه", "Each line becomes a batch with its own expiry and cost")} />
+      {supply && (
+        <div className="mb-4">
+          <Notice tone="primary" title={tr(`استلام طلب التوريد ${supply.number}`, `Receiving supply order ${supply.number}`)}>
+            {tr("املأ تاريخ الصلاحية، وعدّل الكمية إذا وصل أقل. ما لا يصل يبقى في الطلب لاستلام لاحق.", "Fill in the expiry dates, and change the quantity if less arrived. What doesn't come stays on the order for later.")}
+          </Notice>
+        </div>
+      )}
       <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-2">
         <Field label={tr("المخزن", "Warehouse")}>
           <Select value={warehouse} onChange={(e) => setWarehouse(Number(e.target.value))} disabled={user.role === "warehouse"}>

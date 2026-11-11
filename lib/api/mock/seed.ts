@@ -16,6 +16,7 @@ import {
   createReceipt,
   createReturn,
   createTransfer,
+  createSupplyOrder,
   receiveTransfer,
   customerBalance,
   dayOf,
@@ -490,6 +491,27 @@ export function makeSeed(now = new Date()): Db {
     const p = rice.prices.find((x) => x.tier_id === 1) ?? rice.prices[0];
     db.special_prices.push({ customer_id: 1, item_id: 1, carton_price: p.carton_price - 1500, piece_price: p.piece_price - 375, by: { id: manager.id, name: manager.name }, at: addDays(now, -3).toISOString() });
   }
+
+  // A supply order the accountant sent yesterday: the Al-Sinaa keeper downloads it and receives the goods.
+  safe(() =>
+    createSupplyOrder(
+      db,
+      accountant,
+      {
+        warehouse_id: 1,
+        supplier: "شركة الرافدين للتجارة",
+        supplier_phone: "07709998877",
+        expected_date: dayOf(addDays(now, 1)),
+        note: "تأكد من تواريخ الصلاحية قبل التوقيع",
+        lines: [
+          { item_id: 1, unit: "carton", qty: 40, price: 38000 },
+          { item_id: 3, unit: "carton", qty: 25, price: 17500 },
+          { item_id: 5, unit: "carton", qty: 15, price: 22000 },
+        ],
+      },
+      addDays(now, -1),
+    ),
+  );
 
   // The dollar rate of the last week (today's is left for the accountant to fix in the morning).
   [1705, 1700, 1700, 1695, 1690, 1700, 1700].forEach((rate, i) => {

@@ -42,6 +42,8 @@ import type {
   DeliverInput,
   ProblemInput,
   OrderEdit,
+  NewSupplyOrder,
+  SupplyOrder,
   CreditNote,
   Refund,
   PrepLine,
@@ -114,6 +116,11 @@ export const httpApi = {
   getStocktake: (id: number) => get<Stocktake>(`/stocktakes/${id}`),
   /** category: count only that category (only those items stop selling there meanwhile). */
   createStocktake: (warehouseId: number, category?: string) => post<Stocktake>("/stocktakes", { warehouse_id: warehouseId, ...(category ? { category } : {}) }),
+  // Supply orders: the accountant orders goods for a warehouse; its keeper receives them (a receipt with supply_order_id).
+  listSupplyOrders: () => get<SupplyOrder[]>("/supply-orders"),
+  getSupplyOrder: (id: number) => get<SupplyOrder>(`/supply-orders/${id}`),
+  createSupplyOrder: (input: NewSupplyOrder) => post<SupplyOrder>("/supply-orders", input),
+  cancelSupplyOrder: (id: number, reason: string) => post<SupplyOrder>(`/supply-orders/${id}/cancel`, { reason }),
   /** The receiving keeper takes a transfer in: { item_id: pieces that arrived }; less needs a reason. */
   receiveTransfer: (id: number, received: Record<number, number>, reason: string) => post<Transfer>(`/transfers/${id}/receive`, { received, reason }),
   reviewTransfer: (id: number) => post<Transfer>(`/transfers/${id}/review`),

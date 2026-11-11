@@ -154,6 +154,8 @@ export interface ReceiptLine {
 export interface Receipt {
   id: number;
   number: string;
+  /** The supply order it received (if any). */
+  supply_order_id?: number;
   warehouse_id: number;
   supplier: string;
   lines: (ReceiptLine & { batch_id: number; pieces: number })[];
@@ -649,7 +651,7 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem" | "commission_earned" | "usd_rate" | "order_accepted" | "order_rejected" | "order_review" | "refund";
+export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem" | "commission_earned" | "usd_rate" | "order_accepted" | "order_rejected" | "order_review" | "refund" | "supply_order";
 
 export interface AppNotification {
   id: number;
@@ -784,6 +786,51 @@ export interface NewReceipt {
   warehouse_id: number;
   supplier: string;
   lines: ReceiptLine[];
+  /** Receiving the goods of a supply order: what arrives is counted against it. */
+  supply_order_id?: number;
+}
+
+// ---------- Supply orders (the accountant orders goods for a warehouse) ----------
+
+/** sent: the keeper has it (as an Excel / CSV file too). partial: part arrived. received: all arrived. */
+export type SupplyStatus = "sent" | "partial" | "received" | "cancelled";
+
+export interface SupplyLine {
+  item_id: number;
+  unit: Unit;
+  qty: number;
+  /** Purchase price per carton or per piece (following `unit`), as agreed with the supplier. */
+  price: number;
+  /** How much of it the keeper received so far (same unit). */
+  received_qty: number;
+}
+
+export interface SupplyOrder {
+  id: number;
+  number: string;
+  warehouse_id: number;
+  supplier: string;
+  supplier_phone?: string;
+  lines: SupplyLine[];
+  total: number;
+  /** When the supplier should bring it. */
+  expected_date?: string;
+  note?: string;
+  status: SupplyStatus;
+  /** The receipts that brought its goods in. */
+  receipt_ids: number[];
+  created_at: string;
+  created_by: Person & { role: Role };
+  cancel_reason?: string;
+}
+
+export interface NewSupplyOrder {
+  warehouse_id: number;
+  supplier: string;
+  supplier_phone?: string;
+  lines: { item_id: number; unit: Unit; qty: number; price: number }[];
+  expected_date?: string;
+  note?: string;
 }
 
 export interface NewReturn {
