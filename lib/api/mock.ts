@@ -1,5 +1,6 @@
 // The fake backend. It has exactly the same functions as the real one (http.ts), follows the client's rules
 // (rules.ts) and hides fields by role like a real server would. Pages never know which one they use.
+import { publish } from "../realtime";
 import { getSession } from "../auth";
 import { isOffline } from "../offline";
 import { ApiError, NETWORK_ERROR } from "./errors";
@@ -131,11 +132,26 @@ async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { ano
   const draft = structuredClone(db0());
   const now = new Date();
   sweep(draft, now);
+  const before = liveMarks(draft);
   const actor = opts.anonymous ? (null as unknown as DbUser) : actorOf(draft);
   const result = fn(draft, actor, now);
   saveDb(draft);
   emitChange();
+  // Tell the live layer what changed, as the real backend does over its WebSocket (lib/realtime.ts).
+  const after = liveMarks(draft);
+  if (after.notes !== before.notes) publish("notifications", "new");
+  if (after.chat !== before.chat) publish("chat", "message", { customer_id: draft.chat?.at(-1)?.customer_id });
+  if (after.orders !== before.orders) publish("orders", "changed");
   return structuredClone(result);
+}
+
+/** Small marks to see what a write changed (for the live events). */
+function liveMarks(db: Db) {
+  return {
+    notes: db.notifications.length,
+    chat: db.chat?.length ?? 0,
+    orders: db.orders.map((o) => `${o.id}${o.status[0]}${o.delivery?.status?.[0] ?? ""}${o.lines.length}`).join(""),
+  };
 }
 
 // ---------- views: what each role may see ----------
@@ -743,6 +759,27 @@ export const mockApi: Api = {
       return user;
     }),
   addShop: (input) => write((db, a, now) => addShop(db, a, input, now)),
+  // Where the delivery rep is (his phone sends it while shipments are on the way with him).
+  sendLocation: (lat, lng) =>
+    write((db, a, now) => {
+      need(a, ["rep"]);
+      if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) fail(422, "VALIDATION", "موقع غير صحيح", "Not a valid location");
+      db.rep_locations ??= {};
+      const loc = { rep_id: a.id, lat, lng, at: now.toISOString() };
+      db.rep_locations[a.id] = loc;
+      return loc;
+    }),
+  repLocations: () =>
+    read((db, a) => {
+      need(a, ["manager", "warehouse", "accountant", "staff", "shop", "rep"]);
+      const all = Object.values(db.rep_locations ?? {});
+      // A shop owner sees only the rep who has his shipment on the way.
+      if (a.role === "shop") {
+        const reps = new Set(db.orders.filter((o) => o.customer_id === a.customer_id && o.delivery?.status === "out").map((o) => o.delivery?.rep?.id ?? o.rep_id));
+        return all.filter((l) => reps.has(l.rep_id));
+      }
+      return all;
+    }),
   reportDeliveryProblem: (input) => write((db, a, now) => reportDeliveryProblem(db, a, input, now).map((o) => orderView(o, a))),
   returnToWarehouse: (id) => write((db, a, now) => orderView(returnToWarehouse(db, a, id, now), a)),
   getDeliveryPhoto: (id) =>

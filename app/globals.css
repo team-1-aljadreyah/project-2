@@ -342,3 +342,16 @@ html[data-vt="fade"]::view-transition-new(root) {
 @media (prefers-reduced-motion: reduce) {
   .dialog-backdrop, .dialog-panel { animation: none; }
 }
+
+/* The 3D city map's markers (components/map3d): white clay badges, orange for the brand, a pulse for the live rep. */
+.map3d-marker { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer; }
+.map3d-badge { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 14px; background: #fff; color: #1d2127; box-shadow: 0 6px 16px rgb(17 19 23 / 0.18), 0 1px 0 rgb(17 19 23 / 0.06); font: 700 15px/1 var(--font-plex), sans-serif; }
+.map3d-marker[data-kind="warehouse"] .map3d-badge { background: #1d2127; color: #fff; }
+.map3d-marker[data-kind="rep"] .map3d-badge { background: #e1692b; color: #1a0b03; border-radius: 999px; animation: map3d-pulse 1.8s ease-out infinite; }
+.map3d-marker[data-active="1"] .map3d-badge { background: #e1692b; color: #1a0b03; transform: scale(1.12); }
+.map3d-marker[data-done="1"] .map3d-badge { opacity: 0.45; }
+.map3d-label { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 999px; background: rgb(255 255 255 / 0.92); padding: 2px 8px; color: #1d2127; font: 600 11px/1.5 var(--font-plex), sans-serif; box-shadow: 0 2px 8px rgb(17 19 23 / 0.12); }
+.map3d-me { display: block; width: 16px; height: 16px; border-radius: 999px; background: #2f80ed; border: 3px solid #fff; box-shadow: 0 0 0 6px rgb(47 128 237 / 0.25); }
+@keyframes map3d-pulse { 0% { box-shadow: 0 0 0 0 rgb(225 105 43 / 0.55); } 100% { box-shadow: 0 0 0 18px rgb(225 105 43 / 0); } }
+@media (prefers-reduced-motion: reduce) { .map3d-marker[data-kind="rep"] .map3d-badge { animation: none; } }
+.map3d .maplibregl-ctrl-attrib { font-size: 10px; }

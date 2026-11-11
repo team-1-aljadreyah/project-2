@@ -22,16 +22,19 @@ import { api } from "@/lib/api";
 import type { Order } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
+import { DeliveriesOverview, RepTripMap, useRepLocations, useShareLocation, type Stop as MapStop } from "@/components/delivery/live-map";
 import { cn, dayOfIso, today } from "@/lib/utils";
 
 type Tab = "ready" | "out" | "delivered";
 
 export default function DeliveriesPage() {
   const { tr, ago, num } = useFmt();
-  const { user } = useApp();
+  const { user, lookups } = useApp();
   const toast = useToast();
   const isRep = user.role === "rep";
   const orders = useLoad(() => api.listOrders(), []);
+  useRealtime(["orders"], () => orders.reload());
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
   const [tab, setTab] = useState<Tab>(isRep ? "out" : "ready");
   const [scan, setScan] = useState(false);
@@ -43,6 +46,7 @@ export default function DeliveriesPage() {
   const trip = useTrip(user.id);
   const whFilter = useWarehouseFilter();
   const cust = useMemo(() => new Map((customers.data ?? []).map((c) => [c.id, c])), [customers.data]);
+  const locations = useRepLocations();
 
   const withDelivery = (orders.data ?? []).filter((o) => o.delivery && inWarehouse(whFilter, o.warehouse_id));
   const list = (t: Tab) =>
@@ -55,6 +59,13 @@ export default function DeliveriesPage() {
   const tripable = isRep ? [...list("out"), ...list("ready")] : [];
   const tripShops = new Set(tripable.map((o) => o.customer_id));
   const stops = isRep && trip.length ? buildTrip(trip, withDelivery, cust, today()) : [];
+  // The map: the trip's stops in order, or (no trip yet) every shop he has a shipment for.
+  const mapStops: MapStop[] = stops.length
+    ? stops.map((s) => ({ customer: s.customer, done: !s.open.length && !s.waiting.length, waiting: !s.open.length && s.waiting.length > 0 }))
+    : [...new Map(tripable.map((o) => [o.customer_id, o])).values()].flatMap((o) => (cust.get(o.customer_id) ? [{ customer: cust.get(o.customer_id)!, waiting: o.delivery!.status === "ready" }] : []));
+  const startWh = lookups.warehouses.find((w) => w.id === (tripable[0]?.warehouse_id ?? 1));
+  // While shipments are on the way with him, his phone shares where he is (the shops follow him live).
+  const sharing = useShareLocation(isRep && mineOut.length > 0);
   const toggle = (customerId: number) => setPicking((p) => (p ? (p.includes(customerId) ? p.filter((x) => x !== customerId) : [...p, customerId]) : p));
 
   async function dispatch(code: string) {
@@ -109,6 +120,18 @@ export default function DeliveriesPage() {
           </span>
           <span className="hazard absolute inset-x-0 bottom-0 h-1.5" aria-hidden />
         </motion.button>
+      )}
+
+      {/* The map: the rep's route (his location is shared while shipments are with him), or every shipment for the office */}
+      {isRep && mapStops.length > 0 && !picking && (
+        <div className="mb-4">
+          <RepTripMap stops={mapStops} warehouse={startWh} sharing={sharing} />
+        </div>
+      )}
+      {!isRep && list("out").length > 0 && (
+        <div className="mb-4">
+          <DeliveriesOverview orders={withDelivery} customers={cust} warehouses={lookups.warehouses} locations={locations} />
+        </div>
       )}
 
       {stops.length > 0 && !picking && (

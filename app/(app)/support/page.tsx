@@ -11,6 +11,7 @@ import { Card, Empty, ErrorBox, LoadingRows, PageHeader, Pager, usePages } from 
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 
 export default function SupportPage() {
@@ -32,8 +33,9 @@ function Inbox() {
   // On a big screen the first conversation opens by itself; on a phone the list shows first.
   const current = picked ?? null;
 
+  useRealtime(["chat"], () => threads.reload());
   useEffect(() => {
-    const t = setInterval(threads.reload, 4000);
+    const t = setInterval(threads.reload, 30000);
     return () => clearInterval(t);
   }, [threads.reload]);
 
@@ -109,8 +111,9 @@ function Conversation({ customerId, name, area, onBack, onSent }: { customerId: 
   useEffect(() => {
     if (count) api.markChatRead(customerId).catch(() => {});
   }, [count, customerId]);
+  useRealtime(["chat"], (e) => (e.data as { customer_id?: number } | undefined)?.customer_id === customerId && msgs.reload());
   useEffect(() => {
-    const t = setInterval(msgs.reload, 4000);
+    const t = setInterval(msgs.reload, 30000);
     return () => clearInterval(t);
   }, [msgs.reload]);
 
