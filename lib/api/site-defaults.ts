@@ -14,6 +14,9 @@ export const DEFAULT_SITE: SiteCustom = {
   nav: { order: [], hidden: [], groups: {}, labels: {}, group_labels: {} },
   dashboard: { order: [], hidden: [], labels: {} },
   categories: [],
+  texts: {},
+  layouts: {},
+  look: {},
 };
 
 /** Fill what is missing with the defaults (an older saved copy may not have every part). */
@@ -23,6 +26,9 @@ export function fullSite(s: Partial<SiteCustom> | null | undefined): SiteCustom 
     nav: { ...DEFAULT_SITE.nav, ...s?.nav },
     dashboard: { ...DEFAULT_SITE.dashboard, ...s?.dashboard },
     categories: s?.categories ?? [],
+    texts: s?.texts ?? {},
+    layouts: s?.layouts ?? {},
+    look: s?.look ?? {},
   };
 }
 

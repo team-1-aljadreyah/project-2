@@ -199,7 +199,14 @@ function Sidebar({ user }: { user: User }) {
                         className="h-10 text-sm font-medium text-text"
                       >
                         <span className="flex items-center gap-2">
-                          <n.icon className="size-[18px] shrink-0 text-muted" aria-hidden />
+                          {/* The name is being edited, so the icon is the way to open the page. */}
+                          <Link
+                            href={n.href}
+                            aria-label={tr(`فتح ${n.ar}`, `Open ${n.en}`)}
+                            className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg", active ? "bg-primary-soft text-primary-ink" : "text-muted hover:bg-card-2 hover:text-text")}
+                          >
+                            <n.icon className="size-[18px]" aria-hidden />
+                          </Link>
                           <EditText value={tr(n.ar, n.en)} onSave={(v) => save((s) => ({ ...s, nav: { ...s.nav, labels: { ...s.nav.labels, [n.href]: { ...s.nav.labels[n.href], [lang]: v } } } }))} />
                         </span>
                       </SortItem>

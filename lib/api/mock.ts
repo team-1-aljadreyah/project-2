@@ -458,12 +458,13 @@ export const mockApi: Api = {
         if (!/^data:image\/(jpeg|png|webp);base64,/.test(b.logo)) fail(422, "VALIDATION", "الملف ليس صورة", "The file is not a picture");
         if (b.logo.length > 400_000) fail(422, "VALIDATION", "الصورة كبيرة جداً", "The picture is too big");
       }
+      if (next.look.action && !/^#[0-9a-f]{6}$/i.test(next.look.action)) fail(422, "VALIDATION", "اللون غير صحيح", "The color isn't valid");
       const old = fullSite(db.custom);
       db.custom = next;
       // One line in the activity log for a change of identity or of names (not one for every drag).
-      const names = (x: typeof next) => JSON.stringify([x.nav.labels, x.nav.group_labels, x.dashboard.labels]);
+      const names = (x: typeof next) => JSON.stringify([x.nav.labels, x.nav.group_labels, x.dashboard.labels, x.texts]);
       if (JSON.stringify(old.brand) !== JSON.stringify(b)) audit(db, a, "update", "settings", 0, `تعديل هوية الموقع: ${b.name} (${b.company})`, `Site identity changed: ${b.name_en} (${b.company_en})`, now);
-      else if (names(old) !== names(next)) audit(db, a, "update", "settings", 0, "تعديل أسماء في القائمة أو لوحة التحكم", "Renamed menu or dashboard texts", now);
+      else if (names(old) !== names(next)) audit(db, a, "update", "settings", 0, "تعديل نصوص في الموقع (وضع التخصيص)", "Site texts rewritten (customize mode)", now);
       return next;
     }),
   renameWarehouse: (id, name, name_en) =>

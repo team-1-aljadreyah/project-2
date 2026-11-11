@@ -4,6 +4,7 @@
 // so a screen can never miss a translation, and you read both while you work.
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { LOCALE_KEY } from "./boot";
+import { subscribeTexts, textsVersion, translate } from "./texts";
 
 export type Lang = "ar" | "en";
 
@@ -51,7 +52,8 @@ export interface Fmt {
 }
 
 export function makeFmt(lang: Lang): Fmt {
-  const tr: Tr = (ar, en) => (lang === "ar" ? ar : en);
+  // The manager may have rewritten this text (customize mode, lib/texts.ts).
+  const tr: Tr = (ar, en) => translate(ar, en, lang);
   const nf = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
   const locale = lang === "ar" ? "ar-IQ-u-nu-latn" : "en-GB";
   const dateF = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -104,7 +106,10 @@ export function makeFmt(lang: Lang): Fmt {
 /** Everything a screen needs to show text, money and dates in the chosen language. */
 export function useFmt(): Fmt {
   const lang = useSyncExternalStore(subscribe, readLang, () => "ar" as Lang);
-  return useMemo(() => makeFmt(lang), [lang]);
+  // A rewritten text draws the pages again.
+  const texts = useSyncExternalStore(subscribeTexts, textsVersion, () => 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => makeFmt(lang), [lang, texts]);
 }
 
 /** Keeps <html lang dir> in sync when the language changes. */

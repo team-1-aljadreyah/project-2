@@ -711,6 +711,12 @@ export interface SiteCustom {
   dashboard: { order: string[]; hidden: string[]; labels: Record<string, Label> };
   /** The item categories in the manager's order. */
   categories: string[];
+  /** Texts the manager rewrote, by their Arabic original (see lib/texts.ts). */
+  texts: Record<string, Label>;
+  /** The order and the hidden parts of a table's columns or a page's blocks ("table:/orders", "decisions"). */
+  layouts: Record<string, { order: string[]; hidden: string[] }>;
+  /** Colors. `action`: the color of the main buttons (#rrggbb). None = the orange. */
+  look: { action?: string };
 }
 
 /** A quick change to an item from the list (customize mode). */

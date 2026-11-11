@@ -12,10 +12,12 @@ import { DeskArt } from "@/components/decisions/art";
 import { LANES, buildDecisions, type Decision } from "@/components/decisions/data";
 import { useNow } from "@/components/hall/live";
 import { useApp } from "@/components/shell";
+import { SortArea, SortItem, toggleIn } from "@/components/sortable";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Button, Dialog, ErrorBox, Skeleton, Textarea, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
+import { ordered, saveSite, useCustomizing, useSite } from "@/lib/site";
 import { useLoad } from "@/lib/use-load";
 import { today } from "@/lib/utils";
 
@@ -64,6 +66,9 @@ export default function DecisionsPage() {
   const [cheer, setCheer] = useState(0);
   const [done, setDone] = useState(0);
   const [ask, setAsk] = useState<Decision | null>(null);
+  // Customize mode: the four stacks are dragged to a new order and hidden with the eye.
+  const customizing = useCustomizing();
+  const lay = useSite().layouts.decisions;
 
   const loads = [orders, customers, expiring, debts, stocktakes, closed, online];
   const failed = loads.find((l) => l.state.status === "error");
@@ -91,6 +96,11 @@ export default function DecisionsPage() {
   const open = all.filter((d) => !snoozed.includes(d.id));
   const counts = Object.fromEntries(LANES.map((l) => [l.id, open.filter((d) => d.lane === l.id).length]));
   const later = all.length - open.length;
+  const hiddenLanes = lay?.hidden ?? [];
+  const sortedLanes = ordered(LANES, lay?.order ?? [], (l) => l.id);
+  const lanes = customizing ? sortedLanes : sortedLanes.filter((l) => !hiddenLanes.includes(l.id));
+  const saveLanes = (next: { order?: string[]; hidden?: string[] }) =>
+    saveSite((s) => ({ ...s, layouts: { ...s.layouts, decisions: { order: lay?.order ?? [], hidden: hiddenLanes, ...next } } })).catch((e) => toast("danger", errorText(e, tr)));
 
   /** A decision was handled: the heart pops and the counter of "done today" goes up. */
   const finished = (text: string) => {
@@ -112,10 +122,7 @@ export default function DecisionsPage() {
   const hello = now && new Date(now).getHours() >= 12 ? tr("مساء الخير", "Good evening") : tr("صباح الخير", "Good morning");
 
   return (
-    <div
-      className="space-y-6"
-      style={{ "--dec-line": "var(--primary-ink)", "--dec-soft": "color-mix(in oklab, var(--action) 35%, var(--card))", "--dec-bubble": "#e1692b" } as React.CSSProperties}
-    >
+    <div className="space-y-6" style={{ "--dec-line": "var(--primary-ink)", "--dec-soft": "color-mix(in oklab, var(--action) 35%, var(--card))", "--dec-bubble": "#e1692b" } as React.CSSProperties}>
       {/* The desk */}
       <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[28px] border border-line bg-card">
         <div className="pointer-events-none absolute inset-0 opacity-60 [background-image:radial-gradient(var(--line)_1px,transparent_1px)] [background-size:18px_18px]" aria-hidden />
@@ -163,41 +170,51 @@ export default function DecisionsPage() {
           ))}
         </div>
       ) : open.length === 0 ? (
-        <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center gap-3 rounded-[28px] border-2 border-dashed border-line-strong p-10 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-3 rounded-[28px] border-2 border-dashed border-line-strong p-10 text-center"
+        >
           <Coffee className="size-10 text-action" strokeWidth={1.5} />
           <p className="text-xl font-bold">{tr("مكتبك نظيف", "Your desk is clear")}</p>
-          <p className="max-w-sm text-sm text-muted">{tr("لا يوجد قرار ينتظرك الآن. استمتع بشايك، وسنضع هنا أي جديد فور وصوله.", "Nothing waits for you now. Enjoy your tea; anything new will land here.")}</p>
+          <p className="max-w-sm text-sm text-muted">
+            {tr("لا يوجد قرار ينتظرك الآن. استمتع بشايك، وسنضع هنا أي جديد فور وصوله.", "Nothing waits for you now. Enjoy your tea; anything new will land here.")}
+          </p>
         </motion.div>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {LANES.map((l) => {
-            const list = open.filter((d) => d.lane === l.id);
-            return (
-              <section key={l.id} aria-label={tr(l.ar, l.en)}>
-                <div className="mb-3 flex items-center gap-2 px-1">
-                  <span className="flex size-9 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm" style={{ background: l.color }}>
-                    {l.letter}
-                  </span>
-                  <h2 className="font-bold">{tr(l.ar, l.en)}</h2>
-                  <span className="num ms-auto rounded-full bg-card-2 px-2 py-0.5 text-xs font-semibold text-muted">{list.length}</span>
-                </div>
-                <div className="space-y-3">
-                  {/* popLayout: a done card leaves the layout at once (the cards under it move up while it flies off) */}
-                  <AnimatePresence initial={false} mode="popLayout">
-                    {list.map((d, i) => (
-                      <DecisionCard key={d.id} d={d} i={i} color={l.color} onApprove={approve} onAsk={setAsk} onSnooze={() => snooze(d.id)} />
-                    ))}
-                  </AnimatePresence>
-                  {!list.length && (
-                    <p className="flex items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-line py-8 text-sm text-faint">
-                      <Check className="size-4" /> {tr("لا شيء هنا", "Nothing here")}
-                    </p>
-                  )}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        <SortArea ids={lanes.map((l) => l.id)} grid onOrder={(ids) => saveLanes({ order: ids })}>
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {lanes.map((l) => {
+              const list = open.filter((d) => d.lane === l.id);
+              return (
+                <SortItem key={l.id} id={l.id} hidden={hiddenLanes.includes(l.id)} onHide={() => saveLanes({ hidden: toggleIn(hiddenLanes, l.id) })}>
+                  <section aria-label={tr(l.ar, l.en)}>
+                    <div className="mb-3 flex items-center gap-2 px-1">
+                      <span className="flex size-9 items-center justify-center rounded-lg text-lg font-bold text-white shadow-sm" style={{ background: l.color }}>
+                        {l.letter}
+                      </span>
+                      <h2 className="font-bold">{tr(l.ar, l.en)}</h2>
+                      <span className="num ms-auto rounded-full bg-card-2 px-2 py-0.5 text-xs font-semibold text-muted">{list.length}</span>
+                    </div>
+                    <div className="space-y-3">
+                      {/* popLayout: a done card leaves the layout at once (the cards under it move up while it flies off) */}
+                      <AnimatePresence initial={false} mode="popLayout">
+                        {list.map((d, i) => (
+                          <DecisionCard key={d.id} d={d} i={i} color={l.color} onApprove={approve} onAsk={setAsk} onSnooze={() => snooze(d.id)} />
+                        ))}
+                      </AnimatePresence>
+                      {!list.length && (
+                        <p className="flex items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-line py-8 text-sm text-faint">
+                          <Check className="size-4" /> {tr("لا شيء هنا", "Nothing here")}
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                </SortItem>
+              );
+            })}
+          </div>
+        </SortArea>
       )}
 
       {ask && <ReasonDialog d={ask} onClose={() => setAsk(null)} onDone={(t) => finished(t)} />}
@@ -303,7 +320,12 @@ function DecisionCard({
             <Button size="sm" variant="action" href={`tel:${d.phone}`}>
               <Phone className="size-3.5" /> {tr("اتصال", "Call")}
             </Button>
-            <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg border border-line-strong px-2.5 text-xs font-medium hover:bg-card-2">
+            <a
+              href={`https://wa.me/${wa}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-line-strong px-2.5 text-xs font-medium hover:bg-card-2"
+            >
               <MessageCircle className="size-3.5" /> {tr("واتساب", "WhatsApp")}
             </a>
           </>
