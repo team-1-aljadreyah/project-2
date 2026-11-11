@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { UsdRate,
+import type { UsdRate, SpecialPrice,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -69,6 +69,9 @@ export interface Db {
   /** Delivery photos, kept apart from the orders because they are big (order id → JPEG data URL). */
   delivery_photos: Record<number, string>;
   usd_rates: UsdRate[];
+  special_prices: SpecialPrice[];
+  /** Old tier prices, each with the moment it stopped (to price an order recorded offline before a change). */
+  price_changes: { item_id: number; tier_id: number; carton_price: number; piece_price: number; until: string }[];
   /** Support chat messages, all shops together. */
   chat: ChatMessage[];
   /** The last message id each side has seen, per shop: { "<customer id>": { shop, staff } }. */
@@ -83,7 +86,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 18;
+export const DB_VERSION = 21;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

@@ -88,7 +88,7 @@ export default function OrderView() {
         back="/orders"
         title={
           <span className="flex flex-wrap items-center gap-2">
-            {tr("طلب", "Order")} <span className="num">{o.number}</span> <OrderStatusBadge status={o.status} />
+            {tr("طلب", "Order")} <span className="num">{o.number}</span> <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
           </span>
         }
         subtitle={`${dateTime(o.created_at)} · ${tr("سجّله", "by")} ${o.created_by.name}`}
@@ -152,7 +152,12 @@ export default function OrderView() {
               {user.role === "manager" ? tr("وافق عليه إذا كنت تثق بالزبون، أو ألغِه.", "Approve it if you trust the customer, or cancel it.") : tr("ينتظر موافقة المدير، والكمية محجوزة حتى ذلك الحين.", "Waiting for the manager. The stock stays held until then.")}
             </Notice>
           )}
-          {o.status === "expired" && (
+          {o.status === "expired" && o.waiting_stock && (
+            <Notice tone="warning" title={tr("بانتظار توفر البضاعة", "Waiting for the goods")}>
+              {tr("سُجّل بدون إنترنت، ولم تكن البضاعة متوفرة عند المزامنة، فلم يُحجز شيء. يعتمده المحاسب أو المدير عندما تصل البضاعة.", "Written offline; the goods weren't there when it synced, so nothing is held. The accountant or manager approves it when the goods come.")}
+            </Notice>
+          )}
+          {o.status === "expired" && !o.waiting_stock && (
             <Notice tone="danger" title={tr("انتهى وقت الحجز", "The hold time ended")}>
               {tr("مرّت 24 ساعة دون اعتماد، فعادت الكمية إلى المخزون. يمكن اعتماده إذا كانت البضاعة لا تزال موجودة.", "24 hours passed without approval, so the stock was released. It can still be approved if the goods are there.")}
             </Notice>

@@ -242,7 +242,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
       router.push(`/orders/${order.id}`);
     } catch (e) {
       if (isNetworkError(e)) {
-        enqueue({ kind: "order", client_ref: body.client_ref, body, label: `${customer.name} · ${money(total)}`, saved_at: new Date().toISOString() });
+        enqueue({ kind: "order", client_ref: body.client_ref, body: { ...body, offline: true, recorded_at: body.recorded_at ?? new Date().toISOString() }, label: `${customer.name} · ${money(total)}`, saved_at: new Date().toISOString() });
         fresh();
         setBagOpen(false);
         toast("primary", tr("لا يوجد إنترنت: حُفظ الطلب على الجوال وسيُرسَل تلقائياً", "No internet: the order is saved on the phone and will send by itself"));

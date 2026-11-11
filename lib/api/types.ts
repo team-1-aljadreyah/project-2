@@ -23,6 +23,8 @@ export interface User {
   /** Rep: what he does. Marketing (visits shops, takes orders, collects), delivery (takes shipments to the
    *  shops), or both. Not set = both. */
   rep_kinds?: RepKind[];
+  /** Rep: the item categories he may sell (set by the manager). Empty = all. Others don't even show to him. */
+  rep_categories?: string[];
   active: boolean;
 }
 
@@ -113,6 +115,16 @@ export interface Batch {
   status: BatchStatus;
   /** A batch with a problem (a complaint, a recall): nothing more of it is sold, in any warehouse. */
   held?: { reason: string; at: string; by: Person };
+}
+
+/** A price for one shop and one item (set by the manager). It comes before the shop's tier price. */
+export interface SpecialPrice {
+  customer_id: number;
+  item_id: number;
+  carton_price: number;
+  piece_price: number;
+  by: Person;
+  at: string;
 }
 
 /** Which shops got pieces of a batch, and how many (to call them back). */
@@ -210,6 +222,8 @@ export interface Order {
   rest_order_id?: number;
   /** This order carries on the rest of another one. */
   parent_id?: number;
+  /** Written offline but the goods weren't there when it synced: it waits for the goods (nothing held). */
+  waiting_stock?: boolean;
   reserved_until?: string;
   note?: string;
   cancel_reason?: string;
@@ -421,16 +435,35 @@ export interface Return {
   created_by: Person;
 }
 
+/** sent: left the sending warehouse and is on the road (sold nowhere, counted nowhere).
+ *  received: the receiving keeper took it all. partial: he took less and wrote why (the manager reviews). */
+export type TransferStatus = "sent" | "received" | "partial";
+
 export interface Transfer {
   id: number;
   number: string;
   client_ref: string;
   from_warehouse_id: number;
   to_warehouse_id: number;
-  lines: { item_id: number; unit: Unit; qty: number; pieces: number }[];
+  status?: TransferStatus;
+  lines: {
+    item_id: number;
+    unit: Unit;
+    qty: number;
+    pieces: number;
+    /** What arrived (set on receiving). */
+    received_pieces?: number;
+    /** The batches on the road (their expiry and cost go with them). */
+    batches?: { from_batch_id: number; qty: number; expiry_date: string; purchase_price: number; receipt_id?: number }[];
+  }[];
   note?: string;
   created_at: string;
   created_by: Person;
+  received_at?: string;
+  received_by?: Person;
+  /** Why less arrived (needed when it is less). */
+  diff_reason?: string;
+  reviewed_by?: Person;
 }
 
 export interface StocktakeLine {
@@ -644,6 +677,11 @@ export interface DebtRow {
 
 export interface NewOrder {
   client_ref: string;
+  /** When it was written on the phone. The price is the one of that moment. */
+  recorded_at?: string;
+  /** Written without internet ("طلب مبدئي"): sent later by the phone. If the stock is short when it arrives,
+   *  only what is there goes ahead; the rest waits for the goods and the rep is told. */
+  offline?: boolean;
   customer_id: number;
   warehouse_id?: number;
   lines: { item_id: number; unit: Unit; qty: number }[];
@@ -743,6 +781,7 @@ export interface UserInput {
   phone: string;
   role: Role;
   rep_kinds?: RepKind[];
+  rep_categories?: string[];
   warehouse_id?: number;
   customer_id?: number;
   active: boolean;

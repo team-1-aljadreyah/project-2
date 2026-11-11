@@ -10,7 +10,7 @@ import type { Customer, Item, NewOrder, Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { enqueue, isNetworkError, newClientRef, useOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
-import { cn, matches, piecesOf, priceOf } from "@/lib/utils";
+import { cn, matches, piecesOf, priceOf as tierPrice } from "@/lib/utils";
 import { useApp } from "./shell";
 import { DiscountPicker, canDiscount } from "./discount";
 import { Badge, Button, Card, Dialog, Empty, LimitBar, Money, Notice, SearchBox, Segmented, Select, Stepper, Textarea, errorText, useToast } from "./ui";
@@ -86,6 +86,12 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
   };
 
   const available = (it: Item) => it.stock.by_warehouse.find((w) => w.warehouse_id === draft.warehouse_id)?.qty ?? 0;
+  // The shop's special prices come first (special → tier → general).
+  const special = useLoad(() => (customer ? api.specialPrices(customer.id).catch(() => []) : Promise.resolve([])), [customer?.id]);
+  const priceOf = (it: Item, tier: number | undefined, unit: Unit) => {
+    const sp = special.data?.find((x) => x.item_id === it.id);
+    return sp ? (unit === "carton" ? sp.carton_price : sp.piece_price) : tierPrice(it, tier, unit);
+  };
   const subtotal = draft.lines.reduce((s, l) => {
     const it = itemById.get(l.item_id);
     return it ? s + priceOf(it, tierId, l.unit) * l.qty : s;
@@ -116,6 +122,8 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
       lines: draft.lines,
       note: draft.note || undefined,
       ...(pct ? { discount_percent: pct } : {}),
+      // Written now: if it waits on the phone (no internet), the price stays the one of this moment.
+      recorded_at: new Date().toISOString(),
     };
     setBusy(true);
     setErrors({});
@@ -135,9 +143,9 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
       router.push(`/orders/${order.id}`);
     } catch (e) {
       if (isNetworkError(e)) {
-        enqueue({ kind: "order", client_ref: body.client_ref, body, label: `${customer.name} · ${money(total)}`, saved_at: new Date().toISOString() });
+        enqueue({ kind: "order", client_ref: body.client_ref, body: { ...body, offline: true, recorded_at: body.recorded_at ?? new Date().toISOString() }, label: `${customer.name} · ${money(total)}`, saved_at: new Date().toISOString() });
         fresh();
-        toast("primary", tr("لا يوجد إنترنت: حُفظ الطلب على الجوال وسيُرسَل تلقائياً", "No internet: the order is saved on the phone and will send by itself"));
+        toast("primary", tr("لا يوجد إنترنت: حُفظ «طلباً مبدئياً» على الجوال. أعطِ الزبون أنه مبدئي: يصبح ملزماً بعد المزامنة وفحص المخزون.", "No internet: saved as a provisional order. Tell the shop it becomes binding after it syncs and the stock is checked."));
         router.push(fixedCustomerId ? "/orders" : "/rep");
       } else {
         if (e instanceof ApiError && e.errors) setErrors(e.errors);

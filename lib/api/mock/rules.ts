@@ -380,14 +380,29 @@ export function createReceipt(db: Db, actor: DbUser, input: NewReceipt, now: Dat
 
 // ---------- orders ----------
 
-function orderLines(db: Db, tierId: number, lines: NewOrder["lines"]) {
+/** The price of an item for a shop: its own special price first, then its tier, then the general (first) price.
+ *  at: the moment the order was recorded (an offline order keeps the price of the moment it was written). */
+export function shopPrice(db: Db, customerId: number, tierId: number, itemId: number, unit: Unit, at?: string) {
+  const sp = (db.special_prices ?? []).find((x) => x.customer_id === customerId && x.item_id === itemId);
+  if (sp) return unit === "carton" ? sp.carton_price : sp.piece_price;
+  const item = itemOf(db, itemId);
+  if (at) {
+    // The tier price that was in force then (the first change after that moment holds the old price).
+    const tid = item.prices.some((p) => p.tier_id === tierId) ? tierId : item.prices[0]?.tier_id;
+    const old = (db.price_changes ?? []).filter((c) => c.item_id === itemId && c.tier_id === tid && c.until > at).sort((a, b) => a.until.localeCompare(b.until))[0];
+    if (old) return unit === "carton" ? old.carton_price : old.piece_price;
+  }
+  return priceFor(item, tierId, unit);
+}
+
+function orderLines(db: Db, tierId: number, lines: NewOrder["lines"], customerId?: number, at?: string) {
   const errors: Record<string, string> = {};
   if (!lines.length) errors["lines"] = msg("أضف مادة واحدة على الأقل", "Add at least one item");
   const out = lines.map((l, i) => {
     const item = itemOf(db, l.item_id);
     if (!item.active) errors[`lines.${i}.item_id`] = msg("هذه المادة موقوفة", "This item is not active");
     if (!(l.qty > 0) || !Number.isInteger(l.qty)) errors[`lines.${i}.qty`] = msg("الكمية يجب أن تكون عدداً صحيحاً", "Quantity must be a whole number");
-    const unit_price = priceFor(item, tierId, l.unit);
+    const unit_price = customerId ? shopPrice(db, customerId, tierId, l.item_id, l.unit, at) : priceFor(item, tierId, l.unit);
     return { item_id: l.item_id, unit: l.unit, qty: l.qty, unit_price, total: unit_price * l.qty };
   });
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من المواد", "Check the items", errors);
@@ -423,6 +438,11 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   const customer = db.customers.find((c) => c.id === input.customer_id) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
   if (actor.role === "rep" && customer.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذا الزبون ليس من زبائنك", "This customer isn't yours");
   if (actor.role === "rep" && actor.rep_kinds?.length && !actor.rep_kinds.includes("sales")) fail(403, "FORBIDDEN", "أنت مندوب توصيل فقط: الطلبات يأخذها مندوب التسويق", "You only deliver: the marketing rep takes orders");
+  // A rep sells only the categories the manager gave him.
+  if (actor.role === "rep" && actor.rep_categories?.length) {
+    const outside = input.lines.map((l) => itemOf(db, l.item_id)).filter((it) => !actor.rep_categories!.includes(it.category));
+    if (outside.length) fail(403, "FORBIDDEN", `خارج أصنافك: ${outside.map((i) => i.name).join("، ")}`, `Outside your categories: ${outside.map((i) => i.name_en).join(", ")}`);
+  }
   if (actor.role === "shop" && actor.customer_id !== customer.id) fail(403, "FORBIDDEN", "لا تستطيع الطلب لمحل آخر", "You can't order for another shop");
   if (!customer.active) {
     if (customer.pending) fail(409, "BAD_STATE", "الحساب بانتظار موافقة الشركة، ويمكنك الطلب بعد الموافقة", "This account is waiting for approval. You can order after it is approved");
@@ -433,8 +453,33 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     fail(422, "VALIDATION", `الحد الأعلى للطلب الواحد ${SHOP_MAX_QTY} (كل المواد معاً)`, `Up to ${SHOP_MAX_QTY} in one order (all items together)`);
   }
   const warehouseId = input.warehouse_id ?? db.warehouses[0].id;
-  const lines = orderLines(db, customer.tier_id, input.lines);
-  checkStock(db, warehouseId, lines, now);
+  // The price is fixed when the order is recorded (offline: the moment on the rep's phone, at most 3 days back).
+  const recordedAt = input.recorded_at && input.recorded_at < now.toISOString() && input.recorded_at > new Date(now.getTime() - 3 * 86_400_000).toISOString() ? input.recorded_at : undefined;
+  let lines = orderLines(db, customer.tier_id, input.lines, customer.id, recordedAt);
+  // Written offline: we never sell more than is there. What is there goes ahead; the rest waits for the goods.
+  let waiting: typeof lines = [];
+  if (input.offline) {
+    const left = new Map<number, number>();
+    const ok: typeof lines = [];
+    for (const l of lines) {
+      const item = itemOf(db, l.item_id);
+      const free = left.get(l.item_id) ?? sellableQty(db, l.item_id, warehouseId, now);
+      const per = l.unit === "carton" ? item.pieces_per_carton : 1;
+      const can = Math.min(l.qty, Math.floor(free / per));
+      left.set(l.item_id, free - can * per);
+      if (can > 0) ok.push({ ...l, qty: can, total: can * l.unit_price });
+      if (can < l.qty) waiting.push({ ...l, qty: l.qty - can, total: (l.qty - can) * l.unit_price });
+    }
+    lines = ok;
+    if (!lines.length) {
+      // Nothing is there: the whole order waits for the goods.
+      lines = waiting;
+      waiting = [];
+      return waitingOrder(db, actor, input, customer, warehouseId, lines, now, null);
+    }
+  } else {
+    checkStock(db, warehouseId, lines, now);
+  }
 
   const subtotal = lines.reduce((s, l) => s + l.total, 0);
   const discount = makeDiscount(actor, subtotal, input.discount_percent ?? 0, now);
@@ -496,6 +541,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     notify(db, { ...msgBase, roles: ["manager"] }, now);
     notify(db, { ...msgBase, roles: ["rep"], user_id: customer.rep_id }, now);
   }
+  if (waiting.length) waitingOrder(db, actor, { ...input, client_ref: `${input.client_ref}-rest` }, customer, warehouseId, waiting, now, order);
   // Every order (rep or shop) waits for the accountant or the manager to approve it.
   if (order.status === "pending") {
     notify(
@@ -518,6 +564,49 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   return order;
 }
 
+/** An order (or the rest of one) written offline whose goods weren't there when it synced. It holds nothing;
+ *  the accountant / manager approves it when the goods come (the stock is checked again then). */
+function waitingOrder(db: Db, actor: DbUser, input: NewOrder, customer: DbCustomer, warehouseId: number, lines: Order["lines"], now: Date, parent: Order | null): Order {
+  const id = nextId(db, "order");
+  const subtotal = lines.reduce((s, l) => s + l.total, 0);
+  const o: Order = {
+    id,
+    number: `ORD-${pad(id)}`,
+    client_ref: input.client_ref,
+    customer_id: customer.id,
+    rep_id: customer.rep_id,
+    warehouse_id: warehouseId,
+    source: actor.role === "shop" ? "shop" : actor.role === "rep" ? "rep" : "office",
+    status: "expired",
+    waiting_stock: true,
+    lines,
+    total: subtotal,
+    note: parent ? `باقي الطلب المبدئي ${parent.number}: بانتظار توفر البضاعة` : "طلب مبدئي: البضاعة غير متوفرة عند المزامنة",
+    ...(parent ? { parent_id: parent.id } : {}),
+    created_at: now.toISOString(),
+    created_by: person(actor),
+  };
+  setTotal(o, subtotal);
+  db.orders.push(o);
+  const names = lines.map((l) => itemOf(db, l.item_id).name).join("، ");
+  audit(db, actor, "create", "order", id, `${o.number} بانتظار توفر البضاعة: ${names}`, `${o.number} waits for stock`, now);
+  notify(
+    db,
+    {
+      type: "low_stock",
+      roles: ["rep"],
+      user_id: customer.rep_id,
+      title: parent ? `نقصت كمية طلبك المبدئي ${parent.number}` : `طلبك المبدئي لـ ${customer.name} بانتظار البضاعة`,
+      title_en: parent ? `Your offline order ${parent.number} was short` : `Your offline order for ${customer.name} waits for stock`,
+      body: `غير متوفر عند المزامنة: ${names}. بقي معلّقاً في ${o.number}.`,
+      body_en: `Not in stock when it synced. It waits in ${o.number}.`,
+      link: `/orders/${id}`,
+    },
+    now,
+  );
+  return o;
+}
+
 export function approveOrder(db: Db, actor: DbUser, id: number, now: Date): Order {
   need(actor, ["manager"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
@@ -538,6 +627,24 @@ export function approveOrder(db: Db, actor: DbUser, id: number, now: Date): Orde
   const ar = why.map((w) => (w === "debt" ? "تجاوز سقف الدين" : `خصم ${o.discount?.percent ?? ""}%`)).join(" و");
   audit(db, actor, "approve", "order", o.id, `موافقة على ${ar} للطلب ${o.number}`, `Approved ${why.join(" + ")} for ${o.number}`, now);
   return o;
+}
+
+// ---------- special prices ----------
+
+export function setSpecialPrice(db: Db, actor: DbUser, customerId: number, itemId: number, prices: { carton_price: number; piece_price: number } | null, now: Date) {
+  need(actor, ["manager"]);
+  const c = db.customers.find((x) => x.id === customerId) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
+  const item = itemOf(db, itemId);
+  db.special_prices ??= [];
+  db.special_prices = db.special_prices.filter((x) => !(x.customer_id === customerId && x.item_id === itemId));
+  if (prices) {
+    if (!(prices.carton_price > 0) || !(prices.piece_price > 0)) fail(422, "VALIDATION", "اكتب سعر الكارتون والقطعة", "Enter the carton and piece prices");
+    db.special_prices.push({ customer_id: customerId, item_id: itemId, carton_price: Math.round(prices.carton_price), piece_price: Math.round(prices.piece_price), by: person(actor), at: now.toISOString() });
+    audit(db, actor, "price_change", "customer", customerId, `سعر خاص لـ ${c.name}: ${item.name} ${prices.carton_price.toLocaleString("en")}/${prices.piece_price.toLocaleString("en")}`, `Special price for ${c.name}: ${item.name_en}`, now);
+  } else {
+    audit(db, actor, "price_change", "customer", customerId, `إلغاء السعر الخاص لـ ${c.name}: ${item.name}`, `Removed special price for ${c.name}: ${item.name_en}`, now);
+  }
+  return db.special_prices.filter((x) => x.customer_id === customerId);
 }
 
 // ---------- a batch with a problem ----------
@@ -644,7 +751,7 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
     fail(422, "VALIDATION", `الحد الأعلى للطلب الواحد ${SHOP_MAX_QTY} (كل المواد معاً)`, `Up to ${SHOP_MAX_QTY} in one order (all items together)`);
   }
   const customer = db.customers.find((c) => c.id === o.customer_id)!;
-  const lines = orderLines(db, customer.tier_id, wanted);
+  const lines = orderLines(db, customer.tier_id, wanted, customer.id);
   // Its own held stock doesn't count against it.
   checkStock(db, o.warehouse_id, lines, now, o.id);
   const subtotal = lines.reduce((s, l) => s + l.total, 0);
@@ -762,6 +869,7 @@ export function acceptOrder(db: Db, actor: DbUser, id: number, now: Date): Order
   o.accepted_by = person(actor);
   o.accepted_at = now.toISOString();
   o.reserved_until = undefined;
+  delete o.waiting_stock;
   audit(db, actor, "approve", "order", o.id, `اعتماد الطلب ${o.number}`, `Approved ${o.number}`, now);
   const customer = db.customers.find((c) => c.id === o.customer_id);
   notify(db, { type: "order_accepted", roles: ["warehouse"], title: `طلب معتمد للتجهيز: ${customer?.name ?? ""}`, title_en: `Approved order to prepare: ${customer?.name ?? ""}`, body: o.number, body_en: o.number, link: `/orders/${o.id}` }, now);
@@ -1175,6 +1283,8 @@ export function createTransfer(db: Db, actor: DbUser, input: NewTransfer, now: D
   checkStock(db, input.from_warehouse_id, lines, now);
 
   // Work on a copy first: if anything fails, the real data is untouched.
+  // Sending and receiving are two steps: now the goods leave the sending warehouse and are "on the road":
+  // not sold and not counted in any warehouse until the receiving keeper takes them in.
   const today = dayOf(now);
   const draft: Db = JSON.parse(JSON.stringify(db));
   const outLines: Transfer["lines"] = [];
@@ -1182,18 +1292,8 @@ export function createTransfer(db: Db, actor: DbUser, input: NewTransfer, now: D
     const item = itemOf(draft, l.item_id);
     const pieces = piecesOf(item, l.unit, l.qty);
     const used = takeFefo(draft, l.item_id, input.from_warehouse_id, pieces, today);
-    for (const u of used) {
-      draft.batches.push({
-        ...(draft.batches.find((b) => b.id === u.batch_id) as DbBatch),
-        id: nextId(draft, "batch"),
-        warehouse_id: input.to_warehouse_id,
-        qty_received: u.qty,
-        qty_left: u.qty,
-        received_at: now.toISOString(),
-        received_by: person(actor),
-      });
-    }
-    outLines.push({ ...l, pieces });
+    const batches = used.map((u) => ({ from_batch_id: u.batch_id, qty: u.qty, expiry_date: u.expiry_date, purchase_price: u.purchase_price, receipt_id: draft.batches.find((b) => b.id === u.batch_id)?.receipt_id }));
+    outLines.push({ ...l, pieces, batches });
   }
   const id = nextId(draft, "transfer");
   const t: Transfer = {
@@ -1202,16 +1302,74 @@ export function createTransfer(db: Db, actor: DbUser, input: NewTransfer, now: D
     client_ref: input.client_ref,
     from_warehouse_id: input.from_warehouse_id,
     to_warehouse_id: input.to_warehouse_id,
+    status: "sent",
     lines: outLines,
     note: input.note?.trim() || undefined,
     created_at: now.toISOString(),
     created_by: person(actor),
   };
   draft.transfers.push(t);
+  notify(draft, { type: "low_stock", roles: ["warehouse"], title: `تحويل في الطريق إليك: ${t.number}`, title_en: `Transfer on the way: ${t.number}`, body: "استلمه عند وصوله واكتب الكمية التي وصلت.", body_en: "Receive it when it arrives and write what came.", link: "/transfers" }, now);
   const from = draft.warehouses.find((w) => w.id === input.from_warehouse_id);
   const to = draft.warehouses.find((w) => w.id === input.to_warehouse_id);
   audit(draft, actor, "transfer", "transfer", id, `تحويل ${t.number} من ${from?.name} إلى ${to?.name}`, `Transfer ${t.number} from ${from?.name_en} to ${to?.name_en}`, now);
   Object.assign(db, draft);
+  return t;
+}
+
+/** The receiving keeper takes the transfer in: what arrived goes on his shelf (same expiry and cost).
+ *  Less than sent: he writes why, and the manager is told to review. */
+export function receiveTransfer(db: Db, actor: DbUser, id: number, received: Record<number, number>, reason: string, now: Date): Transfer {
+  need(actor, ["warehouse", "manager"]);
+  const t = db.transfers.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "التحويل غير موجود", "Transfer not found");
+  if (t.status && t.status !== "sent") fail(409, "BAD_STATE", "استُلم هذا التحويل من قبل", "This transfer was already received");
+  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== t.to_warehouse_id) fail(403, "FORBIDDEN", "يستلمه أمين المخزن المستلم", "The receiving warehouse's keeper takes it in");
+  let short = false;
+  for (const l of t.lines) {
+    const got = Math.max(0, Math.round(received?.[l.item_id] ?? l.pieces));
+    if (got > l.pieces) fail(422, "VALIDATION", "لا يُستلم أكثر مما أُرسل", "You can't receive more than was sent");
+    if (got < l.pieces) short = true;
+  }
+  if (short && !reason.trim()) fail(422, "VALIDATION", "وصل أقل مما أُرسل: اكتب السبب", "Less arrived than was sent: write why", { reason: msg("السبب مطلوب", "Required") });
+  for (const l of t.lines) {
+    let left = Math.max(0, Math.round(received?.[l.item_id] ?? l.pieces));
+    l.received_pieces = left;
+    // The oldest expiry goes on the shelf first, as it was sent.
+    for (const b of [...(l.batches ?? [])].sort((a, c) => a.expiry_date.localeCompare(c.expiry_date))) {
+      if (left <= 0) break;
+      const n = Math.min(b.qty, left);
+      left -= n;
+      db.batches.push({
+        id: nextId(db, "batch"),
+        item_id: l.item_id,
+        warehouse_id: t.to_warehouse_id,
+        expiry_date: b.expiry_date,
+        qty_received: n,
+        qty_left: n,
+        purchase_price: b.purchase_price,
+        received_at: now.toISOString(),
+        received_by: person(actor),
+        ...(b.receipt_id ? { receipt_id: b.receipt_id } : {}),
+      } as DbBatch);
+    }
+  }
+  t.status = short ? "partial" : "received";
+  t.received_at = now.toISOString();
+  t.received_by = person(actor);
+  if (short) t.diff_reason = reason.trim();
+  audit(db, actor, "transfer", "transfer", t.id, `استلام ${t.number}${short ? ` ناقصاً: ${reason.trim()}` : " كاملاً"}`, `Received ${t.number}${short ? " (short)" : ""}`, now);
+  if (short) {
+    notify(db, { type: "low_stock", roles: ["manager"], title: `فرق في التحويل ${t.number}`, title_en: `Difference in ${t.number}`, body: `وصل أقل مما أُرسل: ${reason.trim()}`, body_en: `Less arrived: ${reason.trim()}`, link: "/transfers" }, now);
+  }
+  return t;
+}
+
+export function reviewTransfer(db: Db, actor: DbUser, id: number, now: Date): Transfer {
+  need(actor, ["manager"]);
+  const t = db.transfers.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "التحويل غير موجود", "Transfer not found");
+  if (t.status !== "partial") fail(409, "BAD_STATE", "لا يوجد فرق لمراجعته", "Nothing to review");
+  t.reviewed_by = person(actor);
+  audit(db, actor, "approve", "transfer", t.id, `راجع المدير فرق التحويل ${t.number}`, `Reviewed ${t.number}`, now);
   return t;
 }
 

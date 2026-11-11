@@ -41,6 +41,9 @@ import {
   setUsdRate,
   usdRateOn,
   acceptOrder,
+  receiveTransfer,
+  reviewTransfer,
+  setSpecialPrice,
   holdBatch,
   releaseBatch,
   traceBatch,
@@ -142,10 +145,11 @@ function itemView(db: Db, it: DbItem, actor: DbUser, now: Date): Item {
   const pieces = live.reduce((s, b) => s + b.qty_left, 0);
   const avg = pieces ? Math.round(live.reduce((s, b) => s + b.qty_left * b.purchase_price, 0) / pieces) : undefined;
   let prices = it.prices;
-  // A shop owner sees only his own price.
+  // A shop owner sees only his own price (his special price for this item if he has one).
   if (actor.role === "shop") {
     const c = db.customers.find((x) => x.id === actor.customer_id);
-    prices = it.prices.filter((p) => p.tier_id === c?.tier_id);
+    const sp = (db.special_prices ?? []).find((x) => x.customer_id === c?.id && x.item_id === it.id);
+    prices = sp && c ? [{ tier_id: c.tier_id, carton_price: sp.carton_price, piece_price: sp.piece_price }] : it.prices.filter((p) => p.tier_id === c?.tier_id);
   }
   return {
     ...it,
@@ -171,6 +175,16 @@ function canSeeCustomer(actor: DbUser, c: { id: number; rep_id: number }) {
   if (actor.role === "rep") return c.rep_id === actor.id;
   if (actor.role === "shop") return actor.customer_id === c.id;
   return true;
+}
+
+/** A rep sells only the categories the manager gave him (none set = all). */
+function repMaySell(actor: DbUser, category: string) {
+  return actor.role !== "rep" || !actor.rep_categories?.length || actor.rep_categories.includes(category);
+}
+
+/** A keeper / staff: batches, expiry dates and movements of their own warehouse only. */
+function ownWarehouse(actor: DbUser, warehouseId: number) {
+  return (actor.role !== "warehouse" && actor.role !== "staff") || !actor.warehouse_id || actor.warehouse_id === warehouseId;
 }
 
 /** A delivery rep sees the shops he has shipments for (name, area, phone), even if they aren't his. */
@@ -378,6 +392,7 @@ export const mockApi: Api = {
         role: input.role,
         warehouse_id: input.role === "warehouse" || input.role === "staff" ? input.warehouse_id : undefined,
         rep_kinds: input.role === "rep" ? (input.rep_kinds?.length ? input.rep_kinds : (["sales", "delivery"] as const).slice()) : undefined,
+        rep_categories: input.role === "rep" && input.rep_categories?.length ? input.rep_categories : undefined,
         customer_id: input.role === "shop" ? input.customer_id : undefined,
         active: input.active,
       };
@@ -430,10 +445,11 @@ export const mockApi: Api = {
     }),
 
   // Items and stock
-  listItems: () => read((db, a, now) => db.items.map((it) => itemView(db, it, a, now))),
+  listItems: () => read((db, a, now) => db.items.filter((it) => repMaySell(a, it.category)).map((it) => itemView(db, it, a, now))),
   getItem: (id) =>
     read((db, a, now) => {
       const it = db.items.find((x) => x.id === id) ?? notFound();
+      if (!repMaySell(a, it.category)) notFound();
       return itemView(db, it, a, now);
     }),
   setItemImage: (id, image) =>
@@ -468,6 +484,12 @@ export const mockApi: Api = {
           const old = it.prices.find((o) => o.tier_id === p.tier_id);
           return !old || old.carton_price !== p.carton_price || old.piece_price !== p.piece_price;
         });
+        // Remember the old prices with the moment they stopped (an order written offline before now keeps them).
+        db.price_changes ??= [];
+        for (const p of changed) {
+          const old = it.prices.find((o) => o.tier_id === p.tier_id);
+          if (old) db.price_changes.push({ item_id: it.id, tier_id: p.tier_id, carton_price: old.carton_price, piece_price: old.piece_price, until: now.toISOString() });
+        }
         Object.assign(it, { ...input, name: input.name.trim(), name_en: input.name_en.trim() });
         if (changed.length) {
           const t = changed
@@ -487,7 +509,7 @@ export const mockApi: Api = {
     read((db, a, now) => {
       need(a, ["manager", "warehouse", "accountant", "staff"]);
       return db.batches
-        .filter((b) => b.item_id === itemId && (b.qty_left > 0 || b.qty_received > 0))
+        .filter((b) => b.item_id === itemId && (b.qty_left > 0 || b.qty_received > 0) && ownWarehouse(a, b.warehouse_id))
         .sort((x, y) => x.expiry_date.localeCompare(y.expiry_date))
         .map((b) => batchView(db, b, a, now));
     }),
@@ -495,7 +517,7 @@ export const mockApi: Api = {
     read((db, a, now) => {
       need(a, ["manager", "warehouse", "accountant", "staff"]);
       return db.batches
-        .filter((b) => b.qty_left > 0 && (!warehouseId || b.warehouse_id === warehouseId))
+        .filter((b) => b.qty_left > 0 && (!warehouseId || b.warehouse_id === warehouseId) && ownWarehouse(a, b.warehouse_id))
         .sort((x, y) => x.expiry_date.localeCompare(y.expiry_date))
         .map((b) => batchView(db, b, a, now));
     }),
@@ -511,6 +533,7 @@ export const mockApi: Api = {
           const expired = db.batches
             .filter((b) => b.item_id === it.id && b.warehouse_id === w.id && b.expiry_date < today)
             .reduce((s, b) => s + b.qty_left, 0);
+          if (!ownWarehouse(a, w.id)) return { warehouse_id: w.id, on_shelf: sellable, sellable, reserved: 0, expired: 0 };
           return { warehouse_id: w.id, on_shelf: live + expired, sellable, reserved: live - sellable, expired };
         }),
       }));
@@ -536,15 +559,17 @@ export const mockApi: Api = {
   listTransfers: () =>
     read((db, a) => {
       need(a, ["manager", "warehouse", "accountant", "staff"]);
-      return [...db.transfers].reverse();
+      return [...db.transfers].filter((t) => ownWarehouse(a, t.from_warehouse_id) || ownWarehouse(a, t.to_warehouse_id)).reverse();
     }),
   createTransfer: (input) => write((db, a, now) => createTransfer(db, a, input, now)),
+  receiveTransfer: (id, received, reason) => write((db, a, now) => receiveTransfer(db, a, id, received, reason, now)),
+  reviewTransfer: (id) => write((db, a, now) => reviewTransfer(db, a, id, now)),
 
   // Stocktakes
   listStocktakes: () =>
     read((db, a) => {
       need(a, ["manager", "warehouse"]);
-      return [...db.stocktakes].reverse();
+      return [...db.stocktakes].filter((s) => ownWarehouse(a, s.warehouse_id)).reverse();
     }),
   getStocktake: (id) =>
     read((db, a) => {
@@ -555,12 +580,19 @@ export const mockApi: Api = {
   holdBatch: (id, reason) => write((db, a, now) => batchView(db, holdBatch(db, a, id, reason, now), a, now)),
   releaseBatch: (id) => write((db, a, now) => batchView(db, releaseBatch(db, a, id, now), a, now)),
   traceBatch: (id) => read((db, a) => traceBatch(db, a, id)),
+  specialPrices: (customerId) =>
+    read((db, a) => {
+      const c = db.customers.find((x) => x.id === customerId);
+      if (!c || !(canSeeCustomer(a, c) || deliversTo(db, a, c.id))) notFound();
+      return (db.special_prices ?? []).filter((x) => x.customer_id === customerId);
+    }),
+  setSpecialPrice: (customerId, itemId, prices) => write((db, a, now) => setSpecialPrice(db, a, customerId, itemId, prices, now)),
   saveStocktake: (id, lines) => write((db, a, now) => saveStocktake(db, a, id, lines, now)),
   closeStocktake: (id) => write((db, a, now) => closeStocktake(db, a, id, now)),
   listDamaged: () =>
     read((db, a) => {
       need(a, ["manager", "warehouse", "accountant"]);
-      return [...db.damaged].reverse();
+      return [...db.damaged].filter((d) => ownWarehouse(a, d.warehouse_id)).reverse();
     }),
 
   // Customers
@@ -878,7 +910,7 @@ export const mockApi: Api = {
       need(a, ["manager", "warehouse", "accountant", "staff"]);
       const today = dayOf(now);
       return db.batches
-        .filter((b) => b.qty_left > 0 && daysBetween(today, b.expiry_date) <= days)
+        .filter((b) => b.qty_left > 0 && daysBetween(today, b.expiry_date) <= days && ownWarehouse(a, b.warehouse_id))
         .sort((x, y) => x.expiry_date.localeCompare(y.expiry_date))
         .map((b) => ({ batch: batchView(db, b, a, now), days_left: daysBetween(today, b.expiry_date) }));
     }),

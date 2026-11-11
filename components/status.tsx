@@ -35,8 +35,10 @@ export function roleName(role: Role, tr: Tr) {
   }
 }
 
-export function OrderStatusBadge({ status }: { status: OrderStatus }) {
+export function OrderStatusBadge({ status, waiting }: { status: OrderStatus; waiting?: boolean }) {
   const { tr } = useFmt();
+  // Written offline but the goods weren't there: it waits for them.
+  if (waiting && status === "expired") return <Badge tone="warning">{tr("بانتظار البضاعة", "Waiting for stock")}</Badge>;
   switch (status) {
     case "pending":
       return <Badge tone="primary">{tr("بانتظار الاعتماد", "Waiting approval")}</Badge>;

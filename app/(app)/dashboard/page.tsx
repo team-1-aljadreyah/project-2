@@ -145,7 +145,7 @@ export default function DashboardPage() {
                   </span>
                   <span className="text-end">
                     <Money value={o.total} className="block text-sm" />
-                    <OrderStatusBadge status={o.status} />
+                    <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
                   </span>
                 </Link>
               </li>

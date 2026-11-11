@@ -13,6 +13,7 @@ import {
   createReceipt,
   createReturn,
   createTransfer,
+  receiveTransfer,
   customerBalance,
   dayOf,
   registerShop,
@@ -168,6 +169,8 @@ export function makeSeed(now = new Date()): Db {
     online_payments: [],
     delivery_photos: {},
     usd_rates: [],
+    special_prices: [],
+    price_changes: [],
     chat: [],
     chat_reads: {},
   };
@@ -228,12 +231,13 @@ export function makeSeed(now = new Date()): Db {
   if (chips) chips.expiry_date = dayOf(addDays(now, 6));
 
   // 3) A transfer between the warehouses.
-  createTransfer(
+  const trf = createTransfer(
     db,
     keepers[0],
     { client_ref: cref(), from_warehouse_id: 1, to_warehouse_id: 2, lines: [{ item_id: 3, unit: "carton", qty: 20 }, { item_id: 5, unit: "carton", qty: 12 }], note: "نقص في مخزن الحر" },
     at(30, 10),
   );
+  receiveTransfer(db, keepers[1], trf.id, {}, "", at(30, 14));
 
   // 4) 45 days of selling, collecting and a few returns.
   const slow = new Set([26, 27]);
@@ -416,6 +420,16 @@ export function makeSeed(now = new Date()): Db {
     db.invoices = db.invoices.filter((i) => i.id !== inv.id);
     o.status = "approved";
     o.invoice_id = undefined;
+  }
+
+  // The manager's rules for the reps and the prices:
+  // عباس (marketing) sells only grains, sugar, oils and canned food; أسواق الكوثر has its own price for basmati rice.
+  const abbas = db.users.find((u) => u.id === 5);
+  if (abbas) abbas.rep_categories = ["حبوب ورز", "سكر وطحين", "زيوت وسمن", "معلبات"];
+  const rice = db.items.find((i) => i.id === 1);
+  if (rice) {
+    const p = rice.prices.find((x) => x.tier_id === 1) ?? rice.prices[0];
+    db.special_prices.push({ customer_id: 1, item_id: 1, carton_price: p.carton_price - 1500, piece_price: p.piece_price - 375, by: { id: manager.id, name: manager.name }, at: addDays(now, -3).toISOString() });
   }
 
   // The dollar rate of the last week (today's is left for the accountant to fix in the morning).

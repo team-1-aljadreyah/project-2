@@ -38,7 +38,7 @@ export default function OrdersPage() {
     { key: "r", head: tr("المندوب", "Rep"), cell: (o) => rName(o.rep_id), hideOnMobile: true },
     { key: "s", head: tr("المصدر", "Source"), cell: (o) => <SourceBadge source={o.source} /> },
     { key: "t", head: tr("المبلغ", "Amount"), cell: (o) => <Money value={o.total} className="font-medium" />, align: "end" },
-    { key: "st", head: tr("الحالة", "Status"), cell: (o) => <OrderStatusBadge status={o.status} /> },
+    { key: "st", head: tr("الحالة", "Status"), cell: (o) => <OrderStatusBadge status={o.status} waiting={o.waiting_stock} /> },
     { key: "d", head: tr("الوقت", "Time"), cell: (o) => <span className="text-muted">{dateTime(o.created_at)}</span> },
   ];
 
@@ -125,7 +125,7 @@ export default function OrdersPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
                   <span className="num">{o.number}</span>
-                  <OrderStatusBadge status={o.status} />
+                  <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
                   {o.source === "shop" && <SourceBadge source="shop" />}
                   <span>{ago(o.created_at)}</span>
                 </div>
