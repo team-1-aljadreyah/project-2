@@ -224,6 +224,9 @@ export interface Order {
   parent_id?: number;
   /** Written offline but the goods weren't there when it synced: it waits for the goods (nothing held). */
   waiting_stock?: boolean;
+  /** Prepared from more than one warehouse: each warehouse's keeper prepares his own part. The shipment
+   *  label is made when every part is ready. A keeper never prepares the other warehouse's part. */
+  prep_parts?: { warehouse_id: number; prepared_by?: Person; at?: string }[];
   reserved_until?: string;
   note?: string;
   cancel_reason?: string;

@@ -43,7 +43,11 @@ export default function OrderView() {
   const beforeDelivery = open || o.status === "approved";
   // The accountant or the manager approves; then the warehouse keeper prepares; the invoice comes at delivery.
   const canAccept = ["manager", "accountant"].includes(user.role) && (o.status === "pending" || o.status === "expired");
-  const canPrepare = ["manager", "warehouse"].includes(user.role) && o.status === "approved" && !o.delivery;
+  // A keeper prepares only his own warehouse: the order of his warehouse (deciding where each line comes from),
+  // or his part of an order split with the other warehouse. The manager can do any part.
+  const myPartWaits = !!o.prep_parts?.some((p) => !p.prepared_by && (user.role === "manager" || p.warehouse_id === user.warehouse_id));
+  const canPrepare =
+    o.status === "approved" && !o.delivery && (o.prep_parts ? myPartWaits : user.role === "manager" || (user.role === "warehouse" && (!user.warehouse_id || user.warehouse_id === o.warehouse_id)));
   const canApprove = user.role === "manager" && o.status === "needs_approval";
   const canCancel = (beforeDelivery && (user.role === "manager" || user.role === "accountant")) || (open && o.created_by.id === user.id);
   const canEditDiscount =
@@ -127,9 +131,19 @@ export default function OrderView() {
               </Button>
             )}
             {canPrepare && (
-              <Button variant="action" onClick={() => setPreparing(true)}>
-                <PackageCheck className="size-4" /> {tr("تجهيز الطلب", "Prepare the order")}
-              </Button>
+              o.prep_parts ? (
+                <Button
+                  variant="action"
+                  loading={busy === "part"}
+                  onClick={() => act("part", () => api.prepareOrder(o.id, {}), tr("جُهّز جزء مخزنك", "Your warehouse's part is prepared"))}
+                >
+                  <PackageCheck className="size-4" /> {tr("جهّزتُ جزء مخزني", "My warehouse's part is ready")}
+                </Button>
+              ) : (
+                <Button variant="action" onClick={() => setPreparing(true)}>
+                  <PackageCheck className="size-4" /> {tr("تجهيز الطلب", "Prepare the order")}
+                </Button>
+              )
             )}
           </>
         }
@@ -173,6 +187,16 @@ export default function OrderView() {
               {!o.delivery
                 ? tr("البضاعة محجوزة له حتى التسليم، وينتظر أن يجهزه المخزن.", "The goods are held until delivery; the warehouse prepares it.")
                 : tr("جُهّز. تصدر الفاتورة ويثبت الدين عند التسليم للمحل.", "Prepared. The invoice and the debt come at delivery.")}
+            </Notice>
+          )}
+          {o.prep_parts && o.prep_parts.length > 1 && !o.delivery && (
+            <Notice tone="warning" title={tr("يُجهَّز من المخزنين", "Prepared from both warehouses")}>
+              {o.prep_parts.map((p) => (
+                <span key={p.warehouse_id} className="me-3 inline-block">
+                  {name(lookups.warehouses.find((w) => w.id === p.warehouse_id))}: {p.prepared_by ? tr(`جاهز (${p.prepared_by.name})`, `ready (${p.prepared_by.name})`) : tr("ينتظر أمينه", "waits for its keeper")}
+                </span>
+              ))}
+              <span className="block text-xs">{tr("كل أمين يجهّز جزء مخزنه فقط، ويُصنع ملصق الشحنة عندما يجهز الجزآن.", "Each keeper prepares only his own part; the label is made when both are ready.")}</span>
             </Notice>
           )}
           {o.short_lines && o.short_lines.length > 0 && (
