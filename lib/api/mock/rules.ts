@@ -653,6 +653,7 @@ export function setSpecialPrice(db: Db, actor: DbUser, customerId: number, itemI
 export function holdBatch(db: Db, actor: DbUser, batchId: number, reason: string, now: Date) {
   need(actor, ["manager", "warehouse"]);
   const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
+  if (actor.role === "warehouse" && actor.warehouse_id && b.warehouse_id !== actor.warehouse_id) fail(403, "FORBIDDEN", "هذه الدفعة في مخزن آخر: يوقفها أمينه أو المدير", "This batch is in another warehouse");
   if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب الإيقاف", "Write the reason", { reason: msg("السبب مطلوب", "Required") });
   const item = itemOf(db, b.item_id);
   // The same batch number may sit in both warehouses (a transfer splits it): stop every part of it.
@@ -675,6 +676,7 @@ export function releaseBatch(db: Db, actor: DbUser, batchId: number, now: Date) 
 export function traceBatch(db: Db, actor: DbUser, batchId: number) {
   need(actor, ["manager", "warehouse", "accountant"]);
   const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
+  if (actor.role === "warehouse" && actor.warehouse_id && b.warehouse_id !== actor.warehouse_id) fail(403, "FORBIDDEN", "هذه الدفعة في مخزن آخر", "This batch is in another warehouse");
   const ids = new Set(db.batches.filter((x) => x.id === b.id || (x.item_id === b.item_id && x.expiry_date === b.expiry_date && x.receipt_id && x.receipt_id === b.receipt_id)).map((x) => x.id));
   const out: BatchTrace[] = [];
   for (const inv of db.invoices) {
@@ -883,6 +885,9 @@ export function acceptOrder(db: Db, actor: DbUser, id: number, now: Date): Order
 export function prepPlan(db: Db, actor: DbUser, id: number, now: Date): PrepLine[] {
   need(actor, ["warehouse", "manager"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== o.warehouse_id && !o.prep_parts?.some((p) => p.warehouse_id === actor.warehouse_id)) {
+    fail(403, "FORBIDDEN", "هذا الطلب من مخزن آخر", "This order is for another warehouse");
+  }
   const today = dayOf(now);
   return o.lines.map((l) => {
     const pieces = piecesOf(itemOf(db, l.item_id), l.unit, l.qty);
@@ -895,26 +900,58 @@ export function prepPlan(db: Db, actor: DbUser, id: number, now: Date): PrepLine
   });
 }
 
-/** The keeper prepared it: each line from the warehouse he chose (one order can come from both).
- *  The shipment label (QR) and the shop's PIN are made now. Nothing is invoiced yet. */
+/** Preparing an approved order.
+ *  First time (the keeper of the order's warehouse, or the manager): he decides the warehouse of each line
+ *  (one order can come from both) and his own part is prepared.
+ *  A part in the other warehouse is prepared by THAT warehouse's keeper only (later call, warehouses ignored).
+ *  When every part is ready, the shipment label (QR) and the shop's PIN are made. Nothing is invoiced yet. */
 export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Record<number, number>, now: Date): Order {
   need(actor, ["warehouse", "manager"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status !== "approved") fail(409, "BAD_STATE", o.status === "pending" ? "الطلب لم يُعتمد بعد: يعتمده المحاسب أو المدير" : "الطلب ليس معتمداً للتجهيز", "The order isn't approved for preparing");
   if (o.delivery) fail(409, "BAD_STATE", "جُهّز هذا الطلب من قبل", "This order is already prepared");
-  const ids = new Set(db.warehouses.map((w) => w.id));
-  const next = o.lines.map((l) => ({ ...l, warehouse_id: ids.has(warehouses?.[l.item_id]) ? warehouses[l.item_id] : (l.warehouse_id ?? o.warehouse_id) }));
-  // Enough free stock in each chosen warehouse (its own hold doesn't count against it).
-  for (const w of db.warehouses) {
-    const mine = next.filter((l) => l.warehouse_id === w.id);
-    if (mine.length) checkStock(db, w.id, mine, now, o.id);
+  const keeperWh = actor.role === "warehouse" ? actor.warehouse_id : undefined;
+  const whName = (wid: number) => db.warehouses.find((w) => w.id === wid)?.name ?? "";
+
+  let decided = false;
+  if (!o.prep_parts) {
+    decided = true;
+    // Deciding where each line comes from: the keeper of the order's own warehouse (or the manager).
+    if (keeperWh && keeperWh !== o.warehouse_id) fail(403, "FORBIDDEN", "يجهّز هذا الطلب أمين مخزنه", "The keeper of this order's warehouse prepares it");
+    const ids = new Set(db.warehouses.map((w) => w.id));
+    const next = o.lines.map((l) => ({ ...l, warehouse_id: ids.has(warehouses?.[l.item_id]) ? warehouses[l.item_id] : (l.warehouse_id ?? o.warehouse_id) }));
+    // Enough free stock in each chosen warehouse (its own hold doesn't count against it).
+    for (const w of db.warehouses) {
+      const mine = next.filter((l) => l.warehouse_id === w.id);
+      if (mine.length) checkStock(db, w.id, mine, now, o.id);
+    }
+    o.lines = next;
+    const used = [...new Set(next.map((l) => l.warehouse_id!))];
+    o.prep_parts = used.map((wid) => ({ warehouse_id: wid }));
   }
-  o.lines = next;
+
+  // Which parts this person prepares now: a keeper only his own warehouse's part; the manager every open part.
+  const mine = o.prep_parts.filter((p) => !p.prepared_by && (!keeperWh || p.warehouse_id === keeperWh));
+  // He put every line on the other warehouse: his decision is saved, and that keeper prepares it.
+  if (!mine.length && decided) {
+    audit(db, actor, "update", "order", o.id, `${o.number} يُجهَّز من ${o.prep_parts.map((p) => whName(p.warehouse_id)).join(" + ")}`, `${o.number} goes to the other warehouse`, now);
+    notify(db, { type: "order_accepted", roles: ["warehouse"], title: `${o.number} ينتظر تجهيزك`, title_en: `${o.number} waits for you`, body: `من ${o.prep_parts.map((p) => whName(p.warehouse_id)).join(" + ")}`, body_en: o.number, link: `/orders/${o.id}` }, now);
+    return o;
+  }
+  if (!mine.length) fail(403, "FORBIDDEN", keeperWh ? "لا يوجد جزء من هذا الطلب في مخزنك ينتظر التجهيز" : "جُهّزت كل الأجزاء", "Nothing of this order waits in your warehouse");
+  for (const p of mine) Object.assign(p, { prepared_by: person(actor), at: now.toISOString() });
+  audit(db, actor, "update", "order", o.id, `تجهيز ${o.number} من ${mine.map((p) => whName(p.warehouse_id)).join(" + ")}`, `Prepared ${o.number}`, now);
+
+  const waiting = o.prep_parts.filter((p) => !p.prepared_by);
+  if (waiting.length) {
+    // The other warehouse's keeper is told: his part waits for him.
+    notify(db, { type: "order_accepted", roles: ["warehouse"], title: `جزء من ${o.number} ينتظر تجهيزك`, title_en: `Part of ${o.number} waits for you`, body: `من ${waiting.map((p) => whName(p.warehouse_id)).join(" + ")}`, body_en: o.number, link: `/orders/${o.id}` }, now);
+    return o;
+  }
+  // Every part is ready: the shipment label, the PIN, and the delivery rep.
   o.delivery = newDelivery();
   const carrier = deliveryRepFor(db, o.rep_id);
   if (carrier) o.delivery.rep = person(carrier);
-  const from = [...new Set(next.map((l) => db.warehouses.find((w) => w.id === l.warehouse_id)?.name ?? ""))].join(" + ");
-  audit(db, actor, "update", "order", o.id, `تجهيز الطلب ${o.number} من ${from}`, `Prepared ${o.number}`, now);
   return o;
 }
 
@@ -1407,6 +1444,7 @@ export function createStocktake(db: Db, actor: DbUser, warehouseId: number, now:
 export function saveStocktake(db: Db, actor: DbUser, id: number, lines: StocktakeLine[], now: Date): Stocktake {
   need(actor, ["manager", "warehouse"]);
   const s = db.stocktakes.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الجرد غير موجود", "Count not found");
+  if (actor.role === "warehouse" && actor.warehouse_id && s.warehouse_id !== actor.warehouse_id) fail(403, "FORBIDDEN", "هذا جرد مخزن آخر", "This is another warehouse's count");
   if (s.status !== "open") fail(409, "BAD_STATE", "هذا الجرد مغلق", "This count is closed");
   for (const l of lines) {
     const row = s.lines.find((x) => x.item_id === l.item_id);

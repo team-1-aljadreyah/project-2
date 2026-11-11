@@ -28,7 +28,13 @@ export function PrepareOrder({ order, onClose, onDone }: { order: Order; onClose
     try {
       const map = Object.fromEntries(plan.data.map((l) => [l.item_id, chosen(l.item_id, l.suggested_warehouse_id)]));
       await api.prepareOrder(order.id, map);
-      toast("success", tr(`جُهّز ${order.number}: اطبع ملصق الشحنة والصقه على البضاعة`, `${order.number} prepared: print the shipment label`));
+      const after = await api.getOrder(order.id).catch(() => null);
+      toast(
+        "success",
+        after && !after.delivery
+          ? tr(`جُهّز جزء مخزنك من ${order.number}، وأُبلغ أمين المخزن الآخر بجزئه`, `Your part of ${order.number} is ready; the other keeper was told`)
+          : tr(`جُهّز ${order.number}: اطبع ملصق الشحنة والصقه على البضاعة`, `${order.number} prepared: print the shipment label`),
+      );
       onDone();
       onClose();
     } catch (e) {
@@ -52,7 +58,7 @@ export function PrepareOrder({ order, onClose, onDone }: { order: Order; onClose
     >
       <p className="mb-3 flex items-center gap-1.5 rounded-xl bg-card-2 p-3 text-xs text-muted">
         <Sparkles className="size-4 shrink-0 text-action" />
-        {tr("اقترح النظام المخزن الذي فيه الأقدم صلاحية والكمية كافية. يمكنك تغييره لكل مادة.", "The system suggests the warehouse with the oldest expiry and enough stock. You can change it per item.")}
+        {tr("اقترح النظام المخزن الذي فيه الأقدم صلاحية والكمية كافية. يمكنك تغييره لكل مادة. ما تختاره من المخزن الآخر يجهّزه أمينه هو، لا أنت.", "The system suggests the warehouse with the oldest expiry and enough stock. What you put on the other warehouse is prepared by its own keeper, not you.")}
       </p>
       {!plan.data ? (
         <LoadingRows rows={3} />

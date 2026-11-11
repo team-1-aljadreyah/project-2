@@ -52,11 +52,18 @@ export function buildMissions({
   const where = new Map<number, { zone: MapZone; cell: MapCell }>();
   for (const zone of view.zones) for (const cell of zone.cells) where.set(cell.item.id, { zone, cell });
 
-  const open = orders.filter((o) => o.warehouse_id === view.wh.id && ((o.status === "approved" && !o.delivery) || o.status === "pending" || o.status === "needs_approval"));
+  const ourPartWaits = (o: Order) => !!o.prep_parts?.some((p) => p.warehouse_id === view.wh.id && !p.prepared_by);
+  const open = orders.filter(
+    (o) =>
+      (o.warehouse_id === view.wh.id && ((o.status === "approved" && !o.delivery && (!o.prep_parts || ourPartWaits(o))) || o.status === "pending" || o.status === "needs_approval")) ||
+      (o.warehouse_id !== view.wh.id && o.status === "approved" && !o.delivery && ourPartWaits(o)),
+  );
 
   const missions = open.map((order): Mission => {
     const lines: MissionLine[] = [];
     for (const l of order.lines) {
+      // Only the lines taken from this warehouse (the other warehouse's keeper picks his own).
+      if (order.prep_parts && (l.warehouse_id ?? order.warehouse_id) !== view.wh.id) continue;
       const item = items.find((i) => i.id === l.item_id);
       const at = where.get(l.item_id);
       if (!item || !at) continue;

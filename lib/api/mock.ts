@@ -192,11 +192,11 @@ function deliversTo(db: Db, actor: DbUser, customerId: number) {
   return actor.role === "rep" && db.orders.some((o) => o.customer_id === customerId && o.delivery?.rep?.id === actor.id && o.delivery.status !== "delivered");
 }
 
-function canSeeOrder(actor: DbUser, o: { customer_id: number; rep_id: number; warehouse_id: number; delivery?: { rep?: { id: number } } }) {
+function canSeeOrder(actor: DbUser, o: { customer_id: number; rep_id: number; warehouse_id: number; delivery?: { rep?: { id: number } }; prep_parts?: { warehouse_id: number }[] }) {
   // A rep sees his shops' orders, and the ones he delivers.
   if (actor.role === "rep") return o.rep_id === actor.id || o.delivery?.rep?.id === actor.id;
   if (actor.role === "shop") return o.customer_id === actor.customer_id;
-  if (actor.role === "warehouse" || actor.role === "staff") return !actor.warehouse_id || actor.warehouse_id === o.warehouse_id;
+  if (actor.role === "warehouse" || actor.role === "staff") return !actor.warehouse_id || actor.warehouse_id === o.warehouse_id || !!o.prep_parts?.some((p) => p.warehouse_id === actor.warehouse_id);
   return true;
 }
 
@@ -574,7 +574,9 @@ export const mockApi: Api = {
   getStocktake: (id) =>
     read((db, a) => {
       need(a, ["manager", "warehouse"]);
-      return db.stocktakes.find((s) => s.id === id) ?? notFound();
+      const s = db.stocktakes.find((x) => x.id === id);
+      if (!s || !ownWarehouse(a, s.warehouse_id)) notFound();
+      return s;
     }),
   createStocktake: (warehouseId, category) => write((db, a, now) => createStocktake(db, a, warehouseId, now, category || undefined)),
   holdBatch: (id, reason) => write((db, a, now) => batchView(db, holdBatch(db, a, id, reason, now), a, now)),
