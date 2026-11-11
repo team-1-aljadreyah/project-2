@@ -175,6 +175,17 @@ export default function DeliveriesPage() {
                       <p className="flex items-center gap-1 text-xs text-muted">
                         <MapPin className="size-3" /> {c?.area ?? ""} · <span className="num" dir="ltr">{o.number}</span>
                       </p>
+                      {c?.address_info?.lat !== undefined && (
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${c.address_info.lat},${c.address_info.lng}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 rounded-full bg-action/10 px-2 py-0.5 text-[11px] font-semibold text-action"
+                        >
+                          <MapPin className="size-3" /> {tr("الموقع", "Location")}
+                          {c.address_info.landmark ? ` · ${c.address_info.landmark}` : ""}
+                        </a>
+                      )}
                     </div>
                     <DeliveryChip d={d} tr={tr} />
                   </div>

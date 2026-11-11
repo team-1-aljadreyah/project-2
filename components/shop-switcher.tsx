@@ -10,6 +10,7 @@ import { Button, Dialog, Field, Input, errorText, useToast } from "@/components/
 import { api, ApiError } from "@/lib/api";
 import type { NewShopInput, User } from "@/lib/api/types";
 import { updateUser } from "@/lib/auth";
+import { AddressCard } from "./address-form";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
@@ -162,9 +163,12 @@ function AddShop({ onClose, onAdded }: { onClose: () => void; onAdded: () => voi
             ))}
           </datalist>
         </Field>
-        <Field label={tr("العنوان", "Address")} hint={tr("اختياري", "Optional")} htmlFor="ns-addr">
-          <Input id="ns-addr" value={f.address} onChange={(e) => set({ address: e.target.value })} />
-        </Field>
+        <div>
+          <p className="mb-1.5 text-sm font-medium">
+            {tr("معلومات العنوان", "Address")} <span className="text-danger">*</span>
+          </p>
+          <AddressCard value={f.address_info} onChange={(v) => set({ address_info: v ?? undefined })} error={errors.address_info ?? (Object.keys(errors).some((k) => k.startsWith("address_info.")) ? tr("تحقق من معلومات العنوان", "Check the address") : undefined)} defaultPhone={f.phone} />
+        </div>
         <Field label={tr("هاتف المحل", "Shop phone")} hint={tr("اتركه فارغاً لاستخدام رقمك", "Leave empty to use your number")} error={errors.phone} htmlFor="ns-phone">
           <Input id="ns-phone" dir="ltr" inputMode="tel" value={f.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="07xxxxxxxxx" invalid={!!errors.phone} />
         </Field>

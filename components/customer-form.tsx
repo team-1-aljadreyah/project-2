@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import type { Customer, CustomerInput } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useApp } from "./shell";
+import { AddressCard } from "./address-form";
 import { Button, Dialog, Field, Input, Notice, NumberInput, Select, Switch, errorText, useToast } from "./ui";
 
 export function CustomerForm({ open, onClose, customer, onSaved }: { open: boolean; onClose: () => void; customer?: Customer; onSaved?: (c: Customer) => void }) {
@@ -18,6 +19,7 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
     phone: customer?.phone ?? "",
     area: customer?.area ?? "",
     address: customer?.address ?? "",
+    address_info: customer?.address_info,
     tier_id: customer?.tier_id ?? lookups.tiers[1]?.id ?? lookups.tiers[0].id,
     rep_id: customer?.rep_id ?? lookups.reps[0]?.id ?? 0,
     // A shop that signed up online starts with no credit; suggest a first limit for the manager to adjust.
@@ -79,9 +81,13 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
         <Field label={tr("المنطقة", "Area")} error={err.area}>
           <Input value={f.area} onChange={(e) => set({ area: e.target.value })} placeholder={tr("حي الحسين", "Hay Al-Hussein")} invalid={!!err.area} />
         </Field>
-        <Field label={tr("العنوان", "Address")} className="sm:col-span-2">
-          <Input value={f.address} onChange={(e) => set({ address: e.target.value })} />
-        </Field>
+        <div className="sm:col-span-2">
+          <p className="mb-1.5 text-sm font-medium">{tr("معلومات العنوان", "Address")}</p>
+          <AddressCard value={f.address_info} onChange={(v) => set({ address_info: v })} defaultPhone={f.phone} deletable />
+          {!f.address_info && (
+            <Input className="mt-2" value={f.address} onChange={(e) => set({ address: e.target.value })} placeholder={tr("أو اكتب العنوان نصاً", "Or type the address as text")} />
+          )}
+        </div>
         <Field label={tr("نوع السعر", "Price tier")} hint={tr("كل نوع له أسعاره", "Each tier has its own prices")}>
           <Select value={f.tier_id} onChange={(e) => set({ tier_id: Number(e.target.value) })}>
             {lookups.tiers.map((t) => (

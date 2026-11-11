@@ -46,6 +46,7 @@ export interface MyShop {
 
 /** The owner adds one more shop: it waits for the manager's approval, like a new sign-up. */
 export interface NewShopInput {
+  address_info?: ShopAddress;
   shop_name: string;
   area: string;
   address?: string;
@@ -158,6 +159,24 @@ export interface Receipt {
   created_by: Person;
 }
 
+/** Where the shop is, like a delivery app's address card: a pin on the map and the details a driver needs. */
+export interface ShopAddress {
+  /** A short name for the place ("الجامعة التكنولوجية"). */
+  label: string;
+  /** How to find it. */
+  details: string;
+  /** The number to call at the shop (07xxxxxxxxx). */
+  phone: string;
+  street?: string;
+  building?: string;
+  floor?: string;
+  apartment?: string;
+  landmark?: string;
+  /** The pin. */
+  lat?: number;
+  lng?: number;
+}
+
 export interface Customer {
   id: number;
   name: string;
@@ -172,6 +191,8 @@ export interface Customer {
   active: boolean;
   /** Signed up on the website and waiting for the manager to approve it. */
   pending?: boolean;
+  /** The full address with the map pin (newer shops). `address` stays the short text of it. */
+  address_info?: ShopAddress;
   last_order_at?: string;
 }
 
@@ -763,6 +784,8 @@ export interface CustomerInput {
   phone: string;
   area: string;
   address: string;
+  /** null = remove the address card. */
+  address_info?: ShopAddress | null;
   tier_id: number;
   rep_id: number;
   debt_limit: number;
@@ -771,6 +794,7 @@ export interface CustomerInput {
 
 /** A shop owner signing up on the website. */
 export interface RegisterInput {
+  address_info?: ShopAddress;
   shop_name: string;
   owner_name: string;
   phone: string;

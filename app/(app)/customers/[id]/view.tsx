@@ -7,6 +7,7 @@ import { useApp } from "@/components/shell";
 import { OrderStatusBadge } from "@/components/status";
 import { StatementView } from "@/components/statement-view";
 import { SpecialPrices } from "@/components/special-prices";
+import { MapPin } from "@/components/map-pin";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
@@ -125,6 +126,23 @@ export default function CustomerView() {
         <Card className="p-4">
           <KV k={tr("الهاتف", "Phone")} v={<span dir="ltr">{x.phone}</span>} />
           <KV k={tr("العنوان", "Address")} v={x.address} />
+          {x.address_info && (
+            <div className="mt-2 space-y-1.5">
+              <p className="text-xs text-muted">
+                {[x.address_info.building && `${tr("بناية", "bldg")} ${x.address_info.building}`, x.address_info.floor && `${tr("طابق", "floor")} ${x.address_info.floor}`, x.address_info.apartment && `${tr("شقة", "apt")} ${x.address_info.apartment}`].filter(Boolean).join(" · ")}
+                {" "}
+                <span dir="ltr">· +964 {x.address_info.phone.replace(/^0/, "")}</span>
+              </p>
+              {x.address_info.lat !== undefined && (
+                <>
+                  <MapPin lat={x.address_info.lat} lng={x.address_info.lng} className="h-36" />
+                  <a href={`https://www.google.com/maps?q=${x.address_info.lat},${x.address_info.lng}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-primary-ink underline">
+                    {tr("افتح الموقع في الخرائط", "Open in Maps")}
+                  </a>
+                </>
+              )}
+            </div>
+          )}
           <KV k={tr("نوع السعر", "Price tier")} v={<Badge tone="primary">{name(lookups.tiers.find((t) => t.id === x.tier_id))}</Badge>} />
           <KV k={tr("المندوب", "Rep")} v={rep?.name} />
           <KV k={tr("آخر طلب", "Last order")} v={x.last_order_at ? ago(x.last_order_at) : "-"} />

@@ -41,6 +41,7 @@ import {
   setUsdRate,
   usdRateOn,
   acceptOrder,
+  cleanAddress,
   receiveTransfer,
   reviewTransfer,
   setSpecialPrice,
@@ -616,7 +617,10 @@ export const mockApi: Api = {
       if (!input.area.trim()) errors.area = msg("المنطقة مطلوبة", "Area is required");
       if (!(input.debt_limit >= 0)) errors.debt_limit = msg("أدخل سقف الدين", "Enter the debt limit");
       if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
-      const clean = { ...input, phone, name: input.name.trim(), owner_name: input.owner_name.trim(), area: input.area.trim(), address: input.address.trim() };
+      const addr = cleanAddress(input.address_info, false);
+      const { address_info: _ai, ...rest } = input;
+      void _ai;
+      const clean = { ...rest, phone, name: input.name.trim(), owner_name: input.owner_name.trim(), area: input.area.trim(), address: addr.text || input.address.trim() };
       if (id) {
         const c = db.customers.find((x) => x.id === id) ?? notFound();
         const wasPending = !!c.pending;
@@ -625,12 +629,14 @@ export const mockApi: Api = {
         if (c.tier_id !== clean.tier_id) parts.push("نوع السعر");
         if (c.rep_id !== clean.rep_id) parts.push("مندوب التوصيل");
         Object.assign(c, clean);
+        if (input.address_info === null) delete c.address_info;
+        else if (addr.info) c.address_info = addr.info;
         audit(db, a, "update", "customer", c.id, `تعديل الزبون ${c.name}${parts.length ? ` (${parts.join("، ")})` : ""}`, `Updated customer ${c.name}`, now);
         // A shop that signed up online: saving it as active is the approval.
         if (wasPending && c.active) approveShop(db, a, c, now);
         return customerView(db, c, a);
       }
-      const c: DbCustomer = { id: nextId(db, "customer"), ...clean };
+      const c: DbCustomer = { id: nextId(db, "customer"), ...clean, ...(addr.info ? { address_info: addr.info } : {}) };
       db.customers.push(c);
       audit(db, a, "create", "customer", c.id, `إضافة الزبون ${c.name}`, `Added customer ${c.name}`, now);
       return customerView(db, c, a);
