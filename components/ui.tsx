@@ -9,9 +9,10 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
 import { useFmt } from "@/lib/i18n";
-import { useSite } from "@/lib/site";
+import { ordered, saveSite, useCustomizing, useSite } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { pageTitle } from "./nav";
+import { SortArea, SortItem, toggleIn } from "./sortable";
 
 // ---------- Button ----------
 
@@ -79,21 +80,7 @@ export function IconButton({ label, className, children, ...props }: React.Butto
 
 // ---------- Form ----------
 
-export function Field({
-  label,
-  error,
-  hint,
-  children,
-  className,
-  htmlFor,
-}: {
-  label?: ReactNode;
-  error?: string;
-  hint?: ReactNode;
-  children: ReactNode;
-  className?: string;
-  htmlFor?: string;
-}) {
+export function Field({ label, error, hint, children, className, htmlFor }: { label?: ReactNode; error?: string; hint?: ReactNode; children: ReactNode; className?: string; htmlFor?: string }) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
@@ -176,7 +163,13 @@ export function Stepper({ value, onChange, min = 0, max }: { value: number; onCh
   const { tr } = useFmt();
   return (
     <div className="inline-flex h-11 items-center rounded-xl border border-line-strong bg-card" dir="ltr">
-      <button type="button" aria-label={tr("أقل", "Less")} className="flex size-11 items-center justify-center text-muted hover:text-text disabled:opacity-40" disabled={value <= min} onClick={() => onChange(Math.max(min, value - 1))}>
+      <button
+        type="button"
+        aria-label={tr("أقل", "Less")}
+        className="flex size-11 items-center justify-center text-muted hover:text-text disabled:opacity-40"
+        disabled={value <= min}
+        onClick={() => onChange(Math.max(min, value - 1))}
+      >
         <Minus className="size-4" />
       </button>
       <input
@@ -189,14 +182,30 @@ export function Stepper({ value, onChange, min = 0, max }: { value: number; onCh
           onChange(max !== undefined ? Math.min(max, n) : n);
         }}
       />
-      <button type="button" aria-label={tr("أكثر", "More")} className="flex size-11 items-center justify-center text-muted hover:text-text disabled:opacity-40" disabled={max !== undefined && value >= max} onClick={() => onChange(max !== undefined ? Math.min(max, value + 1) : value + 1)}>
+      <button
+        type="button"
+        aria-label={tr("أكثر", "More")}
+        className="flex size-11 items-center justify-center text-muted hover:text-text disabled:opacity-40"
+        disabled={max !== undefined && value >= max}
+        onClick={() => onChange(max !== undefined ? Math.min(max, value + 1) : value + 1)}
+      >
         <Plus className="size-4" />
       </button>
     </div>
   );
 }
 
-export function Segmented<T extends string>({ value, onChange, options, className }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode; count?: number }[]; className?: string }) {
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+  className,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: ReactNode; count?: number }[];
+  className?: string;
+}) {
   return (
     <div className={cn("flex gap-1 overflow-x-auto rounded-xl bg-card-2 p-1", className)} role="tablist">
       {options.map((o) => (
@@ -206,10 +215,7 @@ export function Segmented<T extends string>({ value, onChange, options, classNam
           role="tab"
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
-          className={cn(
-            "flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition",
-            value === o.value ? "bg-card text-text shadow-card" : "text-muted hover:text-text",
-          )}
+          className={cn("flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition", value === o.value ? "bg-card text-text shadow-card" : "text-muted hover:text-text")}
         >
           {o.label}
           {o.count !== undefined && <span className={cn("num rounded-md px-1.5 text-xs", value === o.value ? "bg-primary-soft text-primary-ink" : "bg-line")}>{o.count}</span>}
@@ -413,44 +419,67 @@ export function DataTable<T>({
   // Every list is split into pages with numbered circles under it (1, 2, 3…). It also keeps long lists fast:
   // only one page of rows is drawn (twice: table + phone cards).
   const pg = usePages(rows);
+  // Customize mode (manager): the columns are dragged to a new order and hidden with the eye.
+  // It is saved for this page's table ("table:/orders"), for everyone who sees it.
+  const { tr } = useFmt();
+  const toast = useToast();
+  const mode = useCustomizing();
+  const layId = `table:${usePathname().replace(/\/\d+/g, "/_")}`;
+  const lay = useSite().layouts[layId];
   if (!rows.length) return <>{empty}</>;
+  const hiddenCols = lay?.hidden ?? [];
+  const sorted = ordered(columns, lay?.order ?? [], (c) => c.key);
+  const cols = mode ? sorted : sorted.filter((c) => !hiddenCols.includes(c.key));
+  const saveLay = (next: { order?: string[]; hidden?: string[] }) =>
+    saveSite((s) => ({ ...s, layouts: { ...s.layouts, [layId]: { order: lay?.order ?? [], hidden: hiddenCols, ...next } } })).catch((e) => toast("danger", errorText(e, tr)));
   const shown = pg.shown;
   return (
     <>
-      <div className={cn("overflow-x-auto", mobile && "hidden md:block")}>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line bg-card-2 text-xs text-muted">
-              {columns.map((c) => (
-                <th key={c.key} className={cn("px-4 py-2.5 text-start font-medium whitespace-nowrap", c.align === "end" && "text-end", c.align === "center" && "text-center", c.className)}>
-                  {c.head}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => {
-              const href = onRowHref?.(r);
-              return (
-                <tr key={rowKey(r)} className={cn("border-b border-line last:border-0", href && "cursor-pointer hover:bg-card-2")}>
-                  {columns.map((c, i) => (
-                    <td key={c.key} className={cn("px-4 py-3 align-middle", c.align === "end" && "text-end", c.align === "center" && "text-center", c.className)}>
-                      {href && i === 0 ? (
-                        <Link href={href} className="font-medium text-primary-ink hover:underline">
-                          {c.cell(r)}
-                        </Link>
-                      ) : (
-                        c.cell(r)
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-          {footer}
-        </table>
-      </div>
+      <SortArea ids={cols.map((c) => c.key)} grid onOrder={(ids) => saveLay({ order: ids })}>
+        <div className={cn("overflow-x-auto", mobile && "hidden md:block")}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line bg-card-2 text-xs text-muted">
+                {cols.map((c) => (
+                  <th key={c.key} className={cn("px-4 py-2.5 text-start font-medium whitespace-nowrap", c.align === "end" && "text-end", c.align === "center" && "text-center", c.className)}>
+                    {mode ? (
+                      <SortItem id={c.key} inline hidden={hiddenCols.includes(c.key)} onHide={() => saveLay({ hidden: toggleIn(hiddenCols, c.key) })}>
+                        {c.head}
+                      </SortItem>
+                    ) : (
+                      c.head
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((r) => {
+                const href = onRowHref?.(r);
+                return (
+                  <tr key={rowKey(r)} className={cn("border-b border-line last:border-0", href && "cursor-pointer hover:bg-card-2")}>
+                    {cols.map((c, i) => (
+                      <td
+                        key={c.key}
+                        className={cn("px-4 py-3 align-middle", c.align === "end" && "text-end", c.align === "center" && "text-center", c.className, hiddenCols.includes(c.key) && "opacity-40")}
+                      >
+                        {href && i === 0 ? (
+                          <Link href={href} className="font-medium text-primary-ink hover:underline">
+                            {c.cell(r)}
+                          </Link>
+                        ) : (
+                          c.cell(r)
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+            {footer}
+          </table>
+        </div>
+      </SortArea>
       {mobile && (
         <ul className="divide-y divide-line md:hidden">
           {shown.map((r) => {
@@ -535,9 +564,7 @@ export function Pager({
   const circle = "flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition";
   return (
     <nav aria-label={tr("الصفحات", "Pages")} className={cn("flex flex-wrap items-center justify-between gap-3 px-3 py-3", className)}>
-      <p className="text-xs text-muted">
-        {tr(`${num(from)}–${num(to)} من ${num(total)}`, `${num(from)}–${num(to)} of ${num(total)}`)}
-      </p>
+      <p className="text-xs text-muted">{tr(`${num(from)}–${num(to)} من ${num(total)}`, `${num(from)}–${num(to)} of ${num(total)}`)}</p>
       <div className="flex items-center gap-1">
         <button type="button" onClick={() => setPage(page - 1)} disabled={page <= 1} aria-label={tr("السابقة", "Previous")} className={cn(circle, "text-muted hover:bg-card-2 disabled:opacity-30")}>
           <Prev className="size-4" />
@@ -585,7 +612,23 @@ export function Pager({
 // Open dialogs, newest last: Esc closes only the top one (a dialog can open another, e.g. the address sheet).
 const openDialogs: string[] = [];
 
-export function Dialog({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  wide,
+  plain,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  wide?: boolean;
+  /** Not a page to customize: in customize mode its texts and buttons work as usual. */ plain?: boolean;
+}) {
   const { tr } = useFmt();
   const id = useId();
   const ref = useRef<HTMLDivElement>(null);
@@ -617,6 +660,7 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
         ref={ref}
         tabIndex={-1}
         role="dialog"
+        data-cz={plain ? "" : undefined}
         aria-modal
         aria-labelledby={id}
         className={cn("dialog-panel flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-card shadow-xl outline-none sm:rounded-2xl", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}

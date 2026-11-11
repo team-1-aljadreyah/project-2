@@ -11,6 +11,7 @@ import { DEFAULT_SITE, fullSite } from "./api/site-defaults";
 import type { Label, SiteCustom } from "./api/types";
 import { USE_MOCK } from "./config";
 import { useFmt } from "./i18n";
+import { setTexts } from "./texts";
 
 export { DEFAULT_SITE, ordered } from "./api/site-defaults";
 
@@ -19,8 +20,29 @@ let site: SiteCustom = DEFAULT_SITE;
 let started = false;
 const subs = new Set<() => void>();
 
-function set(next: SiteCustom) {
+/** The color of the main buttons, on the whole page (the darker shade for hover is made from it). */
+function applyLook(s: SiteCustom) {
+  if (typeof document === "undefined") return;
+  const style = document.documentElement.style;
+  const c = s.look.action;
+  if (c && /^#[0-9a-f]{6}$/i.test(c)) {
+    style.setProperty("--action", c);
+    style.setProperty("--action-hover", `color-mix(in srgb, ${c} 86%, black)`);
+  } else {
+    style.removeProperty("--action");
+    style.removeProperty("--action-hover");
+  }
+}
+
+/** Take a new copy into use: the store, the rewritten texts (lib/texts.ts) and the colors. */
+function take(next: SiteCustom) {
   site = next;
+  setTexts(next.texts);
+  applyLook(next);
+}
+
+function set(next: SiteCustom) {
+  take(next);
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch {}
@@ -44,7 +66,7 @@ function subscribe(fn: () => void) {
     // The copy from the last visit shows at once; the fresh one replaces it when it arrives.
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) site = fullSite(JSON.parse(raw));
+      if (raw) take(fullSite(JSON.parse(raw)));
     } catch {}
     load();
     if (USE_MOCK) onDbChange(load);

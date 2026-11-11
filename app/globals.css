@@ -355,3 +355,6 @@ html[data-vt="fade"]::view-transition-new(root) {
 @keyframes map3d-pulse { 0% { box-shadow: 0 0 0 0 rgb(225 105 43 / 0.55); } 100% { box-shadow: 0 0 0 18px rgb(225 105 43 / 0); } }
 @media (prefers-reduced-motion: reduce) { .map3d-marker[data-kind="rep"] .map3d-badge { animation: none; } }
 .map3d .maplibregl-ctrl-attrib { font-size: 10px; }
+
+/* Customize mode: the text under the mouse that a click will rewrite (components/customize.tsx). */
+[data-cz-hover] { outline: 1px dashed var(--action); outline-offset: 2px; border-radius: 4px; cursor: text; }
