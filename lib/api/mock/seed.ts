@@ -439,6 +439,10 @@ export function makeSeed(now = new Date()): Db {
     [5, 6, [{ item_id: 1, unit: "carton", qty: 1 }], true],
     [5, 7, [{ item_id: 2, unit: "carton", qty: 1 }, { item_id: 4, unit: "carton", qty: 1 }], false],
     [5, 8, [{ item_id: 3, unit: "carton", qty: 1 }], false],
+    // محمد رضا (marketing and delivery) delivers his own shops too.
+    [6, 9, [{ item_id: 1, unit: "carton", qty: 1 }], true],
+    [6, 10, [{ item_id: 2, unit: "carton", qty: 1 }], true],
+    [6, 11, [{ item_id: 3, unit: "carton", qty: 2 }], false],
   ];
   for (const [repId, customerId, lines, out] of todayRun) {
     safe(() => {

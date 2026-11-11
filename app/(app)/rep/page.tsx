@@ -11,7 +11,9 @@ import { motion } from "motion/react";
 import { Percent, Route, Search, ShoppingCart, Truck, Wallet, WifiOff } from "lucide-react";
 import { useNow } from "@/components/hall/live";
 import { CustomerSheet, NextStopCard, RouteMap, buildStops, useVisits } from "@/components/rep-route";
+import Link from "next/link";
 import { useApp } from "@/components/shell";
+import { repDoes } from "@/lib/api/types";
 import { Button, Card, LimitBar, Notice, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Customer } from "@/lib/api/types";
@@ -43,6 +45,10 @@ export default function RepHome() {
   const done = stops.filter((s) => visited.includes(s.customer.id)).length;
   const nextIdx = stops.findIndex((s) => !visited.includes(s.customer.id));
   const row = comm.data?.[0];
+  // A rep who also delivers: his shipments today (with him or ready at the warehouse), for the delivery trip.
+  const delivers = repDoes(user, "delivery");
+  const myShipments = (orders.data ?? []).filter((o) => o.delivery?.rep?.id === user.id && (o.delivery.status === "out" || o.delivery.status === "ready"));
+  const shipShops = new Set(myShipments.map((o) => o.customer_id)).size;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -54,6 +60,22 @@ export default function RepHome() {
         </div>
         <span className="flex size-12 items-center justify-center rounded-full bg-primary text-xl font-bold text-on-primary ring-4 ring-primary-soft">{user.name.trim()[0]}</span>
       </div>
+
+      {delivers && myShipments.length > 0 && (
+        <Link href="/deliveries" className="brand-panel relative flex items-center gap-4 overflow-hidden rounded-3xl p-4">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-action text-on-action">
+            <Route className="size-6" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-bold">{tr("جولة التوصيل", "Delivery trip")}</span>
+            <span className="block text-sm opacity-80">
+              {tr(`${num(myShipments.length)} ${myShipments.length === 1 ? "شحنة" : myShipments.length === 2 ? "شحنتان" : myShipments.length <= 10 ? "شحنات" : "شحنة"} لـ ${num(shipShops)} ${shipShops <= 2 || shipShops > 10 ? "محل" : "محلات"}: اخترها لجولة واحدة`, `${num(myShipments.length)} shipments for ${num(shipShops)} shops: pick them for one trip`)}
+            </span>
+          </span>
+          <Truck className="size-5 shrink-0 opacity-70" />
+          <span className="hazard absolute inset-x-0 bottom-0 h-1" aria-hidden />
+        </Link>
+      )}
 
       <div className="flex h-12 items-center gap-2 rounded-2xl border border-line-strong bg-card px-4 focus-within:border-action focus-within:ring-4 focus-within:ring-action/15">
         <Search className="size-5 text-faint" />

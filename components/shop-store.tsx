@@ -33,7 +33,7 @@ import {
   Wheat,
 } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { Dialog, Segmented, Stepper, errorText, useToast } from "@/components/ui";
+import { Dialog, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { SHOP_MAX_QTY, orderCount, type Customer, type Item, type NewOrder, type Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -175,6 +175,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
   const categories = useMemo(() => [...new Set(items.filter((i) => i.active).map((i) => i.category))], [items]);
   const catIndex = (c: string) => Math.max(0, categories.indexOf(c));
   const shown = active.filter((i) => (cat === "all" || i.category === cat) && matches(q, i.name, i.name_en, i.barcode));
+  const pg = usePages(shown, 12);
 
   const lineOf = (id: number) => bag.lines.find((l) => l.item_id === id);
   /** Change one line of the bag: null or 0 removes it, a new item goes at the end, an old one keeps its place. */
@@ -338,7 +339,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
 
       {/* Products */}
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {shown.map((it, i) => {
+        {pg.shown.map((it, i) => {
           const l = lineOf(it.id);
           const out = available(it) <= 0;
           return (
@@ -374,6 +375,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
           );
         })}
       </div>
+      <Pager {...pg} sizes={[12, 24, 48]} className="mt-3" />
       {!shown.length && <p className="mt-10 text-center text-sm text-muted">{tr("لا توجد مادة بهذا الاسم", "No item by that name")}</p>}
 
       {/* The floating bag bar */}

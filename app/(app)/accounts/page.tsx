@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import { AlertTriangle, ArrowUpRight, BadgeCheck, Calendar, FileText, MapPin, MessageCircle, Phone, ReceiptText, Store, Truck, User, Wallet, type LucideIcon } from "lucide-react";
 import { CustomerPicker, InvoiceTiles, MoneyChart, PaymentList, monthRows } from "@/components/accounts";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { UsdRateCard } from "@/components/usd-rate";
 import { Button, Card, ErrorBox, LimitBar, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -22,7 +23,9 @@ export default function AccountsPage() {
   const { tr, money, num, name, date, ago, lang } = useFmt();
   const { lookups } = useApp();
   const customers = useLoad(() => api.listCustomers(), []);
-  const invoices = useLoad(() => api.listInvoices(), []);
+  const invoicesAll = useLoad(() => api.listInvoices(), []);
+  const whA = useWarehouseFilter();
+  const invoices = { ...invoicesAll, data: invoicesAll.data?.filter((i) => inWarehouse(whA, i.warehouse_id)) };
   const payments = useLoad(() => api.listPayments(), []);
 
   // The shop to show: from the link (?customer=ID), or the one the accountant picks. Default: the most debt.

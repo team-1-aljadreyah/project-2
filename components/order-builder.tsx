@@ -13,7 +13,7 @@ import { useLoad } from "@/lib/use-load";
 import { cn, matches, piecesOf, priceOf as tierPrice } from "@/lib/utils";
 import { useApp } from "./shell";
 import { DiscountPicker, canDiscount } from "./discount";
-import { Badge, Button, Card, Dialog, Empty, LimitBar, Money, Notice, SearchBox, Segmented, Select, Stepper, Textarea, errorText, useToast } from "./ui";
+import { Badge, Button, Card, Dialog, Empty, LimitBar, Money, Notice, SearchBox, Segmented, Select, Stepper, Textarea, errorText, useToast, Pager, usePages } from "./ui";
 
 interface Line {
   item_id: number;
@@ -104,6 +104,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
 
   const categories = useMemo(() => [...new Set(items.filter((i) => i.active).map((i) => i.category))], [items]);
   const shown = items.filter((i) => i.active && (cat === "all" || i.category === cat) && matches(q, i.name, i.name_en, i.barcode));
+  const pg = usePages(shown, 10);
   const linesOver = draft.lines.filter((l) => {
     const it = itemById.get(l.item_id);
     return it && piecesOf(it, l.unit, l.qty) > available(it);
@@ -314,8 +315,9 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
           {shown.length === 0 ? (
             <Empty icon={<PackageX className="size-6" />} title={tr("لا توجد مادة بهذا الاسم", "No item matches")} />
           ) : (
+            <>
             <ul className="divide-y divide-line">
-              {shown.map((it) => {
+              {pg.shown.map((it) => {
                 const avail = available(it);
                 const line = lineOf(it.id);
                 const low = avail > 0 && avail < it.pieces_per_carton * 3;
@@ -344,6 +346,8 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
                 );
               })}
             </ul>
+            <Pager {...pg} className="border-t border-line" />
+            </>
           )}
         </Card>
       </div>

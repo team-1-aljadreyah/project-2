@@ -448,6 +448,8 @@ export interface ReturnLine {
 }
 
 export interface Return {
+  /** The warehouse of its invoice (the goods go back there). */
+  warehouse_id?: number;
   id: number;
   number: string;
   client_ref: string;

@@ -403,13 +403,11 @@ export function DataTable<T>({
   empty?: ReactNode;
   footer?: ReactNode;
 }) {
-  const { tr, num } = useFmt();
-  // Long lists draw 50 rows first, and more on demand: drawing hundreds of rows (twice: table + phone cards)
-  // made pages like the invoices list slow to open.
-  const [limit, setLimit] = useState(PAGE);
+  // Every list is split into pages with numbered circles under it (1, 2, 3…). It also keeps long lists fast:
+  // only one page of rows is drawn (twice: table + phone cards).
+  const pg = usePages(rows);
   if (!rows.length) return <>{empty}</>;
-  const shown = rows.length > limit ? rows.slice(0, limit) : rows;
-  const more = rows.length - shown.length;
+  const shown = pg.shown;
   return (
     <>
       <div className={cn("overflow-x-auto", mobile && "hidden md:block")}>
@@ -464,18 +462,116 @@ export function DataTable<T>({
           })}
         </ul>
       )}
-      {more > 0 && (
-        <div className="border-t border-line p-3 text-center">
-          <Button variant="soft" size="sm" onClick={() => setLimit((l) => l + PAGE)}>
-            {tr(`عرض المزيد (${num(more)} متبقية)`, `Show more (${num(more)} left)`)}
-          </Button>
-        </div>
-      )}
+      <Pager {...pg} className="border-t border-line" />
     </>
   );
 }
 
-const PAGE = 50;
+// ---------- Pages: numbered circles under every list ----------
+
+const SIZES = [10, 25, 50];
+
+/** Splits a list into pages. A new list (another filter, a search) starts again at page 1. */
+export function usePages<T>(rows: T[], size = 10) {
+  const [state, setState] = useState<{ page: number; size: number; total: number }>({ page: 1, size, total: rows.length });
+  const per = state.size;
+  const pages = Math.max(1, Math.ceil(rows.length / per));
+  // Another list (the length changed): back to page 1. Never past the last page.
+  const page = state.total !== rows.length ? 1 : Math.min(state.page, pages);
+  return {
+    page,
+    pages,
+    per,
+    total: rows.length,
+    shown: rows.slice((page - 1) * per, page * per),
+    setPage: (n: number) => setState({ page: Math.max(1, Math.min(pages, n)), size: per, total: rows.length }),
+    setPer: (n: number) => setState({ page: 1, size: n, total: rows.length }),
+  };
+}
+
+/** 1 2 3 … 9 10, with "previous" and "next", how many are shown, and how many per page. */
+export function Pager({
+  page,
+  pages,
+  per,
+  total,
+  setPage,
+  setPer,
+  className,
+  sizes = SIZES,
+}: {
+  page: number;
+  pages: number;
+  per: number;
+  total: number;
+  setPage: (n: number) => void;
+  setPer?: (n: number) => void;
+  className?: string;
+  sizes?: number[];
+}) {
+  const { tr, num, lang } = useFmt();
+  if (total <= Math.min(...sizes) && pages <= 1) return null;
+  // The numbers to show: the first, the last, and two around the current page; "…" in the gaps.
+  const near = new Set([1, pages, page - 1, page, page + 1].filter((n) => n >= 1 && n <= pages));
+  if (page <= 3) [2, 3, 4].forEach((n) => n <= pages && near.add(n));
+  if (page >= pages - 2) [pages - 1, pages - 2, pages - 3].forEach((n) => n >= 1 && near.add(n));
+  const list = [...near].sort((a, b) => a - b);
+  const items: (number | "gap")[] = [];
+  list.forEach((n, i) => {
+    if (i && n - list[i - 1] > 1) items.push("gap");
+    items.push(n);
+  });
+  const Prev = lang === "ar" ? ArrowRight : ArrowLeft;
+  const Next = lang === "ar" ? ArrowLeft : ArrowRight;
+  const from = (page - 1) * per + 1;
+  const to = Math.min(total, page * per);
+  const circle = "flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition";
+  return (
+    <nav aria-label={tr("الصفحات", "Pages")} className={cn("flex flex-wrap items-center justify-between gap-3 px-3 py-3", className)}>
+      <p className="text-xs text-muted">
+        {tr(`${num(from)}–${num(to)} من ${num(total)}`, `${num(from)}–${num(to)} of ${num(total)}`)}
+      </p>
+      <div className="flex items-center gap-1">
+        <button type="button" onClick={() => setPage(page - 1)} disabled={page <= 1} aria-label={tr("السابقة", "Previous")} className={cn(circle, "text-muted hover:bg-card-2 disabled:opacity-30")}>
+          <Prev className="size-4" />
+        </button>
+        {items.map((it, i) =>
+          it === "gap" ? (
+            <span key={`g${i}`} className="w-5 text-center text-faint">
+              …
+            </span>
+          ) : (
+            <button
+              key={it}
+              type="button"
+              onClick={() => setPage(it)}
+              aria-current={it === page ? "page" : undefined}
+              aria-label={tr(`الصفحة ${it}`, `Page ${it}`)}
+              className={cn(circle, "num", it === page ? "bg-action text-on-action shadow-sm" : "border border-line text-muted hover:border-action hover:text-text")}
+            >
+              {num(it)}
+            </button>
+          ),
+        )}
+        <button type="button" onClick={() => setPage(page + 1)} disabled={page >= pages} aria-label={tr("التالية", "Next")} className={cn(circle, "text-muted hover:bg-card-2 disabled:opacity-30")}>
+          <Next className="size-4" />
+        </button>
+      </div>
+      {setPer && (
+        <label className="flex items-center gap-1.5 text-xs text-muted">
+          {tr("لكل صفحة", "Per page")}
+          <select value={per} onChange={(e) => setPer(Number(e.target.value))} className="h-8 rounded-lg border border-line bg-card px-2 text-xs text-text">
+            {sizes.map((n) => (
+              <option key={n} value={n}>
+                {num(n)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </nav>
+  );
+}
 
 // ---------- Dialog ----------
 

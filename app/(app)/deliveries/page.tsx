@@ -17,7 +17,7 @@ import { QrScanner } from "@/components/delivery/scanner";
 import { DeliveryChip } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
-import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, PageHeader, Segmented, Stepper, errorText, useToast } from "@/components/ui";
+import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, PageHeader, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Order } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -44,12 +44,12 @@ export default function DeliveriesPage() {
   const whFilter = useWarehouseFilter();
   const cust = useMemo(() => new Map((customers.data ?? []).map((c) => [c.id, c])), [customers.data]);
 
-  if (orders.state.status === "error") return <ErrorBox error={orders.state.error} onRetry={orders.reload} />;
   const withDelivery = (orders.data ?? []).filter((o) => o.delivery && inWarehouse(whFilter, o.warehouse_id));
   const list = (t: Tab) =>
     withDelivery.filter((o) => o.delivery!.status === t && (t !== "delivered" || dayOfIso(o.delivery!.delivered_at ?? "") >= today(-6)));
   // Shipments with a problem first, so nobody misses them.
   const shown = list(tab).sort((a, b) => Number(!!b.delivery!.problem) - Number(!!a.delivery!.problem));
+  const pg = usePages(shown, 12);
   const mineOut = isRep ? list("out") : [];
   // Shops he can put in a trip: their shipments are with him, or ready at the warehouse for him to take.
   const tripable = isRep ? [...list("out"), ...list("ready")] : [];
@@ -71,6 +71,7 @@ export default function DeliveriesPage() {
     }
   }
 
+  if (orders.state.status === "error") return <ErrorBox error={orders.state.error} onRetry={orders.reload} />;
   return (
     <>
       <PageHeader
@@ -163,7 +164,7 @@ export default function DeliveriesPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           <AnimatePresence initial={false}>
-            {shown.map((o, i) => {
+            {pg.shown.map((o, i) => {
               const c = cust.get(o.customer_id);
               const d = o.delivery!;
               return (
@@ -236,6 +237,7 @@ export default function DeliveriesPage() {
           </AnimatePresence>
         </div>
       )}
+      <Pager {...pg} sizes={[12, 24, 48]} className="mt-2" />
 
       {/* While picking: how many shops, start / cancel (above the phone's bottom bar) */}
       {picking && (

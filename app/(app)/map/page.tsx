@@ -13,6 +13,7 @@ import { MapStats } from "@/components/map/stats";
 import { ZoneDetail } from "@/components/map/zone-detail";
 import { ZonesView } from "@/components/map/zones";
 import { useApp } from "@/components/shell";
+import { useWarehouseFilter } from "@/components/warehouse-filter";
 import { Button, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
@@ -64,7 +65,14 @@ export default function MapPage() {
   const orders = useLoad(() => api.listOrders(), []);
   const invoices = useLoad(() => api.listInvoices(), []);
 
-  const [level, setLevel] = useState<Level>({ name: "site" });
+  const whM = useWarehouseFilter();
+  const [level, setLevel] = useState<Level>(() => (whM ? { name: "warehouse", id: whM } : { name: "site" }));
+  // The filter changed while the map is open: show that warehouse (or both).
+  const [seenWh, setSeenWh] = useState(whM);
+  if (seenWh !== whM) {
+    setSeenWh(whM);
+    setLevel(whM ? { name: "warehouse", id: whM } : { name: "site" });
+  }
   const [camera, setCamera] = useState<Camera>({ dir: 1, ox: 0.5, oy: 0.5 });
   const [threeD, setThreeD] = useState(true);
   const [showPath, setShowPath] = useState(true);
@@ -211,7 +219,7 @@ export default function MapPage() {
                   {level.name === "site" && (
                     <div className="px-2 pb-4 pt-2 sm:px-6">
                       <SiteScene
-                        warehouses={views}
+                        warehouses={views}
                         myWarehouseId={user.role === "warehouse" ? user.warehouse_id : undefined}
                         onEnter={(id, o) => go({ name: "warehouse", id }, { dir: 1, ox: o.x, oy: o.y })}
                       />
