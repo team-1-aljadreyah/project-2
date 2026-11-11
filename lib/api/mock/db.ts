@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { UsdRate, SpecialPrice, CreditNote, Refund,
+import type { SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -48,6 +48,7 @@ export interface Db {
   items: DbItem[];
   batches: DbBatch[];
   receipts: Receipt[];
+  supply_orders?: SupplyOrder[];
   customers: DbCustomer[];
   orders: Order[];
   invoices: DbInvoice[];
@@ -90,7 +91,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 26;
+export const DB_VERSION = 28;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

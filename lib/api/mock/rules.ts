@@ -20,6 +20,8 @@ import type {
   MyChat,
   DeliverInput,
   OrderEdit,
+  NewSupplyOrder,
+  SupplyOrder,
   CreditNote,
   Refund,
   ShopAddress,
@@ -370,6 +372,7 @@ export function createReceipt(db: Db, actor: DbUser, input: NewReceipt, now: Dat
   const receipt: Receipt = {
     id,
     number: `RCV-${pad(id, 5)}`,
+    ...(input.supply_order_id ? { supply_order_id: input.supply_order_id } : {}),
     warehouse_id: input.warehouse_id,
     supplier: input.supplier.trim(),
     lines,
@@ -379,6 +382,7 @@ export function createReceipt(db: Db, actor: DbUser, input: NewReceipt, now: Dat
   };
   db.receipts.push(receipt);
   for (const l of lines) checkLowStock(db, l.item_id, now);
+  if (input.supply_order_id) receiveSupply(db, actor, input.supply_order_id, receipt, now);
   audit(db, actor, "create", "receipt", id, `استلام بضاعة ${receipt.number} (${lines.length} مواد)`, `Received goods ${receipt.number} (${lines.length} items)`, now);
   return receipt;
 }
@@ -1413,6 +1417,110 @@ export function reviewTransfer(db: Db, actor: DbUser, id: number, now: Date): Tr
   t.reviewed_by = person(actor);
   audit(db, actor, "approve", "transfer", t.id, `راجع المدير فرق التحويل ${t.number}`, `Reviewed ${t.number}`, now);
   return t;
+}
+
+// ---------- supply orders ----------
+// The accountant (or the manager) orders goods from a supplier for one warehouse. That warehouse's keeper is
+// told and gets it as an Excel / CSV file; when the goods arrive he receives them against it (a receipt).
+
+export function createSupplyOrder(db: Db, actor: DbUser, input: NewSupplyOrder, now: Date): SupplyOrder {
+  need(actor, ["accountant", "manager"]);
+  const wh = db.warehouses.find((w) => w.id === input.warehouse_id) ?? fail(422, "VALIDATION", "اختر المخزن", "Choose the warehouse", { warehouse_id: msg("مطلوب", "Required") });
+  const errors: Record<string, string> = {};
+  if (!input.supplier?.trim()) errors.supplier = msg("اكتب اسم المورّد", "Write the supplier's name");
+  const lines = (input.lines ?? []).filter((l) => l.item_id && l.qty > 0);
+  if (!lines.length) errors.lines = msg("أضف مادة واحدة على الأقل", "Add at least one item");
+  lines.forEach((l, i) => {
+    itemOf(db, l.item_id);
+    if (!Number.isInteger(l.qty)) errors[`lines.${i}.qty`] = msg("عدد صحيح", "A whole number");
+    if (!(l.price > 0)) errors[`lines.${i}.price`] = msg("سعر الشراء مطلوب", "The purchase price is required");
+  });
+  if (input.expected_date && input.expected_date < dayOf(now)) errors.expected_date = msg("تاريخ في الماضي", "A date in the past");
+  if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
+  db.supply_orders ??= [];
+  const id = nextId(db, "supply_order");
+  const o: SupplyOrder = {
+    id,
+    number: `SUP-${pad(id, 4)}`,
+    warehouse_id: wh.id,
+    supplier: input.supplier.trim(),
+    ...(input.supplier_phone?.trim() ? { supplier_phone: input.supplier_phone.trim() } : {}),
+    lines: lines.map((l) => ({ item_id: l.item_id, unit: l.unit, qty: l.qty, price: Math.round(l.price), received_qty: 0 })),
+    total: lines.reduce((s, l) => s + Math.round(l.price) * l.qty, 0),
+    ...(input.expected_date ? { expected_date: input.expected_date } : {}),
+    ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+    status: "sent",
+    receipt_ids: [],
+    created_at: now.toISOString(),
+    created_by: { ...person(actor), role: actor.role },
+  };
+  db.supply_orders.push(o);
+  audit(db, actor, "create", "receipt", id, `طلب توريد ${o.number} إلى ${wh.name} من ${o.supplier} (${o.total.toLocaleString("en")} د.ع)`, `Supply order ${o.number} to ${wh.name_en}`, now);
+  // The keeper(s) of that warehouse get it.
+  for (const k of db.users.filter((u) => u.role === "warehouse" && u.active && u.warehouse_id === wh.id)) {
+    notify(
+      db,
+      {
+        type: "supply_order",
+        roles: ["warehouse"],
+        user_id: k.id,
+        title: `طلب توريد جديد: ${o.number}`,
+        title_en: `New supply order: ${o.number}`,
+        body: `${o.supplier} · ${lines.length} مواد${o.expected_date ? ` · يصل ${o.expected_date}` : ""}. نزّل الملف واستلم البضاعة عند وصولها.`,
+        body_en: `${o.supplier} · ${lines.length} items. Download the file and receive the goods when they come.`,
+        link: "/supply",
+      },
+      now,
+    );
+  }
+  return o;
+}
+
+export function cancelSupplyOrder(db: Db, actor: DbUser, id: number, reason: string, now: Date): SupplyOrder {
+  need(actor, ["accountant", "manager"]);
+  const o = (db.supply_orders ?? []).find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "طلب التوريد غير موجود", "Supply order not found");
+  if (o.status !== "sent") fail(409, "BAD_STATE", "وصل شيء من هذا الطلب: لا يُلغى", "Part of it already arrived: it can't be cancelled");
+  if (!reason.trim()) fail(422, "VALIDATION", "اكتب السبب", "Write the reason", { reason: msg("مطلوب", "Required") });
+  o.status = "cancelled";
+  o.cancel_reason = reason.trim();
+  audit(db, actor, "cancel", "receipt", o.id, `إلغاء طلب التوريد ${o.number}: ${o.cancel_reason}`, `Cancelled ${o.number}`, now);
+  for (const k of db.users.filter((u) => u.role === "warehouse" && u.active && u.warehouse_id === o.warehouse_id)) {
+    notify(db, { type: "supply_order", roles: ["warehouse"], user_id: k.id, title: `أُلغي طلب التوريد ${o.number}`, title_en: `${o.number} was cancelled`, body: o.cancel_reason, body_en: o.cancel_reason, link: "/supply" }, now);
+  }
+  return o;
+}
+
+/** A receipt brought goods of this supply order: count them, and say if it is now complete. */
+function receiveSupply(db: Db, actor: DbUser, id: number, receipt: Receipt, now: Date) {
+  const o = (db.supply_orders ?? []).find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "طلب التوريد غير موجود", "Supply order not found");
+  if (o.status === "cancelled" || o.status === "received") fail(409, "BAD_STATE", "طلب التوريد مغلق", "This supply order is closed");
+  if (o.warehouse_id !== receipt.warehouse_id) fail(422, "VALIDATION", "طلب التوريد لمخزن آخر", "The supply order is for another warehouse");
+  for (const rl of receipt.lines) {
+    const sl = o.lines.find((l) => l.item_id === rl.item_id && l.unit === rl.unit) ?? o.lines.find((l) => l.item_id === rl.item_id);
+    if (!sl) continue;
+    const item = itemOf(db, sl.item_id);
+    // Count in the supply line's unit (cartons or pieces).
+    const inUnit = sl.unit === rl.unit ? rl.qty : sl.unit === "carton" ? rl.pieces / item.pieces_per_carton : rl.pieces;
+    sl.received_qty = Math.round((sl.received_qty + inUnit) * 100) / 100;
+  }
+  o.receipt_ids.push(receipt.id);
+  const complete = o.lines.every((l) => l.received_qty >= l.qty);
+  o.status = complete ? "received" : "partial";
+  if (actor.role !== "accountant") {
+    notify(
+      db,
+      {
+        type: "supply_order",
+        roles: ["accountant", "manager"],
+        title: complete ? `وصل طلب التوريد ${o.number} كاملاً` : `وصل جزء من طلب التوريد ${o.number}`,
+        title_en: complete ? `${o.number} arrived in full` : `Part of ${o.number} arrived`,
+        body: `${receipt.number} · ${actor.name}`,
+        body_en: receipt.number,
+        link: "/supply",
+      },
+      now,
+    );
+  }
 }
 
 // ---------- stocktake ----------

@@ -42,6 +42,8 @@ import {
   setUsdRate,
   usdRateOn,
   acceptOrder,
+  createSupplyOrder,
+  cancelSupplyOrder,
   creditInvoice,
   refundCustomer,
   cleanAddress,
@@ -573,6 +575,22 @@ export const mockApi: Api = {
       return receiptView(db.receipts.find((r) => r.id === id) ?? notFound(), a);
     }),
   createReceipt: (input) => write((db, a, now) => receiptView(createReceipt(db, a, input, now), a)),
+
+  // Supply orders: the accountant / manager see all; a keeper / staff, their own warehouse's.
+  listSupplyOrders: () =>
+    read((db, a) => {
+      need(a, ["manager", "accountant", "warehouse", "staff"]);
+      return [...(db.supply_orders ?? [])].filter((o) => ownWarehouse(a, o.warehouse_id)).reverse();
+    }),
+  getSupplyOrder: (id) =>
+    read((db, a) => {
+      need(a, ["manager", "accountant", "warehouse", "staff"]);
+      const o = (db.supply_orders ?? []).find((x) => x.id === id);
+      if (!o || !ownWarehouse(a, o.warehouse_id)) notFound();
+      return o;
+    }),
+  createSupplyOrder: (input) => write((db, a, now) => createSupplyOrder(db, a, input, now)),
+  cancelSupplyOrder: (id, reason) => write((db, a, now) => cancelSupplyOrder(db, a, id, reason, now)),
 
   // Transfers
   listTransfers: () =>
