@@ -16,8 +16,39 @@ export interface User {
   phone: string;
   role: Role;
   warehouse_id?: number;
+  /** Shop owner: the shop he is working on now (orders, statement, chat are for this shop). */
   customer_id?: number;
+  /** Shop owner: every shop he owns (he switches between them from the top bar). */
+  customer_ids?: number[];
+  /** Rep: what he does. Marketing (visits shops, takes orders, collects), delivery (takes shipments to the
+   *  shops), or both. Not set = both. */
+  rep_kinds?: RepKind[];
   active: boolean;
+}
+
+export type RepKind = "sales" | "delivery";
+
+/** Does this rep do marketing / delivery? (Not a rep: false.) */
+export function repDoes(u: { role: Role; rep_kinds?: RepKind[] }, kind: RepKind) {
+  return u.role === "rep" && (!u.rep_kinds?.length || u.rep_kinds.includes(kind));
+}
+
+/** A shop in the owner's switcher. */
+export interface MyShop {
+  id: number;
+  name: string;
+  area: string;
+  pending?: boolean;
+  active: boolean;
+}
+
+/** The owner adds one more shop: it waits for the manager's approval, like a new sign-up. */
+export interface NewShopInput {
+  shop_name: string;
+  area: string;
+  address?: string;
+  /** The shop's own phone; empty = the owner's. */
+  phone?: string;
 }
 
 export interface Session {
@@ -61,6 +92,9 @@ export interface Item {
   nearest_expiry?: string;
   /** Average purchase price per piece. Only manager and accountant get it. */
   avg_cost?: number;
+  /** The product photo the shop owner sees in the store (a link; the fake backend keeps a data URL).
+   *  Set by the manager or the warehouse keeper. None = the colored category tile. */
+  image?: string;
 }
 
 export type BatchStatus = "ok" | "near_expiry" | "expired";
@@ -136,7 +170,15 @@ export interface Order {
   source: OrderSource;
   status: OrderStatus;
   lines: OrderLine[];
+  /** What the shop pays: the lines minus the discount. */
   total: number;
+  /** The lines before the discount (only when there is a discount). */
+  subtotal?: number;
+  discount?: OrderDiscount;
+  /** Why the order waits for the manager: over the debt limit, a discount above 3%, or both. */
+  approval_for?: ("debt" | "discount")[];
+  /** The shop owner changed it after sending (before it was confirmed). */
+  edited_at?: string;
   reserved_until?: string;
   note?: string;
   cancel_reason?: string;
@@ -157,6 +199,8 @@ export interface Delivery {
   status: DeliveryStatus;
   /** What the QR on the shipment label holds (also printed under it, to type by hand if the camera can't read). */
   code: string;
+  /** The delivery rep who takes it to the shop (set on confirm). Older shipments: the order's rep. */
+  rep?: Person;
   /** The 4-digit delivery PIN. Sent ONLY to the shop owner of this order; everyone else gets it hidden. */
   pin?: string;
   out_at?: string;
@@ -168,6 +212,29 @@ export interface Delivery {
   /** Wrong PINs typed so far. At 5 the delivery is locked until the manager opens it again. */
   pin_attempts: number;
   locked?: boolean;
+  /** The delivery rep reported he can't deliver it (an accident, the shop closed...). Cleared when it is
+   *  delivered or the manager / warehouse keeper takes it back into the warehouse. */
+  problem?: DeliveryProblem;
+}
+
+export type ProblemReason = "accident" | "vehicle" | "shop_closed" | "no_answer" | "refused" | "other";
+
+export interface DeliveryProblem {
+  reason: ProblemReason;
+  note?: string;
+  at: string;
+  by: Person;
+}
+
+/** The most a shop owner can order of one item in one order (cartons or pieces). Bigger orders go
+ *  through the delivery rep or the office, who check the stock and the shop's limit first. */
+export const SHOP_MAX_QTY = 100;
+
+export interface ProblemInput {
+  /** The shipments it is about: one, the ones he picked, or all he has on the way (an accident). */
+  order_ids: number[];
+  reason: ProblemReason;
+  note?: string;
 }
 
 export interface DeliverInput {
@@ -201,6 +268,10 @@ export interface Invoice {
   date: string;
   lines: InvoiceLine[];
   total: number;
+  /** Before the discount, and the discount itself (from the order). */
+  subtotal?: number;
+  discount?: number;
+  discount_percent?: number;
   paid: number;
   returned: number;
   remaining: number;
@@ -407,7 +478,7 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply";
+export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem";
 
 export interface AppNotification {
   id: number;
@@ -498,6 +569,30 @@ export interface NewOrder {
   warehouse_id?: number;
   lines: { item_id: number; unit: Unit; qty: number }[];
   note?: string;
+  /** Delivery rep / manager only. Above 3% (rep) the order waits for the manager. */
+  discount_percent?: number;
+}
+
+/** The shop owner changes his order before it is confirmed (the whole new list of lines). */
+export interface OrderEdit {
+  lines: { item_id: number; unit: Unit; qty: number }[];
+  note?: string;
+}
+
+/** The delivery rep and the warehouse keeper give up to this by themselves; more needs the manager. */
+export const STAFF_DISCOUNT_MAX = 3;
+/** Nobody gives more than this on one order. */
+export const DISCOUNT_MAX = 30;
+
+export interface OrderDiscount {
+  percent: number;
+  /** In dinars, taken off the lines' total. */
+  amount: number;
+  by: Person & { role: Role };
+  at: string;
+  /** Above 3% by a rep / keeper: waits for the manager. */
+  needs_approval?: boolean;
+  approved_by?: Person;
 }
 
 export interface NewPayment {
@@ -567,6 +662,7 @@ export interface UserInput {
   name: string;
   phone: string;
   role: Role;
+  rep_kinds?: RepKind[];
   warehouse_id?: number;
   customer_id?: number;
   active: boolean;

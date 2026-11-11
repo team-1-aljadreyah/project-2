@@ -42,7 +42,7 @@ export default function RegisterPage() {
 
   // Already logged in: go to your own home page.
   useEffect(() => {
-    if (session) router.replace(homeOf(session.user.role));
+    if (session) router.replace(homeOf(session.user.role, session.user.rep_kinds));
   }, [session, router]);
 
   /** The same checks the server does, so mistakes show before sending. */
@@ -123,7 +123,7 @@ export default function RegisterPage() {
                   </IconField>
                 </div>
 
-                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone" error={err.phone} hint={tr("تسجّل به الدخول، ويتصل بك مندوب توصيلك عليه", "You log in with it, and your delivery rep calls you on it")} ltr>
+                <IconField icon={Phone} label={tr("رقم الهاتف", "Phone number")} htmlFor="phone" error={err.phone} hint={tr("تسجّل به الدخول، ويتصل بك مندوبك عليه", "You log in with it, and your delivery rep calls you on it")} ltr>
                   <input id="phone" type="tel" inputMode="tel" dir="ltr" autoComplete="tel" placeholder="07XX XXX XXXX" value={f.phone} onChange={(e) => set({ phone: e.target.value })} className={iconInput} />
                 </IconField>
 

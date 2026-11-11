@@ -35,6 +35,8 @@ const icon = (t: NotificationType) => {
       return <Lock className="size-5 text-danger" />;
     case "support_message":
       return <Headset className="size-5 text-action" />;
+    case "delivery_problem":
+      return <AlertTriangle className="size-5 text-danger" />;
     case "support_reply":
       return <MessageCircle className="size-5 text-success" />;
   }

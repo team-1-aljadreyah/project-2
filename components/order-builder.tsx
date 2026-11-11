@@ -12,6 +12,7 @@ import { enqueue, isNetworkError, newClientRef, useOffline } from "@/lib/offline
 import { useLoad } from "@/lib/use-load";
 import { cn, matches, piecesOf, priceOf } from "@/lib/utils";
 import { useApp } from "./shell";
+import { DiscountPicker, canDiscount } from "./discount";
 import { Badge, Button, Card, Dialog, Empty, LimitBar, Money, Notice, SearchBox, Segmented, Select, Stepper, Textarea, errorText, useToast } from "./ui";
 
 interface Line {
@@ -26,6 +27,8 @@ interface Draft {
   lines: Line[];
   note: string;
   client_ref: string;
+  /** Rep / manager: the discount percent on this order. */
+  discount?: number;
 }
 
 const draftKey = (userId: number) => `nahrain.draft.${userId}`;
@@ -83,10 +86,12 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
   };
 
   const available = (it: Item) => it.stock.by_warehouse.find((w) => w.warehouse_id === draft.warehouse_id)?.qty ?? 0;
-  const total = draft.lines.reduce((s, l) => {
+  const subtotal = draft.lines.reduce((s, l) => {
     const it = itemById.get(l.item_id);
     return it ? s + priceOf(it, tierId, l.unit) * l.qty : s;
   }, 0);
+  const pct = canDiscount(user.role) ? (draft.discount ?? 0) : 0;
+  const total = subtotal - Math.round((subtotal * pct) / 100);
   const balance = customer?.balance ?? 0;
   const limit = customer?.debt_limit;
   const overLimit = limit !== undefined && customer && balance + total > limit;
@@ -110,6 +115,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
       warehouse_id: draft.warehouse_id,
       lines: draft.lines,
       note: draft.note || undefined,
+      ...(pct ? { discount_percent: pct } : {}),
     };
     setBusy(true);
     setErrors({});
@@ -118,7 +124,14 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
       const order = await api.createOrder(body);
       fresh();
       reloadItems();
-      toast("success", order.status === "needs_approval" ? tr("أُرسل الطلب، وينتظر موافقة المدير لأنه يتجاوز سقف الدين", "Order sent. It waits for the manager because it passes the debt limit") : tr("أُرسل الطلب وحُجزت الكمية", "Order sent and stock reserved"));
+      toast(
+        "success",
+        order.status === "needs_approval"
+          ? order.approval_for?.includes("discount") && !order.approval_for.includes("debt")
+            ? tr("أُرسل الطلب، وينتظر موافقة المدير على الخصم", "Order sent. It waits for the manager to OK the discount")
+            : tr("أُرسل الطلب، وينتظر موافقة المدير", "Order sent. It waits for the manager")
+          : tr("أُرسل الطلب وحُجزت الكمية", "Order sent and stock reserved"),
+      );
       router.push(`/orders/${order.id}`);
     } catch (e) {
       if (isNetworkError(e)) {
@@ -202,6 +215,18 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
         <Notice tone="primary" title={tr("بدون إنترنت", "Offline")}>
           {tr("يُحفظ الطلب على الجوال ويُرسَل عند عودة الإنترنت.", "The order is saved on the phone and sent when the internet is back.")}
         </Notice>
+      )}
+      {canDiscount(user.role) && draft.lines.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-sm font-semibold">{tr("خصم", "Discount")}</p>
+          <DiscountPicker value={pct} onChange={(v) => update({ discount: v })} subtotal={subtotal} role={user.role} />
+        </div>
+      )}
+      {pct > 0 && (
+        <div className="flex items-center justify-between text-sm text-muted">
+          <span>{tr("قبل الخصم", "Before discount")}</span>
+          <Money value={subtotal} />
+        </div>
       )}
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted">

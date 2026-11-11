@@ -194,7 +194,7 @@ export function buildDecisions({
       kind: "close_month",
       ref: 0,
       title: tr(`إغلاق عمولات ${monthName(lastKey)}`, `Close commissions for ${monthName(lastKey)}`),
-      sub: tr("الشهر انتهى: أغلقه حتى تثبت أرقام عمولات مندوبي التوصيل", "The month is over: close it so the delivery reps' numbers are final"),
+      sub: tr("الشهر انتهى: أغلقه حتى تثبت أرقام عمولات المندوبين", "The month is over: close it so the reps' numbers are final"),
       weight: 40,
       href: "/commissions",
     });

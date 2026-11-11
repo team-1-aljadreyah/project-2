@@ -11,14 +11,16 @@ import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
 import { ChatWidget } from "@/components/support/chat-widget";
+import { ShopSwitcher } from "@/components/shop-switcher";
+import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
-import { canOpen, GROUPS, NAV } from "./nav";
-import { roleName } from "./status";
+import { canOpen, GROUPS, NAV, navFor } from "./nav";
+import { jobName } from "./status";
 import { LanguageSwitch, ThemeToggle } from "./switches";
 import { Button, Empty, IconButton, Skeleton, Switch, useToast } from "./ui";
 
@@ -86,13 +88,13 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
     };
   }, [user, lookups.data, items.data, items.reload]);
 
-  const allowed = canOpen(user.role, path);
+  const allowed = canOpen(user.role, path, user.rep_kinds);
 
   return (
     <div className="min-h-dvh md:flex">
       <Sidebar user={user} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar user={user} />
+        <TopBar user={user} warehouses={lookups.data?.warehouses ?? []} />
         <OfflineBar />
         <main className="mx-auto w-full max-w-7xl flex-1 px-3 pt-4 pb-28 sm:px-5 md:pb-10">
           {!allowed ? (
@@ -100,7 +102,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
               icon={<ShieldAlert className="size-6" />}
               title={tr("هذه الصفحة ليست ضمن صلاحياتك", "This page isn't part of your role")}
               body={tr("كل موظف يرى ما يخص عمله فقط.", "Each person sees only what their job needs.")}
-              action={<Button href={homeOf(user.role)}>{tr("الرجوع للرئيسية", "Go home")}</Button>}
+              action={<Button href={homeOf(user.role, user.rep_kinds)}>{tr("الرجوع للرئيسية", "Go home")}</Button>}
             />
           ) : value ? (
             <Ctx.Provider value={value}>
@@ -124,7 +126,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
 }
 
 function useNav(user: User) {
-  return NAV.filter((n) => n.roles.includes(user.role));
+  return NAV.filter((n) => navFor(n, user));
 }
 
 function isActive(path: string, href: string) {
@@ -172,7 +174,7 @@ function Sidebar({ user }: { user: User }) {
       <div className="border-t border-line p-3">
         <div className="rounded-xl bg-card-2 px-3 py-2 text-xs text-muted">
           <p className="font-medium text-text">{user.name}</p>
-          <p>{roleName(user.role, tr)}</p>
+          <p>{jobName(user, tr)}</p>
         </div>
       </div>
     </aside>
@@ -236,7 +238,7 @@ function BottomBar({ user }: { user: User }) {
   );
 }
 
-function TopBar({ user }: { user: User }) {
+function TopBar({ user, warehouses }: { user: User; warehouses: Lookups["warehouses"] }) {
   const { tr } = useFmt();
   const [menu, setMenu] = useState(false);
   return (
@@ -244,7 +246,20 @@ function TopBar({ user }: { user: User }) {
       <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
         <Logo small href="/" />
       </div>
-      <div className="hidden flex-1 md:block" />
+      <div className="hidden flex-1 md:block">
+        {user.role === "shop" && <ShopSwitcher user={user} />}
+        {hasWarehouseFilter(user) && <WarehouseFilterSwitch warehouses={warehouses} />}
+      </div>
+      {hasWarehouseFilter(user) && (
+        <div className="min-w-0 md:hidden">
+          <WarehouseFilterSwitch warehouses={warehouses} />
+        </div>
+      )}
+      {user.role === "shop" && (
+        <div className="min-w-0 md:hidden">
+          <ShopSwitcher user={user} />
+        </div>
+      )}
       <NetworkDot />
       <Bell2 user={user} />
       <LanguageSwitch />
@@ -254,7 +269,7 @@ function TopBar({ user }: { user: User }) {
           <span className="flex size-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-on-primary">{user.name.slice(0, 1)}</span>
           <span className="hidden text-start text-xs leading-tight lg:block">
             <span className="block font-medium text-text">{user.name}</span>
-            <span className="block text-muted">{roleName(user.role, tr)}</span>
+            <span className="block text-muted">{jobName(user, tr)}</span>
           </span>
           <Menu className="size-4 text-muted lg:hidden" aria-hidden />
         </button>
@@ -282,7 +297,7 @@ function AccountMenu({ user, onClose }: { user: User; onClose: () => void }) {
         <p className="text-xs text-muted" dir="ltr">
           {user.phone}
         </p>
-        <p className="mt-1 text-xs text-muted">{roleName(user.role, tr)}</p>
+        <p className="mt-1 text-xs text-muted">{jobName(user, tr)}</p>
       </div>
       {USE_MOCK && (
         <div className="mx-1 my-1 rounded-xl bg-card-2 px-3 py-2">

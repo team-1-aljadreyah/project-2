@@ -7,7 +7,7 @@
 // Orders go through the same api.createOrder as everywhere else, and keep working without internet.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
@@ -23,6 +23,7 @@ import {
   Milk,
   Minus,
   Package,
+  Pencil,
   Plus,
   Search,
   ShoppingBag,
@@ -34,12 +35,12 @@ import {
 import { useApp } from "@/components/shell";
 import { Dialog, Segmented, Stepper, errorText, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import type { Customer, Item, NewOrder, Unit } from "@/lib/api/types";
+import { SHOP_MAX_QTY, type Customer, type Item, type NewOrder, type Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { enqueue, isNetworkError, newClientRef } from "@/lib/offline";
 import { cn, matches, piecesOf, priceOf } from "@/lib/utils";
 
-// ---------- How each category looks (we have no product photos, so a colored tile with an icon) ----------
+// ---------- How an item looks: its photo, or (no photo yet) a colored tile with the category icon ----------
 const KINDS = [/حبوب|رز/, /سكر|طحين/, /زيوت|سمن/, /معلبات/, /مشروبات/, /ألبان/, /حلويات/, /بهارات/];
 const ACCENTS = ["#e1692b", "#c99a2e", "#4f8a5b", "#3f6f9e", "#b4533c", "#8a6bb0", "#2f8f8a", "#9a7b4f"];
 
@@ -69,8 +70,16 @@ function CatIcon({ category, ...props }: { category: string; className?: string;
 }
 
 /** The colored tile: the accent mixed into the card color, so it works in day and night mode. */
-function Art({ category, index, size = "md" }: { category: string; index: number; size?: "md" | "lg" }) {
+function Art({ category, index, image, size = "md" }: { category: string; index: number; image?: string; size?: "md" | "lg" }) {
   const accent = ACCENTS[index % ACCENTS.length];
+  // The real photo, when the manager or the warehouse keeper added one.
+  if (image)
+    return (
+      <div className={cn("overflow-hidden rounded-2xl bg-card-2", size === "lg" ? "h-48" : "aspect-[4/3]")}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={image} alt="" loading="lazy" className="size-full object-cover" />
+      </div>
+    );
   return (
     <div
       className={cn("relative flex items-center justify-center overflow-hidden rounded-2xl", size === "lg" ? "h-48" : "aspect-[4/3]")}
@@ -92,14 +101,51 @@ interface Bag {
   lines: Line[];
   note: string;
   client_ref: string;
+  /** Changing an order that was sent but isn't confirmed yet: "send" saves the change to it. */
+  edit?: { id: number; number: string };
 }
-const bagKey = (userId: number) => `nahrain.shopbag.${userId}`;
-function readBag(userId: number): Bag {
+
+/** From the order page: put the order's lines into the bag, to change them in the store. */
+export function editOrderInBag(userId: number, customerId: number, order: { id: number; number: string; lines: Line[]; note?: string }) {
+  const bag: Bag = { lines: order.lines.map(({ item_id, unit, qty }) => ({ item_id, unit, qty })), note: order.note ?? "", client_ref: newClientRef(), edit: { id: order.id, number: order.number } };
+  writeBag(userId, customerId, bag);
+}
+
+// The bag lives on the phone (localStorage) and the page only reads it, so it is the same everywhere: after
+// "change the order" on the order page, and when Next shows a store page it kept in memory.
+const BAG_EVENT = "nahrain-bag";
+// One bag per shop: an owner of two shops fills each one on its own (their prices can differ too).
+const bagKey = (userId: number, customerId: number) => `nahrain.shopbag.${userId}.${customerId}`;
+const EMPTY = "";
+function readRaw(userId: number, customerId: number) {
   try {
-    const raw = localStorage.getItem(bagKey(userId));
+    return localStorage.getItem(bagKey(userId, customerId)) ?? EMPTY;
+  } catch {
+    return EMPTY;
+  }
+}
+function parseBag(raw: string): Bag {
+  try {
     if (raw) return JSON.parse(raw) as Bag;
   } catch {}
-  return { lines: [], note: "", client_ref: newClientRef() };
+  return { lines: [], note: "", client_ref: "" };
+}
+function writeBag(userId: number, customerId: number, bag: Bag) {
+  // The order's id for "sent twice" is made with the bag's first line, and kept until it is sent.
+  const next = bag.lines.length && !bag.client_ref ? { ...bag, client_ref: newClientRef() } : bag;
+  try {
+    if (next.lines.length || next.note || next.edit) localStorage.setItem(bagKey(userId, customerId), JSON.stringify(next));
+    else localStorage.removeItem(bagKey(userId, customerId));
+  } catch {}
+  window.dispatchEvent(new Event(BAG_EVENT));
+}
+function subscribeBag(cb: () => void) {
+  window.addEventListener(BAG_EVENT, cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener(BAG_EVENT, cb);
+    window.removeEventListener("storage", cb);
+  };
 }
 
 export function ShopStore({ customer }: { customer: Customer }) {
@@ -108,18 +154,17 @@ export function ShopStore({ customer }: { customer: Customer }) {
   const router = useRouter();
   const toast = useToast();
 
-  const [bag, setBag] = useState<Bag>(() => readBag(user.id));
+  const raw = useSyncExternalStore(subscribeBag, () => readRaw(user.id, customer.id), () => EMPTY);
+  const bag = useMemo(() => parseBag(raw), [raw]);
+  const setBag = useCallback(
+    (u: Bag | ((b: Bag) => Bag)) => writeBag(user.id, customer.id, typeof u === "function" ? u(parseBag(readRaw(user.id, customer.id))) : u),
+    [user.id, customer.id],
+  );
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [open, setOpen] = useState<Item | null>(null);
   const [bagOpen, setBagOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(bagKey(user.id), JSON.stringify(bag));
-    } catch {}
-  }, [bag, user.id]);
 
   // Orders come from the main warehouse (the shop doesn't choose; the company does).
   const warehouseId = lookups.warehouses[0].id;
@@ -141,6 +186,10 @@ export function ShopStore({ customer }: { customer: Customer }) {
     });
   const addOne = (it: Item) => {
     const l = lineOf(it.id);
+    if ((l?.qty ?? 0) >= SHOP_MAX_QTY) {
+      toast("danger", tr(`الحد الأعلى ${SHOP_MAX_QTY} لكل مادة في الطلب. للكميات الأكبر تواصل مع مندوبك.`, `Up to ${SHOP_MAX_QTY} of each item per order. For more, contact your rep.`));
+      return;
+    }
     setLine(it.id, { unit: l?.unit ?? "carton", qty: (l?.qty ?? 0) + 1 });
   };
 
@@ -159,7 +208,23 @@ export function ShopStore({ customer }: { customer: Customer }) {
     if (!bag.lines.length) return;
     const body: NewOrder = { client_ref: bag.client_ref, customer_id: customer.id, warehouse_id: warehouseId, lines: bag.lines, note: bag.note || undefined };
     setBusy(true);
-    const fresh = () => setBag({ lines: [], note: "", client_ref: newClientRef() });
+    const fresh = () => setBag({ lines: [], note: "", client_ref: "" });
+    if (bag.edit) {
+      try {
+        const order = await api.updateOrder(bag.edit.id, { lines: bag.lines, note: bag.note });
+        fresh();
+        reloadItems();
+        setBagOpen(false);
+        toast("success", order.status === "needs_approval" ? tr("حُفظ التعديل، وينتظر الطلب موافقة المدير", "Saved. The order waits for the manager") : tr("حُفظ تعديل الطلب", "Your order was changed"));
+        router.push(`/orders/${order.id}`);
+      } catch (e) {
+        if (e instanceof ApiError && e.code === "OUT_OF_STOCK") reloadItems();
+        toast("danger", errorText(e, tr));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const order = await api.createOrder(body);
       fresh();
@@ -195,6 +260,23 @@ export function ShopStore({ customer }: { customer: Customer }) {
           <h1 className="truncate text-lg font-bold">{customer.owner_name}</h1>
         </div>
       </div>
+
+      {/* Changing a sent order */}
+      {bag.edit && (
+        <div className="mt-4 flex items-center gap-3 rounded-2xl border border-action bg-action/10 p-3">
+          <Pencil className="size-5 shrink-0 text-action" />
+          <p className="min-w-0 flex-1 text-sm">
+            {tr("تعدّل الطلب", "Changing order")}{" "}
+            <b className="num" dir="ltr">
+              {bag.edit.number}
+            </b>
+            {tr(": غيّر الكميات أو أضف مواد، ثم احفظ من السلة.", ": change amounts or add items, then save from the bag.")}
+          </p>
+          <button type="button" onClick={() => setBag({ lines: [], note: "", client_ref: "" })} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-muted hover:bg-card-2 hover:text-text">
+            {tr("إلغاء التعديل", "Stop changing")}
+          </button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mt-4 flex h-12 items-center gap-2 rounded-2xl border border-line-strong bg-card px-4 focus-within:border-action focus-within:ring-4 focus-within:ring-action/15">
@@ -257,7 +339,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
           return (
             <motion.div key={it.id} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03 }} className="flex flex-col rounded-3xl border border-line bg-card p-2.5">
               <button type="button" onClick={() => setOpen(it)} className="text-start">
-                <Art category={it.category} index={catIndex(it.category)} />
+                <Art category={it.category} index={catIndex(it.category)} image={it.image} />
                 <p className="mt-2 line-clamp-2 min-h-10 px-1 text-sm font-bold leading-5">{name(it)}</p>
                 <p className="px-1 text-[11px] text-muted">
                   {tr("كارتون", "Carton")} · {it.pieces_per_carton} {tr("قطعة", "pcs")}
@@ -337,7 +419,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
             className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action transition hover:bg-action-hover disabled:opacity-50"
           >
             {busy ? <Loader2 className="size-5 animate-spin" /> : <Truck className="size-5" />}
-            {tr("أرسل الطلب", "Send the order")} · <span className="num">{money(total)}</span>
+            {bag.edit ? tr("احفظ التعديل", "Save the change") : tr("أرسل الطلب", "Send the order")} · <span className="num">{money(total)}</span>
           </button>
         }
       >
@@ -351,7 +433,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
             <p className="text-xs text-muted">{customer.address || customer.area}</p>
             {rep && (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-                <Truck className="size-3.5" /> {tr("مندوب توصيلك", "Your delivery rep")}: {rep.name}
+                <Truck className="size-3.5" /> {tr("مندوبك", "Your rep")}: {rep.name}
               </p>
             )}
             <input
@@ -370,7 +452,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
               return (
                 <li key={l.item_id} className="flex items-center gap-3 rounded-2xl border border-line p-2">
                   <div className="w-16 shrink-0">
-                    <Art category={it.category} index={catIndex(it.category)} />
+                    <Art category={it.category} index={catIndex(it.category)} image={it.image} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold">{name(it)}</p>
@@ -456,7 +538,8 @@ function ItemSheet({
   const { tr, money, name, qty: fmtQty } = useFmt();
   const [unit, setUnit] = useState<Unit>(line?.unit ?? "carton");
   const [n, setN] = useState(line?.qty ?? 1);
-  const max = unit === "carton" ? Math.floor(available / item.pieces_per_carton) : available;
+  // What is in stock, and never more than the shop owner's limit per item.
+  const max = Math.min(SHOP_MAX_QTY, unit === "carton" ? Math.floor(available / item.pieces_per_carton) : available);
   const tooMuch = piecesOf(item, unit, n) > available;
   return (
     <Dialog
@@ -480,7 +563,7 @@ function ItemSheet({
         </div>
       }
     >
-      <Art category={item.category} index={index} size="lg" />
+      <Art category={item.category} index={index} image={item.image} size="lg" />
       <div className="mt-4 flex items-start justify-between gap-3">
         <div>
           <p className="text-lg font-bold">{name(item)}</p>
@@ -512,6 +595,7 @@ function ItemSheet({
         <p className="text-sm font-bold">{tr("الكمية", "Quantity")}</p>
         <Stepper value={n} onChange={setN} min={1} max={Math.max(1, max)} />
       </div>
+      <p className="mt-1 text-end text-[11px] text-faint">{tr(`حتى ${SHOP_MAX_QTY} في الطلب الواحد`, `Up to ${SHOP_MAX_QTY} per order`)}</p>
       {line && (
         <button type="button" onClick={() => onSave(null)} className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-danger">
           <Trash2 className="size-3.5" /> {tr("احذف من السلة", "Remove from bag")}

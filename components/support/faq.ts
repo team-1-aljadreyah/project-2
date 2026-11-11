@@ -3,7 +3,7 @@ export const FAQ: { q: [string, string]; a: [string, string] }[] = [
   {
     q: ["كيف أطلب بضاعة؟", "How do I order?"],
     a: [
-      "من صفحة «اطلب الآن» اختر المواد وأضفها إلى السلة، ثم اضغط «أرسل الطلب». يصل الطلب إلى الشركة وإلى مندوب التوصيل الخاص بك، وتُحجز الكمية لك.",
+      "من صفحة «اطلب الآن» اختر المواد وأضفها إلى السلة، ثم اضغط «أرسل الطلب». يصل الطلب إلى الشركة وإلى مندوبك الخاص بك، وتُحجز الكمية لك.",
       "From “Order now”, add items to the bag, then press “Send the order”. It reaches the company and your delivery rep, and the stock is held for you.",
     ],
   },
@@ -24,7 +24,7 @@ export const FAQ: { q: [string, string]; a: [string, string] }[] = [
   {
     q: ["كيف أسدد ديني؟", "How do I pay my debt?"],
     a: [
-      "نقداً أو بتحويل لمندوب التوصيل، أو أونلاين ببطاقة Qi من «كشف حسابي». كل تسديد يُخصم من أقدم فاتورة أولاً.",
+      "نقداً أو بتحويل لمندوبك، أو أونلاين ببطاقة Qi من «كشف حسابي». كل تسديد يُخصم من أقدم فاتورة أولاً.",
       "In cash or by transfer to your delivery rep, or online with Qi Card from “My statement”. Every payment goes to your oldest invoice first.",
     ],
   },

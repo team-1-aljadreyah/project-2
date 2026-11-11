@@ -225,7 +225,7 @@ function LabelDialog({ orderId, onClose }: { orderId: number; onClose: () => voi
   return (
     <Dialog open onClose={onClose} title={tr("ملصق الشحنة: اطبعه والصقه على البضاعة", "Shipment label: print it and stick it on the goods")} footer={<PrintButton />}>
       {o?.delivery ? (
-        <ShipmentLabel order={o} shop={customer.data?.name ?? ""} area={customer.data?.area} rep={lookups.reps.find((r) => r.id === o.rep_id)?.name ?? ""} />
+        <ShipmentLabel order={o} shop={customer.data?.name ?? ""} area={customer.data?.area} rep={o.delivery?.rep?.name ?? lookups.reps.find((r) => r.id === o.rep_id)?.name ?? ""} />
       ) : (
         <Skeleton className="h-44" />
       )}

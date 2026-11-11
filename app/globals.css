@@ -141,6 +141,28 @@ body {
     box-shadow: none !important;
     border: none !important;
   }
+  .dark {
+    --bg: #ffffff;
+    --card: #ffffff;
+    --card-2: #f4f5f7;
+    --text: #111317;
+    --muted: #5b616b;
+    --faint: #8d939c;
+    --line: #e1e4e9;
+    --line-strong: #cbd0d7;
+    --primary-ink: #1d2127;
+    --success: #2e7d32;
+    --success-soft: #e7f3e8;
+    --warning: #9a5200;
+    --warning-soft: #fdf0dc;
+    --danger: #b71d08;
+    --danger-soft: #fdecea;
+    color-scheme: light;
+  }
+  /* The price column hides on small screens; on paper there is room for it. */
+  .print-area .sm\:table-cell {
+    display: table-cell !important;
+  }
 }
 
 /* Day/night: the new colors spread out in a circle from the button (lib/view-transition.ts). */

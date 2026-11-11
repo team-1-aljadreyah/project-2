@@ -3,15 +3,20 @@
 // Deliveries. The delivery rep's flow, so no delivery can be faked:
 //   at the warehouse: scan the shipment's QR → it is "out" with him (his name and the time are recorded);
 //   at the shop: photo of the packages + the PIN only the shop owner has → "delivered".
+// He can pick several shops for one trip (in driving order), and report when he can't deliver (an accident,
+// the shop closed...): the manager is told, and the manager / warehouse keeper can take the shipment back.
 // The manager, the warehouse keeper and the accountant see every shipment here (they don't deliver).
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckCircle2, KeyRound, Lock, MapPin, PackageCheck, QrCode, Truck, Warehouse } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CheckSquare, KeyRound, Lock, MapPin, PackageCheck, QrCode, Route, Square, Truck, Warehouse } from "lucide-react";
 import { PhotoCapture } from "@/components/delivery/photo";
+import { ProblemNote, ReportProblem } from "@/components/delivery/problem";
+import { TripPanel, buildTrip, saveTrip, useTrip } from "@/components/delivery/trip";
 import { QrScanner } from "@/components/delivery/scanner";
 import { DeliveryChip } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, PageHeader, Segmented, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Order } from "@/lib/api/types";
@@ -32,13 +37,22 @@ export default function DeliveriesPage() {
   const [scan, setScan] = useState(false);
   const [busy, setBusy] = useState(false);
   const [handing, setHanding] = useState<Order | null>(null);
+  const [reporting, setReporting] = useState<Order[] | null>(null);
+  // Picking shops for a trip: the shops ticked so far (saved as the trip when he presses "start").
+  const [picking, setPicking] = useState<number[] | null>(null);
+  const trip = useTrip(user.id);
+  const whFilter = useWarehouseFilter();
   const cust = useMemo(() => new Map((customers.data ?? []).map((c) => [c.id, c])), [customers.data]);
 
   if (orders.state.status === "error") return <ErrorBox error={orders.state.error} onRetry={orders.reload} />;
-  const withDelivery = (orders.data ?? []).filter((o) => o.delivery);
+  const withDelivery = (orders.data ?? []).filter((o) => o.delivery && inWarehouse(whFilter, o.warehouse_id));
   const list = (t: Tab) =>
     withDelivery.filter((o) => o.delivery!.status === t && (t !== "delivered" || dayOfIso(o.delivery!.delivered_at ?? "") >= today(-6)));
-  const shown = list(tab);
+  // Shipments with a problem first, so nobody misses them.
+  const shown = list(tab).sort((a, b) => Number(!!b.delivery!.problem) - Number(!!a.delivery!.problem));
+  const mineOut = isRep ? list("out") : [];
+  const stops = isRep && trip.length ? buildTrip(trip, withDelivery, cust, today()) : [];
+  const toggle = (customerId: number) => setPicking((p) => (p ? (p.includes(customerId) ? p.filter((x) => x !== customerId) : [...p, customerId]) : p));
 
   async function dispatch(code: string) {
     setBusy(true);
@@ -61,9 +75,16 @@ export default function DeliveriesPage() {
         subtitle={tr("امسح QR الشحنة في المخزن، وسلّمها بصورة ورمز استلام من صاحب المحل", "Scan the shipment's QR at the warehouse; deliver it with a photo and the shop owner's PIN")}
         actions={
           isRep && (
-            <Button variant="action" size="lg" onClick={() => setScan(true)}>
-              <QrCode className="size-5" /> {tr("امسح QR", "Scan QR")}
-            </Button>
+            <>
+              {mineOut.length > 0 && (
+                <Button variant="danger" size="lg" onClick={() => setReporting(mineOut)}>
+                  <AlertTriangle className="size-5" /> {tr("تعذّر التسليم", "Can't deliver")}
+                </Button>
+              )}
+              <Button variant="action" size="lg" onClick={() => setScan(true)}>
+                <QrCode className="size-5" /> {tr("امسح QR", "Scan QR")}
+              </Button>
+            </>
           )
         }
       />
@@ -86,6 +107,15 @@ export default function DeliveriesPage() {
         </motion.button>
       )}
 
+      {stops.length > 0 && !picking && (
+        <TripPanel
+          stops={stops}
+          onDeliver={setHanding}
+          onProblem={setReporting}
+          onEnd={() => saveTrip(user.id, [])}
+        />
+      )}
+
       <Segmented
         className="mb-4"
         value={tab}
@@ -96,6 +126,13 @@ export default function DeliveriesPage() {
           { value: "delivered", label: tr("سُلِّمت (7 أيام)", "Delivered (7 days)"), count: list("delivered").length },
         ]}
       />
+
+      {/* Pick several shops for one trip */}
+      {isRep && tab === "out" && mineOut.length > 1 && !picking && (
+        <Button className="mb-3 w-full sm:w-auto" onClick={() => setPicking(stops.length ? trip.filter((id) => mineOut.some((o) => o.customer_id === id)) : [])}>
+          <Route className="size-4" /> {stops.length ? tr("عدّل محلات الجولة", "Change the trip's shops") : tr("اختر عدة محلات لجولة واحدة", "Pick several shops for one trip")}
+        </Button>
+      )}
 
       {orders.state.status === "loading" ? (
         <LoadingRows />
@@ -117,8 +154,19 @@ export default function DeliveriesPage() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.04 } }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className={cn("rounded-2xl border bg-card p-4", d.locked ? "border-danger/40" : "border-line")}
+                  className={cn("rounded-2xl border bg-card p-4", d.locked || d.problem ? "border-danger/40" : picking?.includes(o.customer_id) ? "border-action ring-2 ring-action/30" : "border-line")}
                 >
+                  {picking && d.status === "out" && (
+                    <button
+                      type="button"
+                      onClick={() => toggle(o.customer_id)}
+                      aria-pressed={picking.includes(o.customer_id)}
+                      className={cn("mb-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold", picking.includes(o.customer_id) ? "bg-action/15 text-text" : "bg-card-2 text-muted")}
+                    >
+                      {picking.includes(o.customer_id) ? <CheckSquare className="size-5 text-action" /> : <Square className="size-5" />}
+                      {picking.includes(o.customer_id) ? tr("ضمن الجولة", "In the trip") : tr("أضِفه إلى الجولة", "Add to the trip")}
+                    </button>
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <Link href={`/orders/${o.id}`} className="font-bold hover:underline">
@@ -140,11 +188,17 @@ export default function DeliveriesPage() {
                     </div>
                     <Money value={o.total} className="font-bold" />
                   </div>
-                  {isRep && d.status === "out" && (
-                    <Button variant="action" className="mt-3 w-full" disabled={d.locked} onClick={() => setHanding(o)}>
-                      {d.locked ? <Lock className="size-4" /> : <PackageCheck className="size-4" />}
-                      {d.locked ? tr("مقفلة: اتصل بالمدير", "Locked: call the manager") : tr("تسليم للمحل", "Deliver to the shop")}
-                    </Button>
+                  <ProblemNote order={o} role={user.role} onChanged={orders.reload} className="mt-3" />
+                  {isRep && d.status === "out" && !picking && (
+                    <div className="mt-3 flex gap-2">
+                      <Button variant="action" className="flex-1" disabled={d.locked} onClick={() => setHanding(o)}>
+                        {d.locked ? <Lock className="size-4" /> : <PackageCheck className="size-4" />}
+                        {d.locked ? tr("مقفلة: اتصل بالمدير", "Locked: call the manager") : tr("تسليم للمحل", "Deliver to the shop")}
+                      </Button>
+                      <Button variant="danger" onClick={() => setReporting([o])} aria-label={tr("تعذّر التسليم", "Can't deliver")} title={tr("تعذّر التسليم", "Can't deliver")}>
+                        <AlertTriangle className="size-4" />
+                      </Button>
+                    </div>
                   )}
                   {isRep && d.status === "ready" && <p className="mt-3 rounded-lg bg-card-2 px-3 py-2 text-xs text-muted">{tr("امسح QR الملصق عند استلامها من المخزن", "Scan the label's QR when you take it")}</p>}
                 </motion.article>
@@ -154,7 +208,32 @@ export default function DeliveriesPage() {
         </div>
       )}
 
+      {/* While picking: how many shops, start / cancel (above the phone's bottom bar) */}
+      {picking && (
+        <div className="fixed inset-x-0 bottom-16 z-40 px-4 md:bottom-4 md:start-64">
+          <div className="mx-auto flex max-w-xl items-center gap-2 rounded-2xl border border-line bg-card p-2 shadow-2xl">
+            <p className="flex-1 px-2 text-sm font-semibold">{tr(`${num(picking.length)} محلات في الجولة`, `${num(picking.length)} shops in the trip`)}</p>
+            <Button variant="ghost" onClick={() => setPicking(null)}>
+              {tr("إلغاء", "Cancel")}
+            </Button>
+            <Button
+              variant="action"
+              disabled={!picking.length}
+              onClick={() => {
+                saveTrip(user.id, picking);
+                setPicking(null);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              <Route className="size-4" /> {tr("ابدأ الجولة", "Start the trip")}
+            </Button>
+          </div>
+        </div>
+      )}
+      {picking && <div className="h-20" aria-hidden />}
+
       {scan && <QrScanner busy={busy} onClose={() => setScan(false)} onCode={dispatch} />}
+      {reporting && reporting.length > 0 && <ReportProblem orders={reporting} onClose={() => setReporting(null)} onDone={orders.reload} />}
       {handing && <HandOver order={handing} shop={cust.get(handing.customer_id)?.name ?? ""} onClose={() => setHanding(null)} />}
     </>
   );

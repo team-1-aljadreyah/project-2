@@ -2,6 +2,7 @@
 
 import { PackagePlus } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, PageHeader, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Receipt } from "@/lib/api/types";
@@ -12,6 +13,7 @@ export default function ReceiptsPage() {
   const { tr, dateTime, name } = useFmt();
   const { lookups } = useApp();
   const list = useLoad(() => api.listReceipts(), []);
+  const wh = useWarehouseFilter();
   const columns: Column<Receipt>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (r) => <span className="num">{r.number}</span> },
     { key: "d", head: tr("الوقت", "Time"), cell: (r) => dateTime(r.created_at) },
@@ -39,7 +41,7 @@ export default function ReceiptsPage() {
           <ErrorBox error={list.state.error} onRetry={list.reload} />
         ) : (
           <DataTable
-            rows={list.data ?? []}
+            rows={(list.data ?? []).filter((r) => inWarehouse(wh, r.warehouse_id))}
             columns={columns}
             rowKey={(r) => r.id}
             onRowHref={(r) => `/receipts/${r.id}`}

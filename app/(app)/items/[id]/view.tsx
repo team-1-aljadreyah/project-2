@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { ItemForm } from "@/components/item-form";
+import { ItemPhoto } from "@/components/item-photo";
 import { useApp } from "@/components/shell";
 import { BatchStatusBadge } from "@/components/status";
 import { Badge, Button, Card, CardHeader, DataTable, Empty, ErrorBox, KV, LoadingRows, Money, Notice, PageHeader, type Column } from "@/components/ui";
@@ -55,7 +56,8 @@ export default function ItemView() {
           </Notice>
         </div>
       )}
-      <div className="mb-4 grid gap-4 lg:grid-cols-3">
+      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <ItemPhoto item={it} />
         <Card className="p-4">
           <p className="text-xs text-muted">{tr("المتوفر للبيع", "Sellable")}</p>
           <p className="mt-1 text-2xl font-bold">{qty(it.stock.total, it.pieces_per_carton)}</p>
@@ -81,7 +83,7 @@ export default function ItemView() {
           ))}
         </Card>
         <Card className="p-4">
-          <KV k={tr("عمولة مندوب التوصيل", "Delivery rep commission")} v={<span className="num">{it.commission_percent}%</span>} />
+          <KV k={tr("عمولة المندوب", "Rep commission")} v={<span className="num">{it.commission_percent}%</span>} />
           {it.avg_cost !== undefined && <KV k={tr("متوسط سعر الشراء/قطعة", "Avg cost/pc")} v={<Money value={it.avg_cost} />} />}
           <KV k={tr("أقرب صلاحية", "Nearest expiry")} v={<span className="num">{it.nearest_expiry ?? "-"}</span>} />
           <KV k={tr("الباركود", "Barcode")} v={<span className="num">{it.barcode ?? "-"}</span>} />

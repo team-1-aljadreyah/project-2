@@ -40,6 +40,11 @@ import type {
   OnlinePayment,
   StartOnlinePayment,
   DeliverInput,
+  ProblemInput,
+  OrderEdit,
+  RepKind,
+  MyShop,
+  NewShopInput,
   ChatMessage,
   ChatThread,
   MyChat,
@@ -48,7 +53,7 @@ import type {
 export interface Lookups {
   warehouses: Warehouse[];
   tiers: PriceTier[];
-  reps: { id: number; name: string; phone: string }[];
+  reps: { id: number; name: string; phone: string; kinds?: RepKind[] }[];
   categories: string[];
   settings: Settings;
 }
@@ -83,6 +88,8 @@ export const httpApi = {
   listItems: () => get<Item[]>("/items"),
   getItem: (id: number) => get<Item>(`/items/${id}`),
   saveItem: (id: number | null, input: ItemInput) => save<Item>("/items", id, input),
+  /** image: a data URL from the page (the backend stores the file and returns its link in item.image), or null to remove. */
+  setItemImage: (id: number, image: string | null) => post<Item>(`/items/${id}/image`, { image }),
   itemBatches: (itemId: number) => get<Batch[]>(`/items/${itemId}/batches`),
   listBatches: (warehouseId?: number) => get<Batch[]>("/batches", { warehouse_id: warehouseId }),
   shelfStock: () => get<ShelfRow[]>("/stock"),
@@ -122,10 +129,23 @@ export const httpApi = {
   /** At the shop: the photo and the PIN. A wrong PIN comes back as { ok: false, left, locked }. */
   deliverOrder: (id: number, input: DeliverInput) => post<{ ok: true; order: Order } | { ok: false; left: number; locked: boolean }>(`/orders/${id}/deliver`, input),
   unlockDelivery: (id: number) => post<Order>(`/orders/${id}/delivery/unlock`),
+  // A shop owner with several shops
+  myShops: () => get<MyShop[]>("/me/shops"),
+  /** Work on another of his shops; returns the user with the new customer_id. */
+  switchShop: (customerId: number) => post<User>("/me/shop", { customer_id: customerId }),
+  addShop: (input: NewShopInput) => post<MyShop>("/me/shops", input),
+  /** The delivery rep can't deliver (accident, shop closed...): marks the shipments and tells the manager. */
+  reportDeliveryProblem: (input: ProblemInput) => post<Order[]>("/deliveries/problem", input),
+  /** Manager / warehouse keeper: the shipment is back at the warehouse ("ready" again). */
+  returnToWarehouse: (id: number) => post<Order>(`/orders/${id}/delivery/return`),
   getDeliveryPhoto: (id: number) => get<string | null>(`/orders/${id}/delivery/photo`),
   createOrder: (input: NewOrder) => post<Order>("/orders", input, input.client_ref),
   confirmOrder: (id: number) => post<Invoice>(`/orders/${id}/confirm`),
   approveOrder: (id: number) => post<Order>(`/orders/${id}/approve`),
+  /** The shop owner changes his order before it is confirmed. */
+  updateOrder: (id: number, input: OrderEdit) => patch<Order>(`/orders/${id}`, input),
+  /** 0 removes it. Rep / keeper above 3%: the order waits for the manager. */
+  setOrderDiscount: (id: number, percent: number) => post<Order>(`/orders/${id}/discount`, { percent }),
   cancelOrder: (id: number, reason: string) => post<Order>(`/orders/${id}/cancel`, { reason }),
 
   listInvoices: () => get<Invoice[]>("/invoices"),
@@ -150,9 +170,11 @@ export const httpApi = {
   closeMonth: (month: string) => post<CommissionRow[]>("/commissions/close", { month }),
   closedMonths: () => get<string[]>("/commissions/closed"),
 
-  dashboard: () => get<Dashboard>("/dashboard"),
-  dailySales: (date: string) => get<DailySales>("/reports/daily-sales", { date }),
-  salesReport: (group: SalesGroup, from: string, to: string) => get<SalesRow[]>("/reports/sales", { group_by: group, from, to }),
+  /** warehouseId: one warehouse only (the manager's / accountant's filter); empty = both. */
+  dashboard: (warehouseId?: number | null) => get<Dashboard>("/dashboard", warehouseId ? { warehouse_id: warehouseId } : undefined),
+  dailySales: (date: string, warehouseId?: number | null) => get<DailySales>("/reports/daily-sales", { date, ...(warehouseId ? { warehouse_id: warehouseId } : {}) }),
+  salesReport: (group: SalesGroup, from: string, to: string, warehouseId?: number | null) =>
+    get<SalesRow[]>("/reports/sales", { group_by: group, from, to, ...(warehouseId ? { warehouse_id: warehouseId } : {}) }),
   slowMoving: (days: number) => get<SlowItem[]>("/reports/slow-moving", { days }),
   nearExpiry: (days: number) => get<NearExpiryRow[]>("/reports/near-expiry", { days }),
   debts: () => get<DebtRow[]>("/reports/debts"),

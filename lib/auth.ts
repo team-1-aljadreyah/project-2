@@ -2,7 +2,7 @@
 
 // The logged-in person, saved in the browser so a refresh keeps you logged in.
 import { useSyncExternalStore } from "react";
-import type { Role, Session, User } from "./api/types";
+import type { RepKind, Role, Session, User } from "./api/types";
 
 const KEY = "nahrain.session";
 const listeners = new Set<() => void>();
@@ -84,10 +84,11 @@ export function useSession(): Session | null | undefined {
 }
 
 /** The home page of each role after login. */
-export function homeOf(role: Role) {
+export function homeOf(role: Role, kinds?: RepKind[]) {
   switch (role) {
     case "rep":
-      return "/rep";
+      // Delivery only: his shipments. Marketing (or both): his day's route of shops.
+      return kinds?.length && !kinds.includes("sales") ? "/deliveries" : "/rep";
     case "shop":
       return "/shop";
     case "warehouse":

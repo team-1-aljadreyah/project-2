@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Printer, Undo2, Wallet } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { useApp } from "@/components/shell";
@@ -19,6 +21,20 @@ export default function InvoiceView() {
   const customer = useLoad(() => (i ? api.getCustomer(i.customer_id) : Promise.resolve(undefined)), [i?.customer_id]);
   const returns = useLoad(() => (i && user.role !== "shop" ? api.listReturns() : Promise.resolve([])), [i?.id]);
   const payments = useLoad(() => (i && user.role !== "warehouse" ? api.listPayments().catch(() => []) : Promise.resolve([])), [i?.id]);
+  const printNow = useSearchParams().get("print") === "1";
+  const router = useRouter();
+  const ready = !!i && customer.state.status !== "loading";
+
+  // Opened with the list's print button: print once everything (the shop's name and address too) is on the
+  // page, then drop ?print=1 so going back or refreshing doesn't print again.
+  useEffect(() => {
+    if (!printNow || !ready) return;
+    const t = setTimeout(() => {
+      window.print();
+      router.replace(`/invoices/${id}`, { scroll: false });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [printNow, ready, id, router]);
 
   if (inv.state.status === "loading") return <LoadingRows />;
   if (inv.state.status === "error" || !i) return <ErrorBox error={inv.state.status === "error" ? inv.state.error : null} onRetry={inv.reload} />;
@@ -60,7 +76,7 @@ export default function InvoiceView() {
                 <MessageCircle className="size-4" /> {tr("واتساب", "WhatsApp")}
               </Button>
             )}
-            <Button onClick={() => window.print()}>
+            <Button variant={user.role === "shop" ? "action" : undefined} onClick={() => window.print()}>
               <Printer className="size-4" /> {tr("طباعة", "Print")}
             </Button>
             {canPay && (
@@ -97,7 +113,7 @@ export default function InvoiceView() {
             </p>
           </div>
           <div className="sm:text-end">
-            <p className="text-xs text-muted">{tr("مندوب التوصيل", "Delivery")}</p>
+            <p className="text-xs text-muted">{tr("المندوب", "Rep")}</p>
             <p className="font-semibold">{rep?.name}</p>
             <p className="text-muted">{name(lookups.tiers.find((t) => t.id === c?.tier_id))}</p>
           </div>
@@ -151,6 +167,12 @@ export default function InvoiceView() {
         </table>
 
         <div className="ms-auto mt-4 max-w-xs space-y-1.5 text-sm">
+          {!!i.discount && (
+            <>
+              <Row k={tr("قبل الخصم", "Before discount")} v={<Money value={i.subtotal} />} />
+              <Row k={tr(`خصم ${i.discount_percent}%`, `${i.discount_percent}% discount`)} v={<Money value={-i.discount} className="text-success" />} />
+            </>
+          )}
           <Row k={tr("المجموع", "Total")} v={<Money value={i.total} className="font-semibold" />} />
           {i.returned > 0 && <Row k={tr("المرتجع", "Returns")} v={<Money value={-i.returned} />} />}
           {seesMoney && (

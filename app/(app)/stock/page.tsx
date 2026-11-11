@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, PackagePlus, PackageX } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { hasWarehouseFilter, setWarehouseFilter, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
 import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, PageHeader, SearchBox, Segmented, Select, Stat, type Column } from "@/components/ui";
 import { api, type ShelfRow } from "@/lib/api";
@@ -17,7 +18,11 @@ export default function StockPage() {
   const { tr, name, qty, dateTime } = useFmt();
   const { user, lookups, itemById } = useApp();
   const [tab, setTab] = useState<Tab>("stock");
-  const [wh, setWh] = useState<number | "">(user.role === "warehouse" || user.role === "staff" ? (user.warehouse_id ?? "") : "");
+  // Keeper / staff: their own warehouse. Manager / accountant: the warehouse filter of the top bar.
+  const globalWh = useWarehouseFilter();
+  const [ownWh, setOwnWh] = useState<number | "">(user.role === "warehouse" || user.role === "staff" ? (user.warehouse_id ?? "") : "");
+  const wh: number | "" = hasWarehouseFilter(user) ? (globalWh ?? "") : ownWh;
+  const setWh = (v: number | "") => (hasWarehouseFilter(user) ? setWarehouseFilter(v || null) : setOwnWh(v));
   const [q, setQ] = useState("");
   const [onlyLow, setOnlyLow] = useState(false);
   const shelf = useLoad(() => api.shelfStock(), []);
@@ -117,7 +122,7 @@ export default function StockPage() {
                 {tr("تحت الحد الأدنى فقط", "Below minimum only")}
               </label>
             )}
-            <Select value={wh} onChange={(e) => setWh(Number(e.target.value) || "")} className="sm:w-56">
+            <Select value={wh} onChange={(e) => setWh(Number(e.target.value) || "")} disabled={user.role === "warehouse" || user.role === "staff"} className="sm:w-56">
               <option value="">{tr("كل المخازن", "All warehouses")}</option>
               {lookups.warehouses.map((w) => (
                 <option key={w.id} value={w.id}>

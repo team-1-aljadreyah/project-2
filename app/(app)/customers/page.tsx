@@ -44,7 +44,7 @@ export default function CustomersPage() {
     },
     { key: "o", head: tr("صاحب المحل", "Owner"), cell: (c) => c.owner_name },
     { key: "a", head: tr("المنطقة", "Area"), cell: (c) => c.area },
-    ...(user.role !== "rep" ? [{ key: "r", head: tr("مندوب التوصيل", "Delivery"), cell: (c: Customer) => rName(c.rep_id) }] : []),
+    ...(user.role !== "rep" ? [{ key: "r", head: tr("المندوب", "Rep"), cell: (c: Customer) => rName(c.rep_id) }] : []),
     { key: "t", head: tr("السعر", "Tier"), cell: (c) => <Badge tone="primary">{name(lookups.tiers.find((t) => t.id === c.tier_id))}</Badge> },
     {
       key: "b",
@@ -97,7 +97,7 @@ export default function CustomersPage() {
           <div className="flex flex-col gap-2 sm:flex-row">
             {user.role !== "rep" && (
               <Select value={rep} onChange={(e) => setRep(Number(e.target.value) || "")} className="sm:w-44">
-                <option value="">{tr("كل مندوبي التوصيل", "All delivery reps")}</option>
+                <option value="">{tr("كل المندوبين", "All reps")}</option>
                 {lookups.reps.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}

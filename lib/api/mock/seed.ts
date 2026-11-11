@@ -78,7 +78,7 @@ const CUSTOMERS: [string, string, string, string, number, number, number][] = [
   ["أسواق المصطفى", "حيدر صالح", "07812345609", "حي الموظفين", 2, 6, 5_000_000],
   ["محلات الأمانة", "جاسم محمد", "07812345610", "حي النقيب", 3, 6, 1_000_000],
   ["ماركت الجود", "مرتضى فلاح", "07812345611", "عون", 2, 6, 3_000_000],
-  ["أسواق البركة", "صادق نوري", "07812345612", "حي الحسين", 1, 6, 8_000_000],
+  ["أسواق البركة", "علي الموسوي", "07812345612", "حي الحسين", 1, 6, 8_000_000], // the second shop of علي الموسوي (one owner, two shops)
   ["بقالة الوفاء", "أمير ستار", "07812345613", "سيف سعد", 3, 4, 900_000],
   ["أسواق العميد", "نبيل حمزة", "07812345614", "حي العباس", 2, 5, 4_000_000],
 ];
@@ -92,12 +92,13 @@ export function makeSeed(now = new Date()): Db {
     { id: 1, name: "حيدر الكعبي", phone: "07801000001", role: "manager", active: true, password: DEMO_PASSWORD },
     { id: 2, name: "كرار جاسم", phone: "07801000002", role: "warehouse", warehouse_id: 1, active: true, password: DEMO_PASSWORD },
     { id: 3, name: "مصطفى عبد الأمير", phone: "07801000003", role: "warehouse", warehouse_id: 2, active: true, password: DEMO_PASSWORD },
-    { id: 4, name: "حسين علي", phone: "07801000004", role: "rep", active: true, password: DEMO_PASSWORD },
-    { id: 5, name: "عباس فاضل", phone: "07801000005", role: "rep", active: true, password: DEMO_PASSWORD },
-    { id: 6, name: "محمد رضا", phone: "07801000006", role: "rep", active: true, password: DEMO_PASSWORD },
+    { id: 4, name: "حسين علي", phone: "07801000004", role: "rep", rep_kinds: ["sales", "delivery"], active: true, password: DEMO_PASSWORD },
+    { id: 5, name: "عباس فاضل", phone: "07801000005", role: "rep", rep_kinds: ["sales"], active: true, password: DEMO_PASSWORD },
+    { id: 6, name: "محمد رضا", phone: "07801000006", role: "rep", rep_kinds: ["sales", "delivery"], active: true, password: DEMO_PASSWORD },
     { id: 7, name: "زينب كاظم", phone: "07801000007", role: "accountant", active: true, password: DEMO_PASSWORD },
-    { id: 8, name: "علي الموسوي", phone: "07812345601", role: "shop", customer_id: 1, active: true, password: DEMO_PASSWORD },
+    { id: 8, name: "علي الموسوي", phone: "07812345601", role: "shop", customer_id: 1, customer_ids: [1, 12], active: true, password: DEMO_PASSWORD },
     { id: 9, name: "أحمد جبار", phone: "07812345602", role: "shop", customer_id: 2, active: true, password: DEMO_PASSWORD },
+    { id: 11, name: "علي حسن", phone: "07801000011", role: "rep", rep_kinds: ["delivery"], active: true, password: DEMO_PASSWORD },
     { id: 10, name: "سجاد كامل", phone: "07801000010", role: "staff", warehouse_id: 1, active: true, password: DEMO_PASSWORD },
   ];
 
@@ -172,7 +173,8 @@ export function makeSeed(now = new Date()): Db {
 
   const manager = users[0];
   const keepers = [users[1], users[2]];
-  const reps = users.filter((u) => u.role === "rep");
+  // Only reps who take orders (marketing): the delivery-only rep has no shops of his own.
+  const reps = users.filter((u) => u.role === "rep" && (!u.rep_kinds?.length || u.rep_kinds.includes("sales")));
   const accountant = users[6];
   const at = (daysAgo: number, hour: number, minute = 0) => {
     const d = addDays(now, -daysAgo);
@@ -240,6 +242,8 @@ export function makeSeed(now = new Date()): Db {
       const count = int(1, 3);
       for (let k = 0; k < count; k++) {
         const customer = pick(mine);
+        // The shops of محمد رضا (west of the city) are served from مخزن الحر; the others from the main warehouse.
+        const whId = rep.id === 6 ? 2 : 1;
         const when = at(d, int(9, 15), int(0, 59));
         // Today: only what already happened (at least an hour ago).
         if (when.getTime() > now.getTime() - 3_600_000) continue;
@@ -253,22 +257,23 @@ export function makeSeed(now = new Date()): Db {
           const unit = rand() < 0.75 ? "carton" : "piece";
           const qty = unit === "carton" ? int(1, customer.tier_id === 1 ? 6 : 3) : int(4, it.pieces_per_carton - 1);
           const pieces = unit === "carton" ? qty * it.pieces_per_carton : qty;
-          if (sellableQty(db, it.id, 1, when) < pieces) continue;
+          if (sellableQty(db, it.id, whId, when) < pieces) continue;
           lines.push({ item_id: it.id, unit, qty });
         }
         if (!lines.length) continue;
-        const order = createOrder(db, rep, { client_ref: cref(), customer_id: customer.id, warehouse_id: 1, lines }, when);
+        const order = createOrder(db, rep, { client_ref: cref(), customer_id: customer.id, warehouse_id: whId, lines }, when);
+        const keeper = keepers[whId - 1];
         const confirmAt = new Date(Math.min(when.getTime() + int(20, 90) * 60_000, now.getTime() - 60_000));
         if (order.status === "needs_approval") {
           if (rand() < 0.6) {
             approveOrder(db, manager, order.id, confirmAt);
-            confirmOrder(db, keepers[0], order.id, new Date(confirmAt.getTime() + 600_000));
+            confirmOrder(db, keeper, order.id, new Date(confirmAt.getTime() + 600_000));
           } else {
             order.status = "cancelled";
             order.cancel_reason = "تجاوز سقف الدين";
           }
         } else if (rand() < 0.95) {
-          confirmOrder(db, rand() < 0.7 ? keepers[0] : accountant, order.id, confirmAt);
+          confirmOrder(db, rand() < 0.7 ? keeper : accountant, order.id, confirmAt);
         } else {
           order.status = "cancelled";
           order.cancel_reason = "الزبون غيّر رأيه";
@@ -393,7 +398,7 @@ export function makeSeed(now = new Date()): Db {
   }
   const firstToday = confirmed.find((o) => o.delivery!.status === "ready");
   if (firstToday) {
-    const rep = db.users.find((u) => u.id === firstToday.rep_id);
+    const rep = db.users.find((u) => u.id === firstToday.delivery!.rep?.id);
     Object.assign(firstToday.delivery!, { status: "out", out_at: addDays(now, 0).toISOString(), out_by: rep && { id: rep.id, name: rep.name } });
   }
 

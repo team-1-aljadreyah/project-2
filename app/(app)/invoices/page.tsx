@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, ReceiptText } from "lucide-react";
+import Link from "next/link";
+import { Download, Printer, ReceiptText } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { InvoiceStatusBadge } from "@/components/status";
 import { Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, PageHeader, SearchBox, Segmented, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -22,7 +24,8 @@ export default function InvoicesPage() {
   const names = useMemo(() => new Map((customers.data ?? []).map((c) => [c.id, c.name])), [customers.data]);
   const cName = (id: number) => names.get(id) ?? `#${id}`;
   const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
-  const all = invoices.data ?? [];
+  const wh = useWarehouseFilter();
+  const all = (invoices.data ?? []).filter((i) => inWarehouse(wh, i.warehouse_id));
   const pass = (i: Invoice, s: typeof status) => s === "all" || (s === "unpaid" ? i.status !== "paid" : i.status === s);
   const rows = all.filter((i) => pass(i, status) && matches(q, i.number, cName(i.customer_id), rName(i.rep_id)));
   const showProfit = user.role === "manager" || user.role === "accountant";
@@ -31,12 +34,22 @@ export default function InvoicesPage() {
     { key: "n", head: tr("الرقم", "No."), cell: (i) => <span className="num">{i.number}</span> },
     { key: "d", head: tr("التاريخ", "Date"), cell: (i) => date(i.date) },
     { key: "c", head: tr("الزبون", "Customer"), cell: (i) => cName(i.customer_id) },
-    { key: "r", head: tr("مندوب التوصيل", "Delivery"), cell: (i) => rName(i.rep_id) },
+    { key: "r", head: tr("المندوب", "Rep"), cell: (i) => rName(i.rep_id) },
     { key: "t", head: tr("المبلغ", "Total"), cell: (i) => <Money value={i.total} />, align: "end" },
     { key: "p", head: tr("المسدد", "Paid"), cell: (i) => <Money value={i.paid + i.returned} className="text-muted" />, align: "end" },
     { key: "rem", head: tr("الباقي", "Left"), cell: (i) => <Money value={Math.max(0, i.remaining)} className="font-semibold" />, align: "end" },
     ...(showProfit ? [{ key: "pr", head: tr("الربح", "Profit"), cell: (i: Invoice) => <Money value={i.profit} className="text-success" />, align: "end" as const }] : []),
     { key: "s", head: tr("الحالة", "Status"), cell: (i) => <InvoiceStatusBadge status={i.status} /> },
+    {
+      key: "print",
+      head: <span className="sr-only">{tr("طباعة", "Print")}</span>,
+      cell: (i) => (
+        <Link href={`/invoices/${i.id}?print=1`} aria-label={tr(`طباعة الفاتورة ${i.number}`, `Print invoice ${i.number}`)} title={tr("طباعة", "Print")} className="inline-flex size-8 items-center justify-center rounded-lg text-muted hover:bg-card-2 hover:text-text">
+          <Printer className="size-4" />
+        </Link>
+      ),
+      align: "end",
+    },
   ];
 
   return (
@@ -49,7 +62,7 @@ export default function InvoicesPage() {
             <Button
               onClick={() =>
                 downloadCsv("invoices", [
-                  [tr("الرقم", "No."), tr("التاريخ", "Date"), tr("الزبون", "Customer"), tr("مندوب التوصيل", "Delivery"), tr("المبلغ", "Total"), tr("الباقي", "Left")],
+                  [tr("الرقم", "No."), tr("التاريخ", "Date"), tr("الزبون", "Customer"), tr("المندوب", "Rep"), tr("المبلغ", "Total"), tr("الباقي", "Left")],
                   ...rows.map((i) => [i.number, date(i.date), cName(i.customer_id), rName(i.rep_id), i.total, Math.max(0, i.remaining)]),
                 ])
               }

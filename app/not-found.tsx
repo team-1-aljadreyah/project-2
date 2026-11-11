@@ -26,7 +26,7 @@ export default function NotFound() {
         <p className="mt-2 text-sm text-white/70">{tr("ربما الرابط خطأ أو نُقلت الصفحة. ارجع وتابع عملك من هنا:", "The link may be wrong or the page moved. Carry on from here:")}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           {session ? (
-            <Link href={homeOf(session.user.role)} className="flex h-11 items-center gap-2 rounded-xl bg-action px-5 font-bold text-on-action hover:bg-action-hover">
+            <Link href={homeOf(session.user.role, session.user.rep_kinds)} className="flex h-11 items-center gap-2 rounded-xl bg-action px-5 font-bold text-on-action hover:bg-action-hover">
               <Home className="size-4" /> {tr("صفحتي الرئيسية", "My home page")}
             </Link>
           ) : (

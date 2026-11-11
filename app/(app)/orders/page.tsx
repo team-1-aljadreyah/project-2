@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ClipboardList, Clock, Plus, RotateCw, Trash2, WifiOff } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { OrderStatusBadge, SourceBadge } from "@/components/status";
 import { Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, Notice, PageHeader, SearchBox, Segmented, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -25,7 +26,8 @@ export default function OrdersPage() {
 
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
   const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
-  const all = orders.data ?? [];
+  const wh = useWarehouseFilter();
+  const all = (orders.data ?? []).filter((o) => inWarehouse(wh, o.warehouse_id));
   const count = (f: Filter) => all.filter((o) => pass(o, f)).length;
   const rows = all.filter((o) => pass(o, filter) && matches(q, o.number, cName(o.customer_id), rName(o.rep_id)));
   const canCreate = user.role === "rep" || user.role === "manager";
@@ -33,7 +35,7 @@ export default function OrdersPage() {
   const columns: Column<Order>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (o) => <span className="num">{o.number}</span> },
     { key: "c", head: tr("الزبون", "Customer"), cell: (o) => cName(o.customer_id) },
-    { key: "r", head: tr("مندوب التوصيل", "Delivery"), cell: (o) => rName(o.rep_id), hideOnMobile: true },
+    { key: "r", head: tr("المندوب", "Rep"), cell: (o) => rName(o.rep_id), hideOnMobile: true },
     { key: "s", head: tr("المصدر", "Source"), cell: (o) => <SourceBadge source={o.source} /> },
     { key: "t", head: tr("المبلغ", "Amount"), cell: (o) => <Money value={o.total} className="font-medium" />, align: "end" },
     { key: "st", head: tr("الحالة", "Status"), cell: (o) => <OrderStatusBadge status={o.status} /> },
@@ -102,7 +104,7 @@ export default function OrdersPage() {
               { value: "all", label: tr("الكل", "All"), count: all.length },
             ]}
           />
-          <SearchBox value={q} onChange={setQ} placeholder={tr("رقم الطلب، الزبون أو مندوب التوصيل", "Order no., customer or delivery rep")} className="lg:w-72" />
+          <SearchBox value={q} onChange={setQ} placeholder={tr("رقم الطلب، الزبون أو المندوب", "Order no., customer or rep")} className="lg:w-72" />
         </div>
         {orders.state.status === "loading" ? (
           <LoadingRows />
