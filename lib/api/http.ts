@@ -39,6 +39,8 @@ import type {
   User,
   UserInput,
   Warehouse,
+  WarehouseInput,
+  WarehouseLayout,
   OnlinePayment,
   StartOnlinePayment,
   DeliverInput,
@@ -80,8 +82,7 @@ export type SalesGroup = "rep" | "item" | "warehouse" | "customer";
 
 // Helpers: GET / POST / PATCH that return only the data part of the answer.
 const get = <T>(url: string, params?: object) => http.get<T>(url, { params }).then((r) => r.data);
-const post = <T>(url: string, body?: unknown, key?: string) =>
-  http.post<T>(url, body, key ? { headers: { "Idempotency-Key": key } } : undefined).then((r) => r.data);
+const post = <T>(url: string, body?: unknown, key?: string) => http.post<T>(url, body, key ? { headers: { "Idempotency-Key": key } } : undefined).then((r) => r.data);
 const patch = <T>(url: string, body: unknown) => http.patch<T>(url, body).then((r) => r.data);
 const save = <T>(base: string, id: number | null, body: unknown) => (id ? patch<T>(`${base}/${id}`, body) : post<T>(base, body));
 
@@ -100,6 +101,10 @@ export const httpApi = {
   site: () => get<SiteCustom | null>("/site"),
   saveSite: (s: SiteCustom) => patch<SiteCustom>("/settings/site", s),
   renameWarehouse: (id: number, name: string, name_en: string) => patch<Warehouse>(`/warehouses/${id}`, { name, name_en }),
+  createWarehouse: (input: WarehouseInput) => post<Warehouse>("/warehouses", input),
+  saveWarehouse: (id: number, input: WarehouseInput) => patch<Warehouse>(`/warehouses/${id}`, input),
+  /** The zones and the place of every item (the manager, or the keeper of this warehouse). */
+  saveLayout: (id: number, layout: WarehouseLayout) => patch<Warehouse>(`/warehouses/${id}/layout`, layout),
   renameCategory: (from: string, to: string) => post<void>("/categories/rename", { from, to }),
   quickItem: (id: number, change: ItemQuick) => patch<Item>(`/items/${id}/quick`, change),
   saveTier: (id: number | null, name: string, name_en: string) => save<PriceTier>("/price-tiers", id, { name, name_en }),
@@ -171,6 +176,8 @@ export const httpApi = {
   /** At the shop: the photo and the PIN. A wrong PIN comes back as { ok: false, left, locked }. */
   deliverOrder: (id: number, input: DeliverInput) => post<{ ok: true; order: Order } | { ok: false; left: number; locked: boolean }>(`/orders/${id}/deliver`, input),
   unlockDelivery: (id: number) => post<Order>(`/orders/${id}/delivery/unlock`),
+  /** The warehouse staff loaded the shipment into the delivery rep's van. */
+  loadShipment: (id: number) => post<Order>(`/orders/${id}/delivery/load`),
   // Where the delivery rep is. His phone sends it every few seconds while he has shipments on the way;
   // the backend passes it on over the WebSocket (topic "location") to the manager and to those shops.
   sendLocation: (lat: number, lng: number) => post<{ rep_id: number; lat: number; lng: number; at: string }>("/deliveries/location", { lat, lng }),

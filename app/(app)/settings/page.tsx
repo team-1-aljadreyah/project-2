@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Paintbrush, Plus, Save } from "lucide-react";
+import { LayoutGrid, MapPin as MapPinIcon, Paintbrush, Pencil, Plus, Save } from "lucide-react";
 import { BrandDialog, EditText, SortArea, SortItem } from "@/components/customize";
 import { LogoMark } from "@/components/logo";
+import { LayoutEditor, WarehouseForm } from "@/components/warehouse-layout";
 import { useApp } from "@/components/shell";
 import { Button, Card, CardHeader, Field, Input, NumberInput, errorText, useToast, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { Settings } from "@/lib/api/types";
+import type { Settings, Warehouse } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { saveSite, setCustomizing, useBrand } from "@/lib/site";
 
@@ -17,6 +18,9 @@ export default function SettingsPage() {
   const toast = useToast();
   const brand = useBrand();
   const [brandOpen, setBrandOpen] = useState(false);
+  // The warehouse being added ("new") or edited, and the one whose inside is being arranged.
+  const [whForm, setWhForm] = useState<Warehouse | "new" | null>(null);
+  const [arranging, setArranging] = useState<Warehouse | null>(null);
   const fail = (e: unknown) => toast("danger", errorText(e, tr));
   const [s, setS] = useState<Settings>(lookups.settings);
   const [busy, setBusy] = useState(false);
@@ -48,11 +52,38 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHeader title={tr("المخازن", "Warehouses")} subtitle={tr("اضغط على الاسم لتغييره. يتغيّر في كل الصفحات", "Click a name to change it. It changes on every page")} />
+          <CardHeader
+            title={tr("المخازن", "Warehouses")}
+            subtitle={tr("اضغط على الاسم لتغييره. «ترتيب» يفتح مناطق المخزن ومكان كل مادة فيه", "Click a name to change it. “Arrange” opens its zones and the place of every item")}
+            action={
+              <Button size="sm" variant="action" onClick={() => setWhForm("new")}>
+                <Plus className="size-4" /> {tr("مخزن جديد", "New warehouse")}
+              </Button>
+            }
+          />
           <ul className="divide-y divide-line">
             {lookups.warehouses.map((w) => (
-              <li key={w.id} className="px-4 py-3 text-sm font-medium">
-                <EditText always value={name(w)} onSave={(v) => api.renameWarehouse(w.id, lang === "ar" ? v : w.name, lang === "ar" ? w.name_en : v).catch(fail)} />
+              <li key={w.id} className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">
+                    <EditText always value={name(w)} onSave={(v) => api.renameWarehouse(w.id, lang === "ar" ? v : w.name, lang === "ar" ? w.name_en : v).catch(fail)} />
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-muted">
+                    <span className="num">{w.capacity.toLocaleString("en")}</span> {tr("كارتون", "cartons")}
+                    {w.layout && <> · {tr(`${w.layout.zones.length} مناطق`, `${w.layout.zones.length} zones`)}</>}
+                    {w.lat === undefined && (
+                      <span className="flex items-center gap-0.5 text-warning">
+                        · <MapPinIcon className="size-3" /> {tr("بلا موقع", "no location")}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                <Button size="sm" onClick={() => setArranging(w)}>
+                  <LayoutGrid className="size-4" /> {tr("ترتيب", "Arrange")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setWhForm(w)} aria-label={tr(`تعديل ${w.name}`, `Edit ${w.name_en}`)}>
+                  <Pencil className="size-4" />
+                </Button>
               </li>
             ))}
           </ul>
@@ -156,6 +187,8 @@ export default function SettingsPage() {
         </Card>
       </div>
       {brandOpen && <BrandDialog onClose={() => setBrandOpen(false)} />}
+      {whForm && <WarehouseForm warehouse={whForm === "new" ? undefined : whForm} onClose={() => setWhForm(null)} onSaved={(w) => whForm === "new" && setArranging(w)} />}
+      {arranging && <LayoutEditor warehouse={arranging} onClose={() => setArranging(null)} />}
     </>
   );
 }
