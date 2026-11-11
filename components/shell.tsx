@@ -6,13 +6,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bell, CloudOff, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Wifi, WifiOff, X } from "lucide-react";
+import { Bell, CloudOff, Volume2, VolumeX, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Wifi, WifiOff, X } from "lucide-react";
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
+import { NotificationAlerts } from "@/components/notification-alerts";
 import { ChatWidget } from "@/components/support/chat-widget";
 import { ShopSwitcher } from "@/components/shop-switcher";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
+import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
@@ -352,6 +354,7 @@ function AccountMenu({ user, onClose }: { user: User; onClose: () => void }) {
   const toast = useToast();
   const ref = useRef<HTMLDivElement>(null);
   const [sim, setSim] = useState(isSimulatedOffline);
+  const sound = useSoundOn();
   useEffect(() => {
     const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && onClose();
     document.addEventListener("mousedown", onDown);
@@ -365,6 +368,21 @@ function AccountMenu({ user, onClose }: { user: User; onClose: () => void }) {
           {user.phone}
         </p>
         <p className="mt-1 text-xs text-muted">{jobName(user, tr)}</p>
+      </div>
+      <div className="mx-1 my-1 rounded-xl bg-card-2 px-3 py-2">
+        <Switch
+          checked={sound}
+          onChange={(v) => {
+            setSoundOn(v);
+            // Turning it on plays it once, so you hear what it is.
+            if (v) playAlert(true);
+          }}
+          label={
+            <span className="flex items-center gap-2">
+              {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />} {tr("صوت الإشعارات", "Notification sound")}
+            </span>
+          }
+        />
       </div>
       {USE_MOCK && (
         <div className="mx-1 my-1 rounded-xl bg-card-2 px-3 py-2">
@@ -465,17 +483,21 @@ function Bell2({ user }: { user: User }) {
   useRealtime(["notifications"], () => list.reload());
   const unread = list.data?.filter((n) => !n.read).length ?? 0;
   return (
-    <Link
-      href="/notifications"
-      aria-label={tr("الإشعارات", "Notifications")}
-      className="relative inline-flex size-10 items-center justify-center rounded-xl text-muted hover:bg-card-2 hover:text-text"
-    >
-      <Bell className="size-5" />
-      {unread > 0 && (
-        <span className="num absolute end-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
-          {unread > 99 ? "99+" : unread}
-        </span>
-      )}
-    </Link>
+    <>
+      {/* A new notification shows a card and plays a sound. A new card set for each person who logs in. */}
+      <NotificationAlerts key={user.id} list={list.data} />
+      <Link
+        href="/notifications"
+        aria-label={tr("الإشعارات", "Notifications")}
+        className="relative inline-flex size-10 items-center justify-center rounded-xl text-muted hover:bg-card-2 hover:text-text"
+      >
+        <Bell className="size-5" />
+        {unread > 0 && (
+          <span className="num absolute end-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
+            {unread > 99 ? "99+" : unread}
+          </span>
+        )}
+      </Link>
+    </>
   );
 }
