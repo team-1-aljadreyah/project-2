@@ -9,13 +9,14 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { downloadCsv, today } from "@/lib/utils";
 import type { StatementType } from "@/lib/api/types";
-import { Badge, Button, Card, ErrorBox, Input, LoadingRows, Money } from "./ui";
+import { Badge, Button, Card, ErrorBox, Input, LoadingRows, Money, Pager, usePages } from "./ui";
 
 export function StatementView({ customerId, links = true }: { customerId: number; links?: boolean }) {
   const { tr, date } = useFmt();
   const [from, setFrom] = useState(today(-60));
   const [to, setTo] = useState(today());
   const st = useLoad(() => api.statement(customerId, from || undefined, to || undefined), [customerId, from, to]);
+  const pg = usePages(st.data?.rows ?? [], 25);
   const label = (t: StatementType) =>
     ({
       opening: tr("رصيد سابق", "Opening balance"),
@@ -77,7 +78,7 @@ export function StatementView({ customerId, links = true }: { customerId: number
                 </tr>
               </thead>
               <tbody>
-                {st.data.rows.map((r, i) => (
+                {pg.shown.map((r, i) => (
                   <tr key={i} className="border-b border-line last:border-0">
                     <td className="num whitespace-nowrap px-3 py-2.5 text-muted">{date(r.date)}</td>
                     <td className="px-3 py-2.5">
@@ -117,6 +118,7 @@ export function StatementView({ customerId, links = true }: { customerId: number
                 </tr>
               </tfoot>
             </table>
+            <Pager {...pg} className="border-t border-line" />
           </div>
           {!st.data.rows.length && <p className="p-6 text-center text-sm text-muted">{tr("لا توجد حركات في هذه الفترة", "No entries in this period")}</p>}
         </>

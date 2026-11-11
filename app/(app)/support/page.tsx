@@ -7,7 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Headset, MessagesSquare, Store } from "lucide-react";
 import { Bubbles, SendBox } from "@/components/support/messages";
-import { Card, Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/ui";
+import { Card, Empty, ErrorBox, LoadingRows, PageHeader, Pager, usePages } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -28,6 +28,7 @@ function Inbox() {
   const [picked, setPicked] = useState<number | null>(fromLink);
   const list = threads.data ?? [];
   const waiting = list.filter((t) => t.waiting).length;
+  const pg = usePages(list, 10);
   // On a big screen the first conversation opens by itself; on a phone the list shows first.
   const current = picked ?? null;
 
@@ -49,8 +50,9 @@ function Inbox() {
           ) : !list.length ? (
             <Empty icon={<MessagesSquare className="size-6" />} title={tr("لا توجد محادثات بعد", "No conversations yet")} />
           ) : (
+            <>
             <ul className="divide-y divide-line">
-              {list.map((t) => (
+              {pg.shown.map((t) => (
                 <li key={t.customer_id}>
                   <button
                     type="button"
@@ -76,6 +78,8 @@ function Inbox() {
                 </li>
               ))}
             </ul>
+            <Pager {...pg} className="border-t border-line [&_p]:hidden" />
+            </>
           )}
         </aside>
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Undo2 } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, PageHeader, SearchBox, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Return } from "@/lib/api/types";
@@ -14,10 +15,11 @@ export default function ReturnsPage() {
   const { tr, dateTime, ago } = useFmt();
   const { user, itemById } = useApp();
   const list = useLoad(() => api.listReturns(), []);
+  const wh = useWarehouseFilter();
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
   const [q, setQ] = useState("");
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
-  const rows = (list.data ?? []).filter((r) => matches(q, r.number, cName(r.customer_id), r.note));
+  const rows = (list.data ?? []).filter((r) => inWarehouse(wh, r.warehouse_id) && matches(q, r.number, cName(r.customer_id), r.note));
   const canCreate = ["manager", "accountant", "rep"].includes(user.role);
   const conditions = (r: Return) => {
     const good = r.lines.filter((l) => l.condition === "good").length;

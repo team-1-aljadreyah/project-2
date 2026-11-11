@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, Package, Plus } from "lucide-react";
 import { ItemForm } from "@/components/item-form";
 import { useApp } from "@/components/shell";
+import { useWarehouseFilter } from "@/components/warehouse-filter";
 import { Badge, Button, Card, DataTable, Empty, Money, PageHeader, SearchBox, Segmented, Select, type Column } from "@/components/ui";
 import type { Item } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -17,7 +18,10 @@ export default function ItemsPage() {
   const [f, setF] = useState<"all" | "low" | "inactive">("all");
   const [add, setAdd] = useState(false);
   const [tier, setTier] = useState(lookups.tiers[1]?.id ?? lookups.tiers[0].id);
-  const low = (i: Item) => i.stock.total < i.min_stock;
+  const wh = useWarehouseFilter();
+  // The stock shown: the chosen warehouse only (manager / accountant filter), or both.
+  const stockOf = (i: Item) => (wh ? (i.stock.by_warehouse.find((w) => w.warehouse_id === wh)?.qty ?? 0) : i.stock.total);
+  const low = (i: Item) => stockOf(i) < (wh ? i.min_stock / 2 : i.min_stock);
   const rows = items.filter(
     (i) => (f === "all" ? i.active : f === "low" ? i.active && low(i) : !i.active) && (!cat || i.category === cat) && matches(q, i.name, i.name_en, i.barcode, i.category),
   );
@@ -35,7 +39,7 @@ export default function ItemsPage() {
       head: tr("المتوفر للبيع", "Sellable"),
       cell: (i) => (
         <span className={low(i) ? "font-semibold text-danger" : ""}>
-          {qty(i.stock.total, i.pieces_per_carton)} {low(i) && <AlertTriangle className="inline size-3.5" />}
+          {qty(stockOf(i), i.pieces_per_carton)} {low(i) && <AlertTriangle className="inline size-3.5" />}
         </span>
       ),
     },
@@ -103,7 +107,7 @@ export default function ItemsPage() {
                 <p className="text-xs text-muted">
                   {i.category} · {i.pieces_per_carton} {tr("بالكارتون", "per carton")}
                 </p>
-                <p className={`text-xs ${low(i) ? "text-danger" : "text-muted"}`}>{qty(i.stock.total, i.pieces_per_carton)}</p>
+                <p className={`text-xs ${low(i) ? "text-danger" : "text-muted"}`}>{qty(stockOf(i), i.pieces_per_carton)}</p>
               </div>
               <div className="text-end text-sm">
                 <p className="num font-semibold">{money(priceOf(i, tier, "carton"))}</p>

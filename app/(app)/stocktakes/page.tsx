@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ClipboardCheck, Plus } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Badge, Button, Card, DataTable, Dialog, Empty, ErrorBox, Field, LoadingRows, PageHeader, Select, errorText, useToast, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Stocktake } from "@/lib/api/types";
@@ -16,6 +17,7 @@ export default function StocktakesPage() {
   const router = useRouter();
   const toast = useToast();
   const list = useLoad(() => api.listStocktakes(), []);
+  const whF = useWarehouseFilter();
   const [open, setOpen] = useState(false);
   const [wh, setWh] = useState(user.warehouse_id ?? lookups.warehouses[0].id);
   const [cat, setCat] = useState("");
@@ -49,7 +51,7 @@ export default function StocktakesPage() {
         ) : list.state.status === "error" ? (
           <ErrorBox error={list.state.error} onRetry={list.reload} />
         ) : (
-          <DataTable rows={list.data ?? []} columns={columns} rowKey={(s) => s.id} onRowHref={(s) => `/stocktakes/${s.id}`} empty={<Empty icon={<ClipboardCheck className="size-6" />} title={tr("لم يتم أي جرد بعد", "No counts yet")} />} />
+          <DataTable rows={(list.data ?? []).filter((x) => inWarehouse(whF, x.warehouse_id))} columns={columns} rowKey={(s) => s.id} onRowHref={(s) => `/stocktakes/${s.id}`} empty={<Empty icon={<ClipboardCheck className="size-6" />} title={tr("لم يتم أي جرد بعد", "No counts yet")} />} />
         )}
       </Card>
       <Dialog

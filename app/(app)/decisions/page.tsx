@@ -12,6 +12,7 @@ import { DeskArt } from "@/components/decisions/art";
 import { LANES, buildDecisions, type Decision } from "@/components/decisions/data";
 import { useNow } from "@/components/hall/live";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Button, Dialog, ErrorBox, Skeleton, Textarea, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
@@ -51,6 +52,7 @@ export default function DecisionsPage() {
   const toast = useToast();
   const now = useNow();
   const orders = useLoad(() => api.listOrders(), []);
+  const whD = useWarehouseFilter();
   const customers = useLoad(() => api.listCustomers(), []);
   const expiring = useLoad(() => api.nearExpiry(lookups.settings.near_expiry_days), [lookups.settings.near_expiry_days]);
   const debts = useLoad(() => api.debts(), []);
@@ -70,12 +72,12 @@ export default function DecisionsPage() {
 
   const all = ready
     ? buildDecisions({
-        orders: orders.data!,
+        orders: orders.data!.filter((o) => inWarehouse(whD, o.warehouse_id)),
         customers: customers.data!,
         items,
-        expiring: expiring.data!,
+        expiring: expiring.data!.filter((r) => inWarehouse(whD, r.batch.warehouse_id)),
         debts: debts.data!,
-        stocktakes: stocktakes.data!,
+        stocktakes: stocktakes.data!.filter((x) => inWarehouse(whD, x.warehouse_id)),
         closedMonths: closed.data!,
         online: online.data!,
         nearDays: lookups.settings.near_expiry_days,

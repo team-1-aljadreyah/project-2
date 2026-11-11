@@ -160,7 +160,8 @@ function Slow() {
   const { tr, name, qty, date } = useFmt();
   const { lookups, itemById } = useApp();
   const [days, setDays] = useState(lookups.settings.slow_moving_days);
-  const rows = useLoad(() => api.slowMoving(days), [days]);
+  const whS = useWarehouseFilter();
+  const rows = useLoad(() => api.slowMoving(days, whS), [days, whS]);
   return (
     <Card>
       <CardHeader

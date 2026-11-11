@@ -825,7 +825,7 @@ export const mockApi: Api = {
   listReturns: () =>
     read((db, a) => {
       need(a, ["manager", "rep", "accountant", "warehouse", "shop"]);
-      return db.returns.filter((r) => canSeeOrder(a, { customer_id: r.customer_id, rep_id: r.rep_id, warehouse_id: db.invoices.find((i) => i.id === r.invoice_id)?.warehouse_id ?? 0 })).map(returnView).reverse();
+      return db.returns.filter((r) => canSeeOrder(a, { customer_id: r.customer_id, rep_id: r.rep_id, warehouse_id: db.invoices.find((i) => i.id === r.invoice_id)?.warehouse_id ?? 0 })).map((r) => ({ ...returnView(r), warehouse_id: db.invoices.find((i) => i.id === r.invoice_id)?.warehouse_id })).reverse();
     }),
   getReturn: (id) =>
     read((db, a) => {
@@ -918,18 +918,19 @@ export const mockApi: Api = {
       need(a, ["manager", "accountant"]);
       return salesRows(db, a, group, from, to, warehouseId || undefined);
     }),
-  slowMoving: (days) =>
+  slowMoving: (days, warehouseId) =>
     read((db, a, now): SlowItem[] => {
       need(a, ["manager", "warehouse", "accountant"]);
       const today = dayOf(now);
+      const wh = warehouseId || undefined;
       return db.items
         .map((it) => {
           const last = db.invoices
-            .filter((i) => i.lines.some((l) => l.item_id === it.id))
+            .filter((i) => (!wh || i.warehouse_id === wh) && i.lines.some((l) => l.item_id === it.id))
             .map((i) => dayOf(new Date(i.date)))
             .sort()
             .pop();
-          const stock = physicalQty(db, it.id, undefined, today);
+          const stock = physicalQty(db, it.id, wh, today);
           return { item_id: it.id, last_sale: last, days: last ? daysBetween(last, today) : null, stock };
         })
         .filter((r) => r.stock > 0 && (r.days === null || r.days >= days))

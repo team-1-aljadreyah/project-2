@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { History } from "lucide-react";
 import { roleName } from "@/components/status";
-import { Badge, Card, Empty, ErrorBox, LoadingRows, PageHeader, SearchBox, Select } from "@/components/ui";
+import { Badge, Card, Empty, ErrorBox, LoadingRows, PageHeader, SearchBox, Select, Pager, usePages } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { AuditAction, AuditEntity } from "@/lib/api/types";
 import { useFmt, type Tr } from "@/lib/i18n";
@@ -39,6 +39,7 @@ export default function AuditPage() {
   const rows = (log.data ?? [])
     .filter((e) => (showLogins || e.action !== "login") && (!action || e.action === action) && (!entity || e.entity === entity) && matches(q, e.summary, e.summary_en, e.user.name))
     .slice(0, 300);
+  const pg = usePages(rows, 25);
   const entityLabel = (x: AuditEntity) =>
     ({
       order: tr("الطلبات", "Orders"),
@@ -88,8 +89,9 @@ export default function AuditPage() {
         ) : log.state.status === "error" ? (
           <ErrorBox error={log.state.error} onRetry={log.reload} />
         ) : rows.length ? (
+          <>
           <ul className="divide-y divide-line">
-            {rows.map((e) => (
+            {pg.shown.map((e) => (
               <li key={e.id} className="flex gap-3 px-4 py-3">
                 <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-card-2 text-xs font-bold">{e.user.name.slice(0, 1)}</div>
                 <div className="min-w-0 flex-1">
@@ -104,6 +106,8 @@ export default function AuditPage() {
               </li>
             ))}
           </ul>
+          <Pager {...pg} className="border-t border-line" />
+          </>
         ) : (
           <Empty icon={<History className="size-6" />} title={tr("لا توجد عمليات", "No activity")} />
         )}

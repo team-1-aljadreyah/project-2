@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { AlertTriangle, Bell, CheckCheck, DollarSign, RotateCcw, Headset, Percent, Lock, MessageCircle, PackageCheck, PackageX, ShieldAlert, ShoppingBag, CheckCircle2, Truck, UserPlus } from "lucide-react";
-import { Button, Card, Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/ui";
+import { Button, Card, Empty, ErrorBox, LoadingRows, PageHeader, Pager, usePages } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { NotificationType } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -52,6 +52,7 @@ export default function NotificationsPage() {
   const { tr, ago, lang } = useFmt();
   const list = useLoad(() => api.listNotifications(), []);
   const unread = (list.data ?? []).filter((n) => !n.read).length;
+  const pg = usePages(list.data ?? [], 10);
   return (
     <>
       <PageHeader
@@ -71,8 +72,9 @@ export default function NotificationsPage() {
         ) : list.state.status === "error" ? (
           <ErrorBox error={list.state.error} onRetry={list.reload} />
         ) : list.data?.length ? (
+          <>
           <ul className="divide-y divide-line">
-            {list.data.map((n) => {
+            {pg.shown.map((n) => {
               const body = (
                 <div className={cn("flex gap-3 px-4 py-3", !n.read && "bg-primary-soft/40")}>
                   <div className="mt-0.5 shrink-0">{icon(n.type)}</div>
@@ -97,6 +99,8 @@ export default function NotificationsPage() {
               );
             })}
           </ul>
+          <Pager {...pg} className="border-t border-line" />
+          </>
         ) : (
           <Empty icon={<Bell className="size-6" />} title={tr("لا توجد إشعارات", "No notifications")} />
         )}

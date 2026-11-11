@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, Save } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { Badge, Button, Card, ErrorBox, Input, LoadingRows, Notice, PageHeader, SearchBox, Segmented, errorText, useToast } from "@/components/ui";
+import { Badge, Button, Card, ErrorBox, Input, LoadingRows, Notice, PageHeader, SearchBox, Segmented, errorText, useToast, Pager, usePages } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { StocktakeLine } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -22,6 +22,17 @@ export default function StocktakeView() {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<Record<string, string>>({});
 
+  // The pages of the list (before the "loading" screen: React needs the same hooks on every render).
+  const pg = usePages(
+    (edits ?? st.data?.lines ?? []).filter((l) => {
+      const it = itemById.get(l.item_id);
+      if (!matches(q, it?.name, it?.name_en, it?.barcode)) return false;
+      if (f === "todo") return l.counted_qty === null;
+      if (f === "diff") return l.counted_qty !== null && l.counted_qty !== l.system_qty;
+      return true;
+    }),
+    25,
+  );
   if (st.state.status === "loading") return <LoadingRows />;
   if (st.state.status === "error" || !st.data) return <ErrorBox error={st.state.status === "error" ? st.state.error : null} />;
   const s = st.data;
@@ -30,13 +41,6 @@ export default function StocktakeView() {
   const open = s.status === "open";
   const set = (itemId: number, p: Partial<StocktakeLine>) => setEdits((ls) => (ls ?? s.lines).map((l) => (l.item_id === itemId ? { ...l, ...p } : l)));
   const diff = (l: StocktakeLine) => (l.counted_qty === null ? 0 : l.counted_qty - l.system_qty);
-  const rows = lines.filter((l) => {
-    const it = itemById.get(l.item_id);
-    if (!matches(q, it?.name, it?.name_en, it?.barcode)) return false;
-    if (f === "todo") return l.counted_qty === null;
-    if (f === "diff") return diff(l) !== 0;
-    return true;
-  });
   const done = lines.filter((l) => l.counted_qty !== null).length;
 
   async function save(close: boolean) {
@@ -111,7 +115,7 @@ export default function StocktakeView() {
           <div className="h-full bg-success transition-all" style={{ width: `${(done / Math.max(1, lines.length)) * 100}%` }} />
         </div>
         <ul className="divide-y divide-line">
-          {rows.map((l) => {
+          {pg.shown.map((l) => {
             const it = itemById.get(l.item_id);
             const ppc = it?.pieces_per_carton ?? 1;
             const d = diff(l);
@@ -167,6 +171,7 @@ export default function StocktakeView() {
             );
           })}
         </ul>
+        <Pager {...pg} className="border-t border-line" />
       </Card>
     </>
   );

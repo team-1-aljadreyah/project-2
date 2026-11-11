@@ -212,7 +212,7 @@ export const httpApi = {
   dailySales: (date: string, warehouseId?: number | null) => get<DailySales>("/reports/daily-sales", { date, ...(warehouseId ? { warehouse_id: warehouseId } : {}) }),
   salesReport: (group: SalesGroup, from: string, to: string, warehouseId?: number | null) =>
     get<SalesRow[]>("/reports/sales", { group_by: group, from, to, ...(warehouseId ? { warehouse_id: warehouseId } : {}) }),
-  slowMoving: (days: number) => get<SlowItem[]>("/reports/slow-moving", { days }),
+  slowMoving: (days: number, warehouseId?: number | null) => get<SlowItem[]>("/reports/slow-moving", { days, ...(warehouseId ? { warehouse_id: warehouseId } : {}) }),
   nearExpiry: (days: number) => get<NearExpiryRow[]>("/reports/near-expiry", { days }),
   debts: () => get<DebtRow[]>("/reports/debts"),
 
