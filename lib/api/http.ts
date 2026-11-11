@@ -42,6 +42,8 @@ import type {
   DeliverInput,
   ProblemInput,
   OrderEdit,
+  CreditNote,
+  Refund,
   PrepLine,
   BatchTrace,
   SpecialPrice,
@@ -115,6 +117,12 @@ export const httpApi = {
   /** The receiving keeper takes a transfer in: { item_id: pieces that arrived }; less needs a reason. */
   receiveTransfer: (id: number, received: Record<number, number>, reason: string) => post<Transfer>(`/transfers/${id}/receive`, { received, reason }),
   reviewTransfer: (id: number) => post<Transfer>(`/transfers/${id}/review`),
+  /** A mistake on an invoice: take an amount off it (a credit note). */
+  creditInvoice: (invoiceId: number, amount: number, reason: string) => post<CreditNote>(`/invoices/${invoiceId}/credit`, { amount, reason }),
+  /** Give money back to the shop (up to its credit): cash, transfer, or back to an online payment's card. */
+  refundCustomer: (customerId: number, input: { amount: number; method: Refund["method"]; payment_id?: number; reason: string }) => post<Refund>(`/customers/${customerId}/refunds`, input),
+  creditNotes: (customerId: number) => get<CreditNote[]>(`/customers/${customerId}/credit-notes`),
+  refunds: (customerId: number) => get<Refund[]>(`/customers/${customerId}/refunds`),
   /** A shop's own prices (manager sets them; they come before the tier price). null removes one. */
   specialPrices: (customerId: number) => get<SpecialPrice[]>(`/customers/${customerId}/prices`),
   setSpecialPrice: (customerId: number, itemId: number, prices: { carton_price: number; piece_price: number } | null) =>

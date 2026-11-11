@@ -41,6 +41,8 @@ import {
   setUsdRate,
   usdRateOn,
   acceptOrder,
+  creditInvoice,
+  refundCustomer,
   cleanAddress,
   receiveTransfer,
   reviewTransfer,
@@ -583,6 +585,20 @@ export const mockApi: Api = {
   holdBatch: (id, reason) => write((db, a, now) => batchView(db, holdBatch(db, a, id, reason, now), a, now)),
   releaseBatch: (id) => write((db, a, now) => batchView(db, releaseBatch(db, a, id, now), a, now)),
   traceBatch: (id) => read((db, a) => traceBatch(db, a, id)),
+  creditInvoice: (invoiceId, amount, reason) => write((db, a, now) => creditInvoice(db, a, invoiceId, amount, reason, now)),
+  refundCustomer: (customerId, input) => write((db, a, now) => refundCustomer(db, a, customerId, input, now)),
+  creditNotes: (customerId) =>
+    read((db, a) => {
+      const c = db.customers.find((x) => x.id === customerId);
+      if (!c || !canSeeCustomer(a, c)) notFound();
+      return (db.credit_notes ?? []).filter((n) => n.customer_id === customerId).reverse();
+    }),
+  refunds: (customerId) =>
+    read((db, a) => {
+      const c = db.customers.find((x) => x.id === customerId);
+      if (!c || !canSeeCustomer(a, c)) notFound();
+      return (db.refunds ?? []).filter((r) => r.customer_id === customerId).reverse();
+    }),
   specialPrices: (customerId) =>
     read((db, a) => {
       const c = db.customers.find((x) => x.id === customerId);
@@ -658,6 +674,12 @@ export const mockApi: Api = {
       }
       for (const r of db.returns.filter((x) => x.customer_id === c.id)) {
         rows.push({ date: r.created_at, type: "return", ref: r.number, link: `/returns/${r.id}`, debit: 0, credit: r.amount });
+      }
+      for (const n of (db.credit_notes ?? []).filter((x) => x.customer_id === c.id)) {
+        rows.push({ date: n.at, type: "credit_note", ref: n.number, link: `/invoices/${n.invoice_id}`, debit: 0, credit: n.amount });
+      }
+      for (const r of (db.refunds ?? []).filter((x) => x.customer_id === c.id)) {
+        rows.push({ date: r.at, type: "refund", ref: r.number, debit: r.amount, credit: 0 });
       }
       rows.sort((x, y) => x.date.localeCompare(y.date));
       let balance = 0;

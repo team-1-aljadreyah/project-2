@@ -23,8 +23,10 @@ export function StatementView({ customerId, links = true }: { customerId: number
       payment: tr("تسديد", "Payment"),
       return: tr("مرتجع", "Return"),
       reversal: tr("عكس تسديد", "Reversal"),
+      credit_note: tr("تعويض عن خطأ", "Credit note"),
+      refund: tr("مبلغ مُعاد للزبون", "Refund"),
     })[t];
-  const tone = (t: StatementType) => (t === "invoice" ? "primary" : t === "payment" ? "success" : t === "return" ? "warning" : t === "reversal" ? "danger" : "neutral");
+  const tone = (t: StatementType) => (t === "invoice" ? "primary" : t === "payment" ? "success" : t === "return" ? "warning" : t === "reversal" ? "danger" : t === "credit_note" ? "success" : t === "refund" ? "warning" : "neutral");
 
   return (
     <Card className="print-area">

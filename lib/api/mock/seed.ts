@@ -170,6 +170,8 @@ export function makeSeed(now = new Date()): Db {
     delivery_photos: {},
     usd_rates: [],
     special_prices: [],
+    credit_notes: [],
+    refunds: [],
     price_changes: [],
     chat: [],
     chat_reads: {},

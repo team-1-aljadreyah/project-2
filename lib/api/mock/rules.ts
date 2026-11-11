@@ -20,6 +20,8 @@ import type {
   MyChat,
   DeliverInput,
   OrderEdit,
+  CreditNote,
+  Refund,
   ShopAddress,
   PrepLine,
   BatchTrace,
@@ -188,8 +190,8 @@ function takeFefo(db: Db, itemId: number, warehouseId: number, pieces: number, t
 
 // ---------- customers and invoices ----------
 
-export function invoiceRemaining(inv: Pick<DbInvoice, "total" | "paid" | "returned">) {
-  return inv.total - inv.paid - inv.returned;
+export function invoiceRemaining(inv: Pick<DbInvoice, "total" | "paid" | "returned"> & { credited?: number }) {
+  return inv.total - inv.paid - inv.returned - (inv.credited ?? 0);
 }
 
 export function invoiceStatus(inv: Pick<DbInvoice, "total" | "paid" | "returned">): InvoiceStatus {
@@ -203,6 +205,8 @@ export function invoiceStatus(inv: Pick<DbInvoice, "total" | "paid" | "returned"
 export function customerBalance(db: Db, customerId: number) {
   let b = 0;
   for (const inv of db.invoices) if (inv.customer_id === customerId) b += invoiceRemaining(inv);
+  // Money given back to the shop uses up its credit.
+  for (const r of db.refunds ?? []) if (r.customer_id === customerId) b += r.amount;
   return b;
 }
 
@@ -1734,6 +1738,71 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
     );
   }
   return { user, customer };
+}
+
+// ---------- mistakes: credit notes and refunds ----------
+
+/** A mistake on an invoice: take `amount` off what the shop owes on it (never more than is left of it
+ *  after returns and earlier notes). Already paid → it becomes the shop's credit, to refund or to use. */
+export function creditInvoice(db: Db, actor: DbUser, invoiceId: number, amount: number, reason: string, now: Date): CreditNote {
+  need(actor, ["accountant", "manager"]);
+  const inv = db.invoices.find((x) => x.id === invoiceId) ?? fail(404, "NOT_FOUND", "الفاتورة غير موجودة", "Invoice not found");
+  const a = Math.round(Number(amount));
+  const room = inv.total - inv.returned - (inv.credited ?? 0);
+  if (!(a > 0)) fail(422, "VALIDATION", "اكتب المبلغ", "Enter the amount", { amount: msg("مبلغ صحيح بالدينار", "A whole amount") });
+  if (a > room) fail(422, "VALIDATION", `أكثر ما يمكن تعويضه ${room.toLocaleString("en")} د.ع`, `At most ${room.toLocaleString("en")} IQD`, { amount: msg(`حتى ${room.toLocaleString("en")}`, `Up to ${room}`) });
+  if (!reason.trim()) fail(422, "VALIDATION", "اكتب ما الخطأ", "Write what the mistake was", { reason: msg("السبب مطلوب", "Required") });
+  db.credit_notes ??= [];
+  const id = nextId(db, "credit_note");
+  const n: CreditNote = { id, number: `CN-${pad(id, 4)}`, invoice_id: inv.id, customer_id: inv.customer_id, amount: a, reason: reason.trim(), by: { ...person(actor), role: actor.role }, at: now.toISOString() };
+  db.credit_notes.push(n);
+  inv.credited = (inv.credited ?? 0) + a;
+  const c = db.customers.find((x) => x.id === inv.customer_id);
+  audit(db, actor, "update", "invoice", inv.id, `تعويض ${n.number} على ${inv.number} (${c?.name ?? ""}): ${a.toLocaleString("en")} د.ع. ${n.reason}`, `Credit note ${n.number} on ${inv.number}: ${a} IQD`, now);
+  if (actor.role !== "manager") notify(db, { type: "refund", roles: ["manager"], title: `تعويض على ${inv.number}: ${a.toLocaleString("en")} د.ع`, title_en: `Credit note on ${inv.number}`, body: `${actor.name}: ${n.reason}`, body_en: n.reason, link: `/invoices/${inv.id}` }, now);
+  const owner = shopOwnerOf(db, inv.customer_id);
+  if (owner) notify(db, { type: "refund", roles: ["shop"], user_id: owner.id, title: `خُصم ${a.toLocaleString("en")} د.ع من فاتورتك ${inv.number}`, title_en: `${a} IQD taken off invoice ${inv.number}`, body: n.reason, body_en: n.reason, link: `/invoices/${inv.id}` }, now);
+  return n;
+}
+
+/** Give money back to the shop, up to its credit. Online: back to the card of one of its online payments. */
+export function refundCustomer(db: Db, actor: DbUser, customerId: number, input: { amount: number; method: Refund["method"]; payment_id?: number; reason: string }, now: Date): Refund {
+  need(actor, ["accountant", "manager"]);
+  const c = db.customers.find((x) => x.id === customerId) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
+  const credit = -customerBalance(db, customerId);
+  const a = Math.round(Number(input.amount));
+  if (credit <= 0) fail(409, "BAD_STATE", "ليس للزبون رصيد يُعاد: سجّل تعويضاً على الفاتورة أولاً", "The shop has no credit: make a credit note on the invoice first");
+  if (!(a > 0)) fail(422, "VALIDATION", "اكتب المبلغ", "Enter the amount", { amount: msg("مبلغ صحيح بالدينار", "A whole amount") });
+  if (a > credit) fail(422, "VALIDATION", `رصيد الزبون ${credit.toLocaleString("en")} د.ع فقط`, `The shop's credit is ${credit} IQD`, { amount: msg(`حتى ${credit.toLocaleString("en")}`, `Up to ${credit}`) });
+  if (!input.reason?.trim()) fail(422, "VALIDATION", "اكتب السبب", "Write the reason", { reason: msg("السبب مطلوب", "Required") });
+  if (!["cash", "transfer", "online"].includes(input.method)) fail(422, "VALIDATION", "اختر طريقة الإعادة", "Choose how", { method: msg("مطلوب", "Required") });
+  let payment: Payment | undefined;
+  if (input.method === "online") {
+    payment = db.payments.find((p) => p.id === input.payment_id && p.customer_id === customerId && p.method === "online" && !p.reversed && p.amount > 0);
+    if (!payment) fail(422, "VALIDATION", "اختر التسديد الأونلاين الذي تُعاد إلى بطاقته", "Choose the online payment to refund to", { payment_id: msg("مطلوب", "Required") });
+    const already = (db.refunds ?? []).filter((r) => r.payment_id === payment!.id).reduce((s, r) => s + r.amount, 0);
+    if (a > payment.amount - already) fail(422, "VALIDATION", `لا يُعاد إلى البطاقة أكثر مما دُفع بها (${(payment.amount - already).toLocaleString("en")} د.ع)`, "Not more than was paid by that card", { amount: msg("أكثر من المدفوع بالبطاقة", "More than the card paid") });
+  }
+  db.refunds ??= [];
+  const id = nextId(db, "refund");
+  const r: Refund = {
+    id,
+    number: `RF-${pad(id, 4)}`,
+    customer_id: customerId,
+    amount: a,
+    method: input.method,
+    ...(payment ? { payment_id: payment.id } : {}),
+    reason: input.reason.trim(),
+    by: { ...person(actor), role: actor.role },
+    at: now.toISOString(),
+  };
+  db.refunds.push(r);
+  const how = input.method === "cash" ? "نقداً" : input.method === "transfer" ? "بتحويل" : `إلى بطاقة ${payment?.gateway?.card ?? ""}`;
+  audit(db, actor, "create", "payment", id, `إعادة ${a.toLocaleString("en")} د.ع إلى ${c.name} ${how} (${r.number}): ${r.reason}`, `Refund ${r.number} to ${c.name}: ${a} IQD`, now);
+  if (actor.role !== "manager") notify(db, { type: "refund", roles: ["manager"], title: `إعادة مبلغ لـ ${c.name}: ${a.toLocaleString("en")} د.ع`, title_en: `Refund to ${c.name}`, body: `${actor.name} · ${how} · ${r.reason}`, body_en: r.reason, link: `/customers/${c.id}` }, now);
+  const owner = shopOwnerOf(db, customerId);
+  if (owner) notify(db, { type: "refund", roles: ["shop"], user_id: owner.id, title: `أُعيد لك ${a.toLocaleString("en")} د.ع`, title_en: `${a} IQD refunded to you`, body: `${how} · ${r.reason}`, body_en: r.reason, link: "/statement" }, now);
+  return r;
 }
 
 // ---------- the shop's address card ----------
