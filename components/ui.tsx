@@ -2,6 +2,7 @@
 
 // The small building blocks every screen uses: buttons, inputs, cards, badges, dialogs, tables.
 // Keeping them in one place means every screen looks and behaves the same.
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
@@ -478,13 +479,17 @@ const PAGE = 50;
 
 // ---------- Dialog ----------
 
+// Open dialogs, newest last: Esc closes only the top one (a dialog can open another, e.g. the address sheet).
+const openDialogs: string[] = [];
+
 export function Dialog({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const { tr } = useFmt();
   const id = useId();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    openDialogs.push(id);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && openDialogs[openDialogs.length - 1] === id && onClose();
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -495,10 +500,15 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
+      const i = openDialogs.lastIndexOf(id);
+      if (i >= 0) openDialogs.splice(i, 1);
     };
-  }, [open, onClose]);
+  }, [open, onClose, id]);
   if (!open) return null;
-  return (
+  // Drawn at the end of <body>, not inside the page: a dialog opened from inside another dialog would
+  // otherwise be trapped in the first one's box (its opening animation makes it the frame for anything
+  // "fixed" inside it) and get cut off.
+  return createPortal(
     <div className="dialog-backdrop no-print fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
@@ -516,10 +526,11 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
             <X className="size-5" />
           </IconButton>
         </div>
-        <div className="overflow-y-auto p-4">{children}</div>
-        {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-line px-4 py-3">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">{children}</div>
+        {footer && <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-4 py-3">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
