@@ -10,6 +10,8 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
+    // Wrangler's local files (npx wrangler pages dev)
+    ".wrangler/**",
     "build/**",
     "next-env.d.ts",
   ]),

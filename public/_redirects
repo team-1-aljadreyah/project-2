@@ -1,0 +1,46 @@
+# Cloudflare Pages (static export). The detail screens are built once, as "_".
+# Every /<list>/<id>/ is served by that screen (200 = the address stays the same), and the screen reads the
+# real id from the address bar. /<list>/<id>/* covers the small data files Next loads when moving between pages.
+# The first rule that matches wins, so the real pages (like /orders/new/) come first.
+
+# Real pages
+/orders/new  /orders/new/  200
+/orders/new/  /orders/new/  200
+/payments/new  /payments/new/  200
+/payments/new/  /payments/new/  200
+/receipts/new  /receipts/new/  200
+/receipts/new/  /receipts/new/  200
+/returns/new  /returns/new/  200
+/returns/new/  /returns/new/  200
+
+# Real pages' data files
+/orders/new/*  /orders/new/:splat  200
+/payments/new/*  /payments/new/:splat  200
+/receipts/new/*  /receipts/new/:splat  200
+/returns/new/*  /returns/new/:splat  200
+
+# Detail screens
+/customers/:id/*  /customers/_/:splat  200
+/customers/:id/  /customers/_/  200
+/customers/:id  /customers/_/  200
+/invoices/:id/*  /invoices/_/:splat  200
+/invoices/:id/  /invoices/_/  200
+/invoices/:id  /invoices/_/  200
+/items/:id/*  /items/_/:splat  200
+/items/:id/  /items/_/  200
+/items/:id  /items/_/  200
+/orders/:id/*  /orders/_/:splat  200
+/orders/:id/  /orders/_/  200
+/orders/:id  /orders/_/  200
+/payments/:id/*  /payments/_/:splat  200
+/payments/:id/  /payments/_/  200
+/payments/:id  /payments/_/  200
+/receipts/:id/*  /receipts/_/:splat  200
+/receipts/:id/  /receipts/_/  200
+/receipts/:id  /receipts/_/  200
+/returns/:id/*  /returns/_/:splat  200
+/returns/:id/  /returns/_/  200
+/returns/:id  /returns/_/  200
+/stocktakes/:id/*  /stocktakes/_/:splat  200
+/stocktakes/:id/  /stocktakes/_/  200
+/stocktakes/:id  /stocktakes/_/  200
