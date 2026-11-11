@@ -47,7 +47,7 @@ The site has no server code (every page runs in the browser), so Cloudflare Page
 | Name | Value |
 | --- | --- |
 | `NODE_VERSION` | `22` |
-| `NEXT_PUBLIC_USE_MOCK` | `true` for the demo (data lives in each browser), `false` with the real backend |
+| `NEXT_PUBLIC_USE_MOCK` | leave it empty or `true` for the demo (each visitor's browser keeps its own demo data); `false` with the real backend |
 | `NEXT_PUBLIC_API_URL` | the backend address, e.g. `https://api.example.com` (only when `NEXT_PUBLIC_USE_MOCK=false`) |
 
 `NEXT_PUBLIC_*` values are put into the files at build time: after changing one, run a new deployment.
