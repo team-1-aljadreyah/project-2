@@ -6,7 +6,9 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 /** A heading whose words slide up one after another when it scrolls into view. */
-export function WordReveal({ text, className, as: Tag = "h2" }: { text: string; className?: string; as?: "h1" | "h2" | "p" }) {
+/** onLoad: animate as soon as the page opens (for a heading at the top, already on screen),
+ *  instead of waiting for it to scroll into view. */
+export function WordReveal({ text, className, as: Tag = "h2", onLoad }: { text: string; className?: string; as?: "h1" | "h2" | "p"; onLoad?: boolean }) {
   const words = text.split(" ");
   return (
     <Tag className={className}>
@@ -17,8 +19,7 @@ export function WordReveal({ text, className, as: Tag = "h2" }: { text: string; 
             <motion.span
               className="inline-block"
               initial={{ y: "110%" }}
-              whileInView={{ y: 0 }}
-              viewport={{ once: true, margin: "-60px" }}
+              {...(onLoad ? { animate: { y: 0 } } : { whileInView: { y: 0 }, viewport: { once: true, margin: "-60px" } })}
               transition={{ duration: 0.6, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
             >
               {w}

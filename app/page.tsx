@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
-import { ArrowLeft, ArrowRight, MapPin, Phone, UserPlus, Warehouse } from "lucide-react";
+import { ArrowLeft, ArrowRight, MapPin, Phone, Store, UserPlus, Warehouse } from "lucide-react";
 import { Bento, Roles } from "@/components/landing/features";
 import { Hero } from "@/components/landing/hero";
 import { CategoryStrip, Platform, Problems } from "@/components/landing/sections";
@@ -53,6 +53,9 @@ export default function LandingPage() {
             <div className="relative">
               <WordReveal text={tr("هل أنت مستعد لتوديع الدفاتر؟", "Ready to say goodbye to notebooks?")} className="text-3xl font-bold sm:text-5xl" />
               <p className="mx-auto mt-4 max-w-xl text-muted">{tr("صاحب محل؟ ادخل إلى حسابك، واطّلع على أسعارك الخاصة، واطلب، وتابع كشف حسابك في أي وقت.", "A shop owner? Log in, see your own prices, order, and follow your statement any time.")}</p>
+              <Link href="/shops" className="mx-auto mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-action hover:underline">
+                <Store className="size-4" /> {tr("لماذا يطلب أصحاب المحلات من النهرين؟", "Why do shop owners order from Al-Nahrain?")}
+              </Link>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 {/* New shops register by themselves; the company approves them before the first order. */}
                 {!session && (
@@ -129,6 +132,9 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
           <a href="#contact" className="transition hover:text-text">
             {tr("تواصل معنا", "Contact")}
           </a>
+          <Link href="/shops" className="flex items-center gap-1.5 rounded-full border border-action/40 bg-action/10 px-3 py-1 font-semibold text-text transition hover:bg-action/20">
+            <Store className="size-4 text-action" /> {tr("لأصحاب المحلات", "For shop owners")}
+          </Link>
         </div>
         <div className="flex items-center gap-2">
           <LanguageSwitch onBrand />
