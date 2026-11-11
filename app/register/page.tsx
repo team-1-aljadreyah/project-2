@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, Loader2, Lock, MapPin, Navigation, Phone, Store, User } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, Loader2, Lock, MapPin, Phone, Store, User } from "lucide-react";
 import { AuthTopBar, BrandPanel, IconField, PhoneBand, iconInput } from "@/components/auth";
 import { LogoMark } from "@/components/logo";
 import { errorText } from "@/components/ui";
@@ -13,6 +13,7 @@ import { api, ApiError } from "@/lib/api";
 import type { RegisterInput } from "@/lib/api/types";
 import { homeOf, setSession, useSession } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
+import { AddressCard } from "@/components/address-form";
 import { cn } from "@/lib/utils";
 
 // Areas of Karbala the company already delivers to (you can still type another one).
@@ -53,6 +54,7 @@ export default function RegisterPage() {
     if (f.owner_name.trim().length < 3) e.owner_name = tr("اكتب اسمك الكامل", "Enter your full name");
     if (!/^07\d{9}$/.test(phone)) e.phone = tr("رقم عراقي من 11 رقم يبدأ بـ 07", "An 11-digit Iraqi number starting with 07");
     if (!f.area.trim()) e.area = tr("اختر المنطقة", "Choose the area");
+    if (!f.address_info) e.address_info = tr("أضف عنوان المحل وحدّده على الخريطة", "Add the shop's address and pin it on the map");
     if (f.password.length < 6) e.password = tr("6 أحرف على الأقل", "At least 6 characters");
     else if (f.confirm !== f.password) e.confirm = tr("كلمتا المرور غير متطابقتين", "The passwords don't match");
     return e;
@@ -136,9 +138,13 @@ export default function RegisterPage() {
                       ))}
                     </datalist>
                   </IconField>
-                  <IconField icon={Navigation} label={tr("أقرب نقطة دالة", "Nearest landmark")} htmlFor="address" hint={tr("اختياري", "Optional")}>
-                    <input id="address" value={f.address} onChange={(e) => set({ address: e.target.value })} placeholder={tr("قرب جامع الغدير", "Near Al-Ghadeer mosque")} className={iconInput} />
-                  </IconField>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-semibold">
+                    {tr("عنوان المحل", "The shop's address")} <span className="text-danger">*</span>
+                  </p>
+                  <AddressCard value={f.address_info} onChange={(v) => set({ address_info: v ?? undefined })} error={err.address_info} defaultPhone={f.phone.replace(/\s/g, "")} />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">

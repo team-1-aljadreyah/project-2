@@ -20,6 +20,7 @@ import type {
   MyChat,
   DeliverInput,
   OrderEdit,
+  ShopAddress,
   PrepLine,
   BatchTrace,
   CommissionLine,
@@ -1670,6 +1671,7 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
   if (input.password.length < 6) errors.password = msg("6 أحرف على الأقل", "At least 6 characters");
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول المؤشرة", "Check the marked fields", errors);
 
+  const addr = cleanAddress(input.address_info, true);
   // The new shop goes to the rep who already serves that area (or the rep with the fewest shops).
   const area = input.area.trim();
   const reps = db.users.filter((u) => u.role === "rep" && u.active);
@@ -1690,7 +1692,8 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
     owner_name: input.owner_name.trim(),
     phone,
     area,
-    address: input.address?.trim() || `كربلاء - ${area}`,
+    address: addr.text || input.address?.trim() || `كربلاء - ${area}`,
+    ...(addr.info ? { address_info: addr.info } : {}),
     tier_id: tier.id,
     rep_id: rep?.id ?? 0,
     debt_limit: 0,
@@ -1731,6 +1734,40 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
     );
   }
   return { user, customer };
+}
+
+// ---------- the shop's address card ----------
+
+/** Checks and cleans the address card; returns it with the short text for the old `address` field. */
+export function cleanAddress(a: ShopAddress | null | undefined, required: boolean): { info?: ShopAddress; text?: string } {
+  if (!a) {
+    if (required) fail(422, "VALIDATION", "أكمل معلومات العنوان", "Complete the address", { address_info: msg("العنوان مطلوب", "The address is required") });
+    return {};
+  }
+  const t = (v?: string) => (v ?? "").trim().slice(0, 160);
+  const digits = (a.phone ?? "").replace(/\s/g, "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/^\+?964/, "0");
+  const phone = digits.startsWith("7") ? `0${digits}` : digits;
+  const errors: Record<string, string> = {};
+  if (!t(a.label)) errors["address_info.label"] = msg("اسم العنوان مطلوب", "Required");
+  if (!t(a.details)) errors["address_info.details"] = msg("تفاصيل العنوان مطلوبة", "Required");
+  if (!/^07\d{9}$/.test(phone)) errors["address_info.phone"] = msg("رقم عراقي يبدأ بـ 7 بعد +964", "An Iraqi number starting with 7 after +964");
+  const lat = Number(a.lat), lng = Number(a.lng);
+  // Iraq, roughly: a pin far away is a mistake.
+  const pin = Number.isFinite(lat) && Number.isFinite(lng) && lat > 29 && lat < 38 && lng > 38 && lng < 49;
+  if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من معلومات العنوان", "Check the address", errors);
+  const info: ShopAddress = {
+    label: t(a.label),
+    details: t(a.details),
+    phone,
+    ...(t(a.street) ? { street: t(a.street) } : {}),
+    ...(t(a.building) ? { building: t(a.building) } : {}),
+    ...(t(a.floor) ? { floor: t(a.floor) } : {}),
+    ...(t(a.apartment) ? { apartment: t(a.apartment) } : {}),
+    ...(t(a.landmark) ? { landmark: t(a.landmark) } : {}),
+    ...(pin ? { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 } : {}),
+  };
+  const text = [info.label, info.street, info.details !== info.label ? info.details : "", info.landmark ? `قرب ${info.landmark}` : ""].filter(Boolean).join(" - ");
+  return { info, text };
 }
 
 // ---------- A shop owner with several shops ----------
@@ -1776,6 +1813,7 @@ export function addShop(db: Db, actor: DbUser, input: NewShopInput, now: Date): 
   if (shopsOf(actor).length >= 10) errors.shop_name = msg("حتى 10 محلات لكل حساب", "Up to 10 shops per account");
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول المؤشرة", "Check the marked fields", errors);
 
+  const addr = cleanAddress(input.address_info, true);
   // The same choice of delivery rep as a sign-up: the one who already serves that area.
   const reps = db.users.filter((u) => u.role === "rep" && u.active);
   const rep = reps
@@ -1788,7 +1826,8 @@ export function addShop(db: Db, actor: DbUser, input: NewShopInput, now: Date): 
     owner_name: actor.name,
     phone,
     area,
-    address: input.address?.trim() || `كربلاء - ${area}`,
+    address: addr.text || input.address?.trim() || `كربلاء - ${area}`,
+    ...(addr.info ? { address_info: addr.info } : {}),
     tier_id: tier.id,
     rep_id: rep?.id ?? 0,
     debt_limit: 0,
