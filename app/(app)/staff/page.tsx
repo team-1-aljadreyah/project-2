@@ -14,6 +14,7 @@ import { Button, Card, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 
 const rise = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
@@ -23,6 +24,7 @@ export default function StaffHome() {
   const { user, lookups, items } = useApp();
   const threads = useLoad(() => api.chatThreads(), []);
   const orders = useLoad(() => api.listOrders(), []);
+  useRealtime(["orders"], () => orders.reload());
   const customers = useLoad(() => api.listCustomers(), []);
   const expiring = useLoad(() => api.nearExpiry(lookups.settings.near_expiry_days), [lookups.settings.near_expiry_days]);
   const Arrow = lang === "ar" ? ArrowUpLeft : ArrowUpRight;

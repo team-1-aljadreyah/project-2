@@ -69,6 +69,8 @@ export interface Db {
   /** Delivery photos, kept apart from the orders because they are big (order id → JPEG data URL). */
   delivery_photos: Record<number, string>;
   usd_rates: UsdRate[];
+  /** The last place each delivery rep's phone sent (the shop owner's tracking map). */
+  rep_locations?: Record<number, { rep_id: number; lat: number; lng: number; at: string }>;
   special_prices: SpecialPrice[];
   credit_notes: CreditNote[];
   refunds: Refund[];
@@ -88,7 +90,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 25;
+export const DB_VERSION = 26;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

@@ -11,6 +11,7 @@ import type { Order, OrderStatus } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { removeJob, retryJob, useQueue } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { matches } from "@/lib/utils";
 
 type Filter = "open" | OrderStatus | "all";
@@ -19,6 +20,7 @@ export default function OrdersPage() {
   const { tr, dateTime, ago, money } = useFmt();
   const { user, lookups } = useApp();
   const orders = useLoad(() => api.listOrders(), []);
+  useRealtime(["orders"], () => orders.reload());
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
   const queue = useQueue();
   const [filter, setFilter] = useState<Filter>(user.role === "warehouse" ? "approved" : user.role === "accountant" ? "pending" : "open");

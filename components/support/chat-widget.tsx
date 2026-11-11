@@ -13,6 +13,7 @@ import { useApp } from "@/components/shell";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { cn, matches } from "@/lib/utils";
 import { FAQ } from "./faq";
 import { Bubbles, SendBox } from "./messages";
@@ -30,7 +31,8 @@ export function ChatWidget() {
 
   // Ask again every few seconds (the real backend has no push yet).
   useEffect(() => {
-    const t = setInterval(chat.reload, open ? 4000 : 15000);
+    // Live over the WebSocket (below); asking again is only a backup if the line is down.
+    const t = setInterval(chat.reload, open ? 20000 : 60000);
     return () => clearInterval(t);
   }, [chat.reload, open]);
 
@@ -39,6 +41,7 @@ export function ChatWidget() {
     if (open && view === "chat" && unread > 0 && user.customer_id) api.markChatRead(user.customer_id).catch(() => {});
   }, [open, view, unread, user.customer_id]);
 
+  useRealtime(["chat"], () => chat.reload());
   const lastStaff = [...(chat.data?.messages ?? [])].reverse().find((m) => m.from === "staff");
 
   return (

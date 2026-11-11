@@ -87,6 +87,26 @@ const CUSTOMERS: [string, string, string, string, number, number, number][] = [
   ["أسواق العميد", "نبيل حمزة", "07812345614", "حي العباس", 2, 5, 4_000_000],
 ];
 
+// The middle of each Karbala neighbourhood used by the demo shops (close enough for the maps).
+const AREA_SPOTS: Record<string, [number, number]> = {
+  "حي الحسين": [32.5965, 44.0405],
+  "سيف سعد": [32.5852, 44.0118],
+  "حي العباس": [32.6072, 44.0502],
+  "الإسكان": [32.6268, 44.0102],
+  "حي الغدير": [32.6318, 44.0405],
+  "باب بغداد": [32.6198, 44.0302],
+  "حي الأسرة": [32.5902, 44.0598],
+  "البلدية": [32.6122, 44.0202],
+  "حي الموظفين": [32.6002, 44.0002],
+  "حي النقيب": [32.6402, 44.0252],
+  "عون": [32.5702, 44.0302],
+};
+/** The shop's pin: its neighbourhood, moved a little (the same every time) so two shops don't overlap. */
+function spotIn(area: string, i: number) {
+  const [lat, lng] = AREA_SPOTS[area] ?? [32.616, 44.0249];
+  return { lat: Math.round((lat + ((i * 37) % 11 - 5) * 0.0007) * 1e6) / 1e6, lng: Math.round((lng + ((i * 53) % 13 - 6) * 0.0007) * 1e6) / 1e6 };
+}
+
 export function makeSeed(now = new Date()): Db {
   const rand = rng(20261109);
   const pick = <T,>(arr: T[]) => arr[Math.floor(rand() * arr.length)];
@@ -133,8 +153,8 @@ export function makeSeed(now = new Date()): Db {
     seq: { user: users.length, item: items.length, customer: CUSTOMERS.length },
     users,
     warehouses: [
-      { id: 1, name: "المخزن الرئيسي - الصناعة", name_en: "Main warehouse - Al-Sinaa", capacity: 3500 },
-      { id: 2, name: "مخزن الحر", name_en: "Al-Hur warehouse", capacity: 900 },
+      { id: 1, name: "المخزن الرئيسي - الصناعة", name_en: "Main warehouse - Al-Sinaa", capacity: 3500, lat: 32.6302, lng: 44.0548 },
+      { id: 2, name: "مخزن الحر", name_en: "Al-Hur warehouse", capacity: 900, lat: 32.6395, lng: 43.9862 },
     ],
     tiers: [
       { id: 1, name: "جملة كبيرة", name_en: "Big wholesale" },
@@ -151,6 +171,8 @@ export function makeSeed(now = new Date()): Db {
       phone,
       area,
       address: `كربلاء - ${area}`,
+      // A spot in its neighbourhood of Karbala, so the delivery maps can show it.
+      address_info: { label: name, details: `كربلاء - ${area}`, phone, ...spotIn(area, i) },
       tier_id,
       rep_id,
       debt_limit,

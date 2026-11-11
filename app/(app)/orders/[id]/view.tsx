@@ -10,7 +10,9 @@ import { api } from "@/lib/api";
 import type { Batch } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { DeliveryPanel } from "@/components/delivery/status";
+import { ShipmentTracker, useRepLocations } from "@/components/delivery/live-map";
 import { OrderTotals } from "@/components/discount";
 import { editOrderInBag } from "@/components/shop-store";
 import { PrepareOrder } from "@/components/prepare-order";
@@ -23,6 +25,8 @@ export default function OrderView() {
   const router = useRouter();
   const toast = useToast();
   const order = useLoad(() => api.getOrder(id), [id]);
+  const locations = useRepLocations();
+  useRealtime(["orders"], () => order.reload());
   const o = order.data;
   const customer = useLoad(() => (o ? api.getCustomer(o.customer_id) : Promise.resolve(undefined)), [o?.customer_id]);
   const seesBatches = ["manager", "warehouse", "accountant"].includes(user.role);
@@ -152,6 +156,7 @@ export default function OrderView() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
           {o.delivery && <DeliveryPanel order={o} role={user.role} shop={c?.name ?? ""} rep={o.delivery.rep?.name ?? rep?.name ?? ""} area={c?.area} />}
+          {o.delivery?.status === "out" && c && <ShipmentTracker order={o} shop={c} warehouse={wh} live={locations[o.delivery.rep?.id ?? o.rep_id]} />}
           {o.status === "needs_approval" && (
             <Notice
               tone="warning"

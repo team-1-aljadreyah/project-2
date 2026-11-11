@@ -17,6 +17,7 @@ import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
 import { canOpen, GROUPS, NAV, navFor } from "./nav";
@@ -392,6 +393,7 @@ function QueueSender() {
 function Bell2({ user }: { user: User }) {
   const { tr } = useFmt();
   const list = useLoad<AppNotification[]>(() => api.listNotifications(), [user.id]);
+  useRealtime(["notifications"], () => list.reload());
   const unread = list.data?.filter((n) => !n.read).length ?? 0;
   return (
     <Link href="/notifications" aria-label={tr("الإشعارات", "Notifications")} className="relative inline-flex size-10 items-center justify-center rounded-xl text-muted hover:bg-card-2 hover:text-text">

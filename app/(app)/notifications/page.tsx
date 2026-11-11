@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { NotificationType } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 
 const icon = (t: NotificationType) => {
@@ -51,6 +52,7 @@ const icon = (t: NotificationType) => {
 export default function NotificationsPage() {
   const { tr, ago, lang } = useFmt();
   const list = useLoad(() => api.listNotifications(), []);
+  useRealtime(["notifications"], () => list.reload());
   const unread = (list.data ?? []).filter((n) => !n.read).length;
   const pg = usePages(list.data ?? [], 10);
   return (

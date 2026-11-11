@@ -156,6 +156,10 @@ export const httpApi = {
   /** At the shop: the photo and the PIN. A wrong PIN comes back as { ok: false, left, locked }. */
   deliverOrder: (id: number, input: DeliverInput) => post<{ ok: true; order: Order } | { ok: false; left: number; locked: boolean }>(`/orders/${id}/deliver`, input),
   unlockDelivery: (id: number) => post<Order>(`/orders/${id}/delivery/unlock`),
+  // Where the delivery rep is. His phone sends it every few seconds while he has shipments on the way;
+  // the backend passes it on over the WebSocket (topic "location") to the manager and to those shops.
+  sendLocation: (lat: number, lng: number) => post<{ rep_id: number; lat: number; lng: number; at: string }>("/deliveries/location", { lat, lng }),
+  repLocations: () => get<{ rep_id: number; lat: number; lng: number; at: string }[]>("/deliveries/locations"),
   // A shop owner with several shops
   myShops: () => get<MyShop[]>("/me/shops"),
   /** Work on another of his shops; returns the user with the new customer_id. */

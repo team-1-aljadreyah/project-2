@@ -65,6 +65,9 @@ export interface Warehouse {
   name_en: string;
   /** How many cartons the warehouse can hold (for the "space used" numbers). */
   capacity: number;
+  /** Where it is (the start of every delivery trip). */
+  lat?: number;
+  lng?: number;
 }
 
 export interface PriceTier {

@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import type { Order, Receipt } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { cn, dayOfIso, today } from "@/lib/utils";
 
 const INTRO_KEY = "nahrain.hall-intro";
@@ -31,6 +32,7 @@ export default function HallPage() {
   const shelf = useLoad(() => api.shelfStock(), []);
   const batches = useLoad(() => api.listBatches(), []);
   const orders = useLoad(() => api.listOrders(), []);
+  useRealtime(["orders"], () => orders.reload());
   const invoices = useLoad(() => api.listInvoices(), []);
   const receipts = useLoad(() => api.listReceipts(), []);
   const transfers = useLoad(() => api.listTransfers(), []);

@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { Check, Clock, PhoneCall, ShoppingCart, XCircle } from "lucide-react";
 import Link from "next/link";
 import { PinCard } from "@/components/delivery/status";
+import { ShipmentTracker, useRepLocations } from "@/components/delivery/live-map";
 import { ShopStore } from "@/components/shop-store";
 import { useApp } from "@/components/shell";
 import { Button, Card, ErrorBox, LoadingRows, Notice } from "@/components/ui";
@@ -11,6 +12,7 @@ import { api } from "@/lib/api";
 import type { Customer } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useRealtime } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
 
 // The shop owner orders by himself, in a store made after the coffee-shop app design (components/shop-store.tsx).
@@ -38,7 +40,7 @@ export default function ShopOrderPage() {
   }
   return (
     <>
-      <MyShipments />
+      <MyShipments customer={c.data} />
       <ShopStore key={c.data.id} customer={c.data} />
     </>
   );
@@ -101,9 +103,12 @@ function PendingAccount({ customer }: { customer: Customer }) {
 }
 
 /** Shipments on their way to this shop, each with its delivery PIN (only the shop owner ever sees it). */
-function MyShipments() {
+function MyShipments({ customer }: { customer: Customer }) {
   const { tr } = useFmt();
+  const { lookups } = useApp();
   const orders = useLoad(() => api.listOrders(), []);
+  const locations = useRepLocations();
+  useRealtime(["orders"], () => orders.reload());
   const coming = (orders.data ?? []).filter((o) => o.delivery && o.delivery.status !== "delivered" && o.delivery.pin);
   if (!coming.length) return null;
   return (
@@ -123,6 +128,10 @@ function MyShipments() {
           </div>
           <div className="sm:w-80">
             <PinCard pin={o.delivery!.pin!} compact />
+          </div>
+          {/* Where the order is: the rep moving toward the shop, live */}
+          <div className="sm:col-span-2">
+            <ShipmentTracker order={o} shop={customer} warehouse={lookups.warehouses.find((w) => w.id === o.warehouse_id)} live={locations[o.delivery!.rep?.id ?? o.rep_id]} />
           </div>
         </motion.div>
       ))}
