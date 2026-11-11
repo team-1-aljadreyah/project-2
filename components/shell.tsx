@@ -365,7 +365,7 @@ function OfflineBar() {
   return (
     <div className="no-print border-b border-line bg-warning-soft px-4 py-2 text-center text-sm text-warning">
       <WifiOff className="me-1 inline size-4 align-[-3px]" />
-      {tr("لا يوجد إنترنت. يمكنك متابعة عملك: تُحفظ الطلبات والتسديدات على الجوال وتُرسَل تلقائياً عند عودة الإنترنت.", "No internet. Keep working: orders and payments are saved on the phone and sent by themselves when the internet is back.")}
+      {tr("لا يوجد إنترنت. يمكنك متابعة عملك: تُحفظ الطلبات (مبدئية حتى المزامنة) والتسديدات على الجوال، وتُرسَل تلقائياً عند عودة الإنترنت.", "No internet. Keep working: orders and payments are saved on the phone and sent by themselves when the internet is back.")}
       {queue.length > 0 && <span className="num ms-1 font-semibold">({tr(`${queue.length} بانتظار الإرسال`, `${queue.length} waiting`)})</span>}
     </div>
   );

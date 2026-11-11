@@ -29,7 +29,7 @@ export default function StockPage() {
   const expiry = useLoad(() => api.nearExpiry(lookups.settings.near_expiry_days), [lookups.settings.near_expiry_days]);
   const damaged = useLoad(() => api.listDamaged(), []);
   const orders = useLoad(() => api.listOrders(), []);
-  const toIssue = (orders.data ?? []).filter((o) => o.status === "pending" && (!wh || o.warehouse_id === wh)).length;
+  const toIssue = (orders.data ?? []).filter((o) => o.status === "approved" && !o.delivery && (!wh || o.warehouse_id === wh)).length;
 
   const sum = (r: ShelfRow, k: "on_shelf" | "sellable" | "reserved" | "expired") => r.by_warehouse.filter((w) => !wh || w.warehouse_id === wh).reduce((s, w) => s + w[k], 0);
   const rows = (shelf.data ?? []).filter((r) => {

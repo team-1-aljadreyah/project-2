@@ -262,7 +262,7 @@ function Timeline({ now, orders, receipts, selected, onPick }: { now: number; or
   };
   const pos = (h: number) => `${(h / 24) * 100}%`;
   const nowH = now ? hourOf(new Date(now).toISOString()) : null;
-  const tone = (o: Order) => (o.status === "pending" ? "bg-action" : o.status === "needs_approval" ? "bg-warning" : o.status === "cancelled" ? "bg-line-strong" : "bg-success");
+  const tone = (o: Order) => (o.status === "pending" || o.status === "approved" ? "bg-action" : o.status === "needs_approval" ? "bg-warning" : o.status === "cancelled" ? "bg-line-strong" : "bg-success");
   return (
     <div className="border-b border-line px-4 pb-3 pt-2" dir="ltr">
       <div className="relative h-12">

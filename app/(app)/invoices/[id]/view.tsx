@@ -173,6 +173,7 @@ export default function InvoiceView() {
               <Row k={tr(`خصم ${i.discount_percent}%`, `${i.discount_percent}% discount`)} v={<Money value={-i.discount} className="text-success" />} />
             </>
           )}
+          {!!i.rounding && <Row k={<span className="text-xs">{tr("تقريب لأقرب 250 د.ع", "Rounded to 250 IQD")}</span>} v={<Money value={i.rounding} className="text-xs" />} />}
           <Row k={tr("المجموع", "Total")} v={<Money value={i.total} className="font-semibold" />} />
           {!!i.usd_rate && (
             <Row

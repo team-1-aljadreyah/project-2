@@ -143,7 +143,9 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
 
   const left =
     m.urgency === "blocked"
-      ? tr("ينتظر موافقة المدير", "Waiting for the manager")
+      ? m.order.status === "needs_approval"
+        ? tr("ينتظر موافقة المدير", "Waiting for the manager")
+        : tr("ينتظر اعتماد المحاسب أو المدير", "Waiting for approval")
       : m.minutesLeft === null
         ? tr("بدون حجز", "No reservation")
         : m.minutesLeft <= 0
@@ -155,10 +157,12 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
   async function confirm() {
     setBusy(true);
     try {
-      await api.confirmOrder(m.order.id);
+      // Each line from the suggested warehouse (oldest expiry first); the order page lets him change it.
+      const plan = await api.prepPlan(m.order.id);
+      await api.prepareOrder(m.order.id, Object.fromEntries(plan.map((l) => [l.item_id, l.suggested_warehouse_id ?? m.order.warehouse_id])));
       clearPicked(m.order.id);
       onConfirmed?.(m.order.id);
-      toast("success", tr(`تم تجهيز ${m.order.number} وصدرت الفاتورة`, `${m.order.number} prepared and invoiced`));
+      toast("success", tr(`تم تجهيز ${m.order.number}: الفاتورة تصدر عند التسليم`, `${m.order.number} prepared: the invoice comes at delivery`));
     } catch (e) {
       toast("danger", errorText(e, tr));
       setBusy(false);

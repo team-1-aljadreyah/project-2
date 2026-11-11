@@ -1,6 +1,7 @@
 "use client";
 
-// Discounts: the delivery rep and the warehouse keeper give up to 3% by themselves; more waits for the manager.
+// Discounts: the rep and the accountant give up to 3% by themselves; more waits for the manager.
+// The warehouse keeper gives none. Every discount is written in the audit log (who, when, which order).
 // The manager gives up to 30% with no approval. Used in the order builder (new order) and on the order page.
 import { useState } from "react";
 import { BadgePercent, Clock, ShieldCheck } from "lucide-react";
@@ -10,7 +11,7 @@ import { DISCOUNT_MAX, STAFF_DISCOUNT_MAX, type Order, type Role } from "@/lib/a
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export const canDiscount = (role: Role) => role === "manager" || role === "rep" || role === "warehouse";
+export const canDiscount = (role: Role) => role === "manager" || role === "rep" || role === "accountant";
 
 /** The percent field with quick chips, and what it means (amount, needs approval or not). */
 export function DiscountPicker({ value, onChange, subtotal, role }: { value: number; onChange: (v: number) => void; subtotal: number; role: Role }) {
@@ -92,6 +93,12 @@ export function OrderTotals({ order, role, canEdit, onChanged }: { order: Order;
             </span>
             <Money value={-d.amount} className="text-success" />
           </div>
+        </div>
+      )}
+      {!!order.rounding && (
+        <div className="mb-1 flex justify-between text-xs text-muted">
+          <span>{tr("تقريب لأقرب 250 د.ع", "Rounded to 250 IQD")}</span>
+          <Money value={order.rounding} />
         </div>
       )}
       <div className="flex items-center justify-between">

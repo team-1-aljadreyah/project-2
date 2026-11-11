@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowLeftRight, Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { useWarehouseFilter } from "@/components/warehouse-filter";
-import { Button, Card, DataTable, Dialog, Empty, ErrorBox, Field, LoadingRows, Notice, PageHeader, Segmented, Select, Stepper, Textarea, errorText, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Card, DataTable, Dialog, Empty, ErrorBox, Field, LoadingRows, Notice, PageHeader, Segmented, Select, Stepper, Textarea, errorText, useToast, type Column } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { Transfer, Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -13,8 +13,10 @@ import { useLoad } from "@/lib/use-load";
 
 export default function TransfersPage() {
   const { tr, dateTime, name, qty } = useFmt();
-  const { lookups, itemById } = useApp();
+  const { user, lookups, itemById } = useApp();
+  const toast = useToast();
   const list = useLoad(() => api.listTransfers(), []);
+  const [receiving, setReceiving] = useState<Transfer | null>(null);
   const wh = useWarehouseFilter();
   const [open, setOpen] = useState(false);
   const wName = (id: number) => name(lookups.warehouses.find((w) => w.id === id));
@@ -24,12 +26,51 @@ export default function TransfersPage() {
     { key: "f", head: tr("من ← إلى", "From → to"), cell: (t) => `${wName(t.from_warehouse_id)} ${tr("←", "→")} ${wName(t.to_warehouse_id)}` },
     { key: "l", head: tr("المواد", "Items"), cell: (t) => t.lines.map((l) => `${itemById.get(l.item_id)?.name} (${qty(l.pieces, itemById.get(l.item_id)?.pieces_per_carton ?? 1)})`).join("، ") },
     { key: "b", head: tr("بواسطة", "By"), cell: (t) => t.created_by.name },
+    {
+      key: "s",
+      head: tr("الحالة", "Status"),
+      cell: (t) =>
+        !t.status || t.status === "received" ? (
+          <Badge tone="success">{tr("استُلم", "Received")}</Badge>
+        ) : t.status === "sent" ? (
+          <Badge tone="warning">{tr("في الطريق", "On the road")}</Badge>
+        ) : (
+          <span title={t.diff_reason}>
+            <Badge tone="danger">{t.reviewed_by ? tr("فرق · روجع", "Short · reviewed") : tr("وصل ناقصاً", "Arrived short")}</Badge>
+          </span>
+        ),
+    },
+    {
+      key: "a",
+      head: "",
+      align: "end",
+      cell: (t) =>
+        t.status === "sent" && (user.role === "manager" || (user.role === "warehouse" && user.warehouse_id === t.to_warehouse_id)) ? (
+          <Button size="sm" variant="action" onClick={() => setReceiving(t)}>
+            {tr("استلام", "Receive")}
+          </Button>
+        ) : t.status === "partial" && !t.reviewed_by && user.role === "manager" ? (
+          <Button
+            size="sm"
+            onClick={async () => {
+              try {
+                await api.reviewTransfer(t.id);
+                list.reload();
+              } catch (e) {
+                toast("danger", errorText(e, tr));
+              }
+            }}
+          >
+            {tr("راجعت الفرق", "Reviewed")}
+          </Button>
+        ) : null,
+    },
   ];
   return (
     <>
       <PageHeader
         title={tr("التحويل بين المخازن", "Transfers between warehouses")}
-        subtitle={tr("التحويل يتم كاملاً أو لا يتم أبداً، فلا تضيع البضاعة ولا تُحسب مرتين", "A transfer happens fully or not at all, so goods are never lost or counted twice")}
+        subtitle={tr("الإرسال والاستلام خطوتان: ما في الطريق لا يُباع ولا يُحسب في أي مخزن حتى يستلمه أمين المخزن المستلم.", "Sending and receiving are two steps: what is on the road isn't sold or counted anywhere until the receiving keeper takes it in.")}
         actions={
           <Button variant="action" onClick={() => setOpen(true)}>
             <Plus className="size-4" /> {tr("تحويل جديد", "New transfer")}
@@ -46,6 +87,7 @@ export default function TransfersPage() {
         )}
       </Card>
       {open && <TransferDialog onClose={() => setOpen(false)} onDone={list.reload} />}
+      {receiving && <ReceiveDialog transfer={receiving} onClose={() => setReceiving(null)} onDone={list.reload} />}
     </>
   );
 }
@@ -167,6 +209,70 @@ function TransferDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
         </Field>
         <Notice tone="primary">{tr("الدفعات تنتقل بتاريخ صلاحيتها وسعر شرائها نفسه.", "Batches move with the same expiry date and cost.")}</Notice>
       </div>
+    </Dialog>
+  );
+}
+
+/** The receiving keeper writes what really arrived; if less, why (the manager reviews it). */
+function ReceiveDialog({ transfer, onClose, onDone }: { transfer: Transfer; onClose: () => void; onDone: () => void }) {
+  const { tr, name, qty } = useFmt();
+  const { itemById } = useApp();
+  const toast = useToast();
+  const [got, setGot] = useState<Record<number, number>>(() => Object.fromEntries(transfer.lines.map((l) => [l.item_id, l.pieces])));
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const short = transfer.lines.some((l) => (got[l.item_id] ?? l.pieces) < l.pieces);
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={tr(`استلام ${transfer.number}`, `Receive ${transfer.number}`)}
+      footer={
+        <Button
+          variant="action"
+          className="w-full"
+          loading={busy}
+          disabled={busy || (short && !reason.trim())}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await api.receiveTransfer(transfer.id, got, reason);
+              toast("success", short ? tr("استُلم ناقصاً، ويراجعه المدير", "Received short; the manager reviews it") : tr("استُلم كاملاً وأُضيف إلى مخزنك", "Received in full and added to your warehouse"));
+              onDone();
+              onClose();
+            } catch (e) {
+              toast("danger", errorText(e, tr));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {tr("تأكيد الاستلام", "Confirm receiving")}
+        </Button>
+      }
+    >
+      <p className="mb-3 text-sm text-muted">{tr("اكتب بالقطعة ما وصل فعلاً. يدخل مخزنك بنفس الصلاحية وسعر الشراء.", "Write in pieces what really arrived. It enters your warehouse with the same expiry and cost.")}</p>
+      <ul className="space-y-2">
+        {transfer.lines.map((l) => {
+          const it = itemById.get(l.item_id);
+          return (
+            <li key={l.item_id} className="flex items-center justify-between gap-2 rounded-xl border border-line p-3">
+              <span className="min-w-0 text-sm">
+                <span className="block truncate font-medium">{name(it)}</span>
+                <span className="text-xs text-muted">
+                  {tr("أُرسل", "Sent")} {qty(l.pieces, it?.pieces_per_carton ?? 1)}
+                </span>
+              </span>
+              <Stepper value={got[l.item_id] ?? l.pieces} onChange={(v) => setGot((g) => ({ ...g, [l.item_id]: v }))} min={0} max={l.pieces} />
+            </li>
+          );
+        })}
+      </ul>
+      {short && (
+        <Field label={tr("لماذا وصل أقل؟", "Why did less arrive?")} className="mt-3">
+          <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder={tr("مثلاً: كارتونان تالفان في الطريق", "e.g. two cartons damaged on the road")} />
+        </Field>
+      )}
     </Dialog>
   );
 }

@@ -6,6 +6,7 @@ import { CustomerForm } from "@/components/customer-form";
 import { useApp } from "@/components/shell";
 import { OrderStatusBadge } from "@/components/status";
 import { StatementView } from "@/components/statement-view";
+import { SpecialPrices } from "@/components/special-prices";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
@@ -135,7 +136,9 @@ export default function CustomerView() {
           <h2 className="mb-2 font-semibold">{tr("كشف الحساب", "Statement")}</h2>
           <StatementView customerId={x.id} />
         </div>
-        <Card className="self-start">
+        <div className="space-y-4 self-start">
+        <SpecialPrices customer={x} />
+        <Card>
           <CardHeader title={tr("آخر الطلبات", "Latest orders")} />
           <ul className="divide-y divide-line text-sm">
             {mine.map((o) => (
@@ -147,7 +150,7 @@ export default function CustomerView() {
                   </span>
                   <span className="text-end">
                     <Money value={o.total} className="block" />
-                    <OrderStatusBadge status={o.status} />
+                    <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
                   </span>
                 </Link>
               </li>
@@ -155,6 +158,7 @@ export default function CustomerView() {
             {!mine.length && <li className="p-4 text-center text-muted">{tr("لا توجد طلبات", "No orders")}</li>}
           </ul>
         </Card>
+        </div>
       </div>
       {edit && <CustomerForm open customer={x} onClose={() => setEdit(false)} onSaved={() => c.reload()} />}
       <Dialog

@@ -21,7 +21,7 @@ export default function OrdersPage() {
   const orders = useLoad(() => api.listOrders(), []);
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
   const queue = useQueue();
-  const [filter, setFilter] = useState<Filter>(user.role === "warehouse" ? "pending" : "open");
+  const [filter, setFilter] = useState<Filter>(user.role === "warehouse" ? "approved" : user.role === "accountant" ? "pending" : "open");
   const [q, setQ] = useState("");
 
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
@@ -38,7 +38,7 @@ export default function OrdersPage() {
     { key: "r", head: tr("المندوب", "Rep"), cell: (o) => rName(o.rep_id), hideOnMobile: true },
     { key: "s", head: tr("المصدر", "Source"), cell: (o) => <SourceBadge source={o.source} /> },
     { key: "t", head: tr("المبلغ", "Amount"), cell: (o) => <Money value={o.total} className="font-medium" />, align: "end" },
-    { key: "st", head: tr("الحالة", "Status"), cell: (o) => <OrderStatusBadge status={o.status} /> },
+    { key: "st", head: tr("الحالة", "Status"), cell: (o) => <OrderStatusBadge status={o.status} waiting={o.waiting_stock} /> },
     { key: "d", head: tr("الوقت", "Time"), cell: (o) => <span className="text-muted">{dateTime(o.created_at)}</span> },
   ];
 
@@ -98,9 +98,10 @@ export default function OrdersPage() {
             onChange={setFilter}
             options={[
               { value: "open", label: tr("المفتوحة", "Open"), count: count("open") },
-              { value: "pending", label: tr("بانتظار التثبيت", "Waiting"), count: count("pending") },
+              { value: "pending", label: tr("بانتظار الاعتماد", "To approve"), count: count("pending") },
+              { value: "approved", label: tr("معتمدة", "Approved"), count: count("approved") },
               { value: "needs_approval", label: tr("تحتاج موافقة", "Need approval"), count: count("needs_approval") },
-              { value: "confirmed", label: tr("مثبّتة", "Confirmed"), count: count("confirmed") },
+              { value: "confirmed", label: tr("سُلِّمت", "Delivered"), count: count("confirmed") },
               { value: "all", label: tr("الكل", "All"), count: all.length },
             ]}
           />
@@ -124,7 +125,7 @@ export default function OrdersPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
                   <span className="num">{o.number}</span>
-                  <OrderStatusBadge status={o.status} />
+                  <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
                   {o.source === "shop" && <SourceBadge source="shop" />}
                   <span>{ago(o.created_at)}</span>
                 </div>
@@ -148,6 +149,6 @@ export default function OrdersPage() {
 
 function pass(o: Order, f: Filter) {
   if (f === "all") return true;
-  if (f === "open") return o.status === "pending" || o.status === "needs_approval";
+  if (f === "open") return o.status === "pending" || o.status === "needs_approval" || o.status === "approved";
   return o.status === f;
 }

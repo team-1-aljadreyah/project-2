@@ -13,6 +13,7 @@ import {
   createReceipt,
   createReturn,
   createTransfer,
+  receiveTransfer,
   customerBalance,
   dayOf,
   registerShop,
@@ -161,13 +162,15 @@ export function makeSeed(now = new Date()): Db {
     damaged: [],
     audit: [],
     notifications: [],
-    settings: { reservation_hours: 2, near_expiry_days: 30, slow_moving_days: 21, auto_confirm_rep_orders: false },
+    settings: { reservation_hours: 24, near_expiry_days: 30, slow_moving_days: 21, auto_confirm_rep_orders: false },
     closed_months: {},
     notified_batches: [],
     notified_low: [],
     online_payments: [],
     delivery_photos: {},
     usd_rates: [],
+    special_prices: [],
+    price_changes: [],
     chat: [],
     chat_reads: {},
   };
@@ -228,12 +231,13 @@ export function makeSeed(now = new Date()): Db {
   if (chips) chips.expiry_date = dayOf(addDays(now, 6));
 
   // 3) A transfer between the warehouses.
-  createTransfer(
+  const trf = createTransfer(
     db,
     keepers[0],
     { client_ref: cref(), from_warehouse_id: 1, to_warehouse_id: 2, lines: [{ item_id: 3, unit: "carton", qty: 20 }, { item_id: 5, unit: "carton", qty: 12 }], note: "نقص في مخزن الحر" },
     at(30, 10),
   );
+  receiveTransfer(db, keepers[1], trf.id, {}, "", at(30, 14));
 
   // 4) 45 days of selling, collecting and a few returns.
   const slow = new Set([26, 27]);
@@ -401,6 +405,31 @@ export function makeSeed(now = new Date()): Db {
   if (firstToday) {
     const rep = db.users.find((u) => u.id === firstToday.delivery!.rep?.id);
     Object.assign(firstToday.delivery!, { status: "out", out_at: addDays(now, 0).toISOString(), out_by: rep && { id: rep.id, name: rep.name } });
+  }
+
+  // Today's shipments aren't delivered yet: under the rule "invoice at delivery" they have no invoice yet.
+  // (The history was built the quick way, all at once; give their goods back to the shelf and drop the invoice.)
+  for (const o of db.orders) {
+    if (o.status !== "confirmed" || !o.delivery || o.delivery.status === "delivered" || !o.invoice_id) continue;
+    const inv = db.invoices.find((i) => i.id === o.invoice_id);
+    if (!inv || inv.paid || inv.returned) continue;
+    for (const l of inv.lines) for (const u of l.batches) {
+      const b = db.batches.find((x) => x.id === u.batch_id);
+      if (b) b.qty_left += u.qty;
+    }
+    db.invoices = db.invoices.filter((i) => i.id !== inv.id);
+    o.status = "approved";
+    o.invoice_id = undefined;
+  }
+
+  // The manager's rules for the reps and the prices:
+  // عباس (marketing) sells only grains, sugar, oils and canned food; أسواق الكوثر has its own price for basmati rice.
+  const abbas = db.users.find((u) => u.id === 5);
+  if (abbas) abbas.rep_categories = ["حبوب ورز", "سكر وطحين", "زيوت وسمن", "معلبات"];
+  const rice = db.items.find((i) => i.id === 1);
+  if (rice) {
+    const p = rice.prices.find((x) => x.tier_id === 1) ?? rice.prices[0];
+    db.special_prices.push({ customer_id: 1, item_id: 1, carton_price: p.carton_price - 1500, piece_price: p.piece_price - 375, by: { id: manager.id, name: manager.name }, at: addDays(now, -3).toISOString() });
   }
 
   // The dollar rate of the last week (today's is left for the accountant to fix in the morning).

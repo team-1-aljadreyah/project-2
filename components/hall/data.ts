@@ -52,7 +52,7 @@ export function buildMissions({
   const where = new Map<number, { zone: MapZone; cell: MapCell }>();
   for (const zone of view.zones) for (const cell of zone.cells) where.set(cell.item.id, { zone, cell });
 
-  const open = orders.filter((o) => o.warehouse_id === view.wh.id && (o.status === "pending" || o.status === "needs_approval"));
+  const open = orders.filter((o) => o.warehouse_id === view.wh.id && ((o.status === "approved" && !o.delivery) || o.status === "pending" || o.status === "needs_approval"));
 
   const missions = open.map((order): Mission => {
     const lines: MissionLine[] = [];
@@ -71,7 +71,8 @@ export function buildMissions({
 
     const minutesLeft = order.reserved_until ? Math.round((new Date(order.reserved_until).getTime() - now) / 60000) : null;
     let urgency: Urgency = "ok";
-    if (order.status === "needs_approval") urgency = "blocked";
+    // Only an approved order is prepared; the others wait for the accountant / manager.
+    if (order.status !== "approved") urgency = "blocked";
     else if (minutesLeft !== null && minutesLeft <= 0) urgency = "late";
     else if (minutesLeft !== null && minutesLeft < SOON_MIN) urgency = "soon";
 

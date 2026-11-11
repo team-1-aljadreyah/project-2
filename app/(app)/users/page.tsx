@@ -92,6 +92,7 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
     warehouse_id: user?.warehouse_id ?? lookups.warehouses[0].id,
     customer_id: user?.customer_id,
     rep_kinds: user?.rep_kinds?.length ? user.rep_kinds : ["sales", "delivery"],
+    rep_categories: user?.rep_categories ?? [],
     active: user?.active ?? true,
     password: "",
   });
@@ -166,6 +167,26 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
                     />
                     {label}
                   </label>
+                );
+              })}
+            </div>
+          </Field>
+        )}
+        {f.role === "rep" && (f.rep_kinds ?? []).includes("sales") && (
+          <Field label={tr("الأصناف التي يبيعها", "Categories he sells")} hint={tr("بدون اختيار = كل الأصناف. المادة خارج أصنافه لا تظهر له أصلاً.", "None picked = all. Items outside them don't show to him at all.")}>
+            <div className="flex flex-wrap gap-1.5">
+              {lookups.categories.map((c) => {
+                const on = f.rep_categories?.includes(c) ?? false;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => set({ rep_categories: on ? (f.rep_categories ?? []).filter((x) => x !== c) : [...(f.rep_categories ?? []), c] })}
+                    className={cn("rounded-full border px-3 py-1 text-xs font-semibold", on ? "border-action bg-action/10 text-text" : "border-line text-muted hover:text-text")}
+                  >
+                    {c}
+                  </button>
                 );
               })}
             </div>

@@ -13,6 +13,7 @@ import { useLoad } from "@/lib/use-load";
 import { DeliveryPanel } from "@/components/delivery/status";
 import { OrderTotals } from "@/components/discount";
 import { editOrderInBag } from "@/components/shop-store";
+import { PrepareOrder } from "@/components/prepare-order";
 import { piecesOf, useIdParam } from "@/lib/utils";
 
 export default function OrderView() {
@@ -27,6 +28,7 @@ export default function OrderView() {
   const seesBatches = ["manager", "warehouse", "accountant"].includes(user.role);
   const batches = useLoad(() => (o && seesBatches ? api.listBatches(o.warehouse_id) : Promise.resolve([] as Batch[])), [o?.warehouse_id, seesBatches]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [cancel, setCancel] = useState(false);
   const [reason, setReason] = useState("");
 
@@ -37,11 +39,15 @@ export default function OrderView() {
   const wh = lookups.warehouses.find((w) => w.id === o.warehouse_id);
   const rep = lookups.reps.find((r) => r.id === o.rep_id);
   const open = o.status === "pending" || o.status === "needs_approval";
-  const canConfirm = ["manager", "warehouse", "accountant"].includes(user.role) && (o.status === "pending" || o.status === "expired");
+  // Not delivered yet: it can still be cancelled (nothing was owed).
+  const beforeDelivery = open || o.status === "approved";
+  // The accountant or the manager approves; then the warehouse keeper prepares; the invoice comes at delivery.
+  const canAccept = ["manager", "accountant"].includes(user.role) && (o.status === "pending" || o.status === "expired");
+  const canPrepare = ["manager", "warehouse"].includes(user.role) && o.status === "approved" && !o.delivery;
   const canApprove = user.role === "manager" && o.status === "needs_approval";
-  const canCancel = open && (user.role === "manager" || o.created_by.id === user.id);
+  const canCancel = (beforeDelivery && (user.role === "manager" || user.role === "accountant")) || (open && o.created_by.id === user.id);
   const canEditDiscount =
-    open && (user.role === "manager" || (user.role === "rep" && o.rep_id === user.id) || (user.role === "warehouse" && (!user.warehouse_id || user.warehouse_id === o.warehouse_id)));
+    open && (user.role === "manager" || (user.role === "rep" && o.rep_id === user.id) || user.role === "accountant");
   const waitsFor = o.approval_for ?? ["debt"];
   // The shop owner changes his own order until the warehouse confirms it.
   const canEditLines = open && user.role === "shop" && user.customer_id === o.customer_id;
@@ -82,7 +88,7 @@ export default function OrderView() {
         back="/orders"
         title={
           <span className="flex flex-wrap items-center gap-2">
-            {tr("طلب", "Order")} <span className="num">{o.number}</span> <OrderStatusBadge status={o.status} />
+            {tr("طلب", "Order")} <span className="num">{o.number}</span> <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
           </span>
         }
         subtitle={`${dateTime(o.created_at)} · ${tr("سجّله", "by")} ${o.created_by.name}`}
@@ -115,15 +121,14 @@ export default function OrderView() {
                 <ShieldCheck className="size-4" /> {waitsFor.includes("debt") ? tr("موافقة على تجاوز السقف", "Approve over limit") : tr("موافقة على الخصم", "Approve the discount")}
               </Button>
             )}
-            {canConfirm && (
-              <Button
-                variant="action"
-                loading={busy === "confirm"}
-                onClick={() =>
-                  act("confirm", () => api.confirmOrder(o.id), tr("تم التثبيت وصدرت الفاتورة", "Confirmed and invoiced"), (inv) => router.push(`/invoices/${(inv as { id: number }).id}`))
-                }
-              >
-                <PackageCheck className="size-4" /> {tr("تثبيت وإصدار فاتورة", "Confirm and invoice")}
+            {canAccept && (
+              <Button variant="action" loading={busy === "accept"} onClick={() => act("accept", () => api.acceptOrder(o.id), tr("اعتُمد الطلب، ويجهزه المخزن الآن", "Approved. The warehouse prepares it now"))}>
+                <CheckCircle2 className="size-4" /> {tr("اعتماد الطلب", "Approve the order")}
+              </Button>
+            )}
+            {canPrepare && (
+              <Button variant="action" onClick={() => setPreparing(true)}>
+                <PackageCheck className="size-4" /> {tr("تجهيز الطلب", "Prepare the order")}
               </Button>
             )}
           </>
@@ -140,19 +145,48 @@ export default function OrderView() {
                 waitsFor.includes("debt") && waitsFor.includes("discount")
                   ? tr(`يتجاوز سقف دين الزبون، وفيه خصم ${o.discount?.percent}%`, `Over the debt limit, with a ${o.discount?.percent}% discount`)
                   : waitsFor.includes("discount")
-                    ? tr(`فيه خصم ${o.discount?.percent}%: أكثر مما يعطيه المندوب أو أمين المخزن وحده (3%)`, `It has a ${o.discount?.percent}% discount: more than a rep or keeper gives alone (3%)`)
+                    ? tr(`فيه خصم ${o.discount?.percent}%: أكثر مما يعطيه المندوب أو المحاسب وحده (3%)`, `It has a ${o.discount?.percent}% discount: more than a rep or accountant gives alone (3%)`)
                     : tr("هذا الطلب يتجاوز سقف دين الزبون", "This order passes the customer's debt limit")
               }
             >
               {user.role === "manager" ? tr("وافق عليه إذا كنت تثق بالزبون، أو ألغِه.", "Approve it if you trust the customer, or cancel it.") : tr("ينتظر موافقة المدير، والكمية محجوزة حتى ذلك الحين.", "Waiting for the manager. The stock stays held until then.")}
             </Notice>
           )}
-          {o.status === "expired" && (
+          {o.status === "expired" && o.waiting_stock && (
+            <Notice tone="warning" title={tr("بانتظار توفر البضاعة", "Waiting for the goods")}>
+              {tr("سُجّل بدون إنترنت، ولم تكن البضاعة متوفرة عند المزامنة، فلم يُحجز شيء. يعتمده المحاسب أو المدير عندما تصل البضاعة.", "Written offline; the goods weren't there when it synced, so nothing is held. The accountant or manager approves it when the goods come.")}
+            </Notice>
+          )}
+          {o.status === "expired" && !o.waiting_stock && (
             <Notice tone="danger" title={tr("انتهى وقت الحجز", "The hold time ended")}>
-              {tr("عادت الكمية إلى المخزون. يمكنك تثبيته إذا كانت البضاعة لا تزال موجودة.", "The stock was released. You can still confirm if the goods are available.")}
+              {tr("مرّت 24 ساعة دون اعتماد، فعادت الكمية إلى المخزون. يمكن اعتماده إذا كانت البضاعة لا تزال موجودة.", "24 hours passed without approval, so the stock was released. It can still be approved if the goods are there.")}
             </Notice>
           )}
           {o.status === "cancelled" && <Notice tone="danger" title={tr("الطلب ملغي", "Cancelled")}>{o.cancel_reason}</Notice>}
+          {o.status === "pending" && (
+            <Notice tone="primary" title={tr("بانتظار الاعتماد", "Waiting for approval")}>
+              {tr("يعتمده المحاسب أو المدير، والكمية محجوزة حتى ينتهي وقت الحجز.", "The accountant or the manager approves it. The goods are held until the hold time ends.")}
+            </Notice>
+          )}
+          {o.status === "approved" && (
+            <Notice tone="primary" title={tr(`معتمد${o.accepted_by ? ` · ${o.accepted_by.name}` : ""}`, `Approved${o.accepted_by ? ` · ${o.accepted_by.name}` : ""}`)}>
+              {!o.delivery
+                ? tr("البضاعة محجوزة له حتى التسليم، وينتظر أن يجهزه المخزن.", "The goods are held until delivery; the warehouse prepares it.")
+                : tr("جُهّز. تصدر الفاتورة ويثبت الدين عند التسليم للمحل.", "Prepared. The invoice and the debt come at delivery.")}
+            </Notice>
+          )}
+          {o.short_lines && o.short_lines.length > 0 && (
+            <Notice tone="warning" title={tr("سُلِّم جزء من الطلب", "Part of the order was delivered")}>
+              {tr("الفاتورة على ما سُلِّم فقط. ", "The invoice is for what was delivered only. ")}
+              {o.rest_order_id ? (
+                <a href={`/orders/${o.rest_order_id}`} className="font-semibold underline">
+                  {tr("الباقي في طلب مفتوح", "The rest is an open order")}
+                </a>
+              ) : (
+                tr("وأُلغي الباقي برغبة المحل.", "The rest was cancelled at the shop's wish.")
+              )}
+            </Notice>
+          )}
           {open && o.reserved_until && <Countdown until={o.reserved_until} />}
 
           <Card>
@@ -264,6 +298,7 @@ export default function OrderView() {
           <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("مثلاً: الزبون غيّر رأيه", "e.g. the customer changed their mind")} />
         </Field>
       </Dialog>
+      {preparing && o && <PrepareOrder order={o} onClose={() => setPreparing(false)} onDone={order.reload} />}
     </>
   );
 }

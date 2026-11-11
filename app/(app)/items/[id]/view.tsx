@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { ItemForm } from "@/components/item-form";
 import { ItemPhoto } from "@/components/item-photo";
+import { BatchActions } from "@/components/batch-hold";
 import { useApp } from "@/components/shell";
 import { BatchStatusBadge } from "@/components/status";
 import { Badge, Button, Card, CardHeader, DataTable, Empty, ErrorBox, KV, LoadingRows, Money, Notice, PageHeader, type Column } from "@/components/ui";
@@ -28,11 +29,25 @@ export default function ItemView() {
     { key: "id", head: tr("الدفعة", "Batch"), cell: (b) => <span className="num">#{b.id}</span> },
     { key: "w", head: tr("المخزن", "Warehouse"), cell: (b) => name(lookups.warehouses.find((w) => w.id === b.warehouse_id)) },
     { key: "e", head: tr("الصلاحية", "Expiry"), cell: (b) => <span className="num">{b.expiry_date}</span> },
-    { key: "s", head: tr("الحالة", "Status"), cell: (b) => <BatchStatusBadge status={b.status} days={daysUntil(b.expiry_date)} /> },
+    {
+      key: "s",
+      head: tr("الحالة", "Status"),
+      cell: (b) =>
+        b.held ? (
+          <span title={b.held.reason}>
+            <Badge tone="danger">{tr("موقوفة عن البيع", "Off sale")}</Badge>
+          </span>
+        ) : (
+          <BatchStatusBadge status={b.status} days={daysUntil(b.expiry_date)} />
+        ),
+    },
     { key: "q", head: tr("الباقي", "Left"), cell: (b) => qty(b.qty_left, it.pieces_per_carton) },
     { key: "r", head: tr("المستلم", "Received"), cell: (b) => <span className="text-muted">{qty(b.qty_received, it.pieces_per_carton)}</span> },
     ...(user.role !== "rep" && user.role !== "staff" ? [{ key: "p", head: tr("سعر الشراء/قطعة", "Cost/pc"), cell: (b: Batch) => <Money value={b.purchase_price} />, align: "end" as const }] : []),
     { key: "d", head: tr("تاريخ الاستلام", "Received on"), cell: (b) => <span className="text-muted">{date(b.received_at)}</span> },
+    ...(user.role === "manager" || user.role === "warehouse" || user.role === "accountant"
+      ? [{ key: "a", head: "", cell: (b: Batch) => <BatchActions batch={b} role={user.role} piecesPerCarton={it.pieces_per_carton} onChanged={batches.reload} />, align: "end" as const }]
+      : []),
   ];
 
   return (
