@@ -42,6 +42,8 @@ import type {
   DeliverInput,
   ProblemInput,
   OrderEdit,
+  UsdRate,
+  CommissionLine,
   RepKind,
   MyShop,
   NewShopInput,
@@ -56,6 +58,8 @@ export interface Lookups {
   reps: { id: number; name: string; phone: string; kinds?: RepKind[] }[];
   categories: string[];
   settings: Settings;
+  /** Today's dollar rate (or the last one set); null = never set. */
+  usd_rate: UsdRate | null;
 }
 
 export interface ShelfRow {
@@ -170,6 +174,11 @@ export const httpApi = {
   closeMonth: (month: string) => post<CommissionRow[]>("/commissions/close", { month }),
   closedMonths: () => get<string[]>("/commissions/closed"),
 
+  // The dollar rate (the accountant fixes it every day)
+  usdRates: () => get<UsdRate[]>("/usd-rates"),
+  setUsdRate: (rate: number) => post<UsdRate>("/usd-rates", { rate }),
+  /** Every payment of the month on the rep's invoices and its commission (a rep gets only his). */
+  commissionLines: (month: string) => get<CommissionLine[]>("/commissions/lines", { month }),
   /** warehouseId: one warehouse only (the manager's / accountant's filter); empty = both. */
   dashboard: (warehouseId?: number | null) => get<Dashboard>("/dashboard", warehouseId ? { warehouse_id: warehouseId } : undefined),
   dailySales: (date: string, warehouseId?: number | null) => get<DailySales>("/reports/daily-sales", { date, ...(warehouseId ? { warehouse_id: warehouseId } : {}) }),

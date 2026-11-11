@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import { AlertTriangle, ArrowUpRight, BadgeCheck, Calendar, FileText, MapPin, MessageCircle, Phone, ReceiptText, Store, Truck, User, Wallet, type LucideIcon } from "lucide-react";
 import { CustomerPicker, InvoiceTiles, MoneyChart, PaymentList, monthRows } from "@/components/accounts";
 import { useApp } from "@/components/shell";
+import { UsdRateCard } from "@/components/usd-rate";
 import { Button, Card, ErrorBox, LimitBar, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
@@ -81,6 +82,11 @@ export default function AccountsPage() {
           <p className="text-sm text-muted">{tr("فواتير الزبون وتسديداته ودينه في صفحة واحدة", "A customer's invoices, payments and debt on one page")}</p>
         </div>
         <CustomerPicker customers={all} value={c} onChange={pick} />
+      </motion.div>
+
+      {/* The accountant fixes the dollar rate every morning */}
+      <motion.div variants={rise}>
+        <UsdRateCard />
       </motion.div>
 
       <motion.div variants={rise} className="grid gap-3 sm:grid-cols-3">

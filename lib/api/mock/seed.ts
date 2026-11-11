@@ -167,6 +167,7 @@ export function makeSeed(now = new Date()): Db {
     notified_low: [],
     online_payments: [],
     delivery_photos: {},
+    usd_rates: [],
     chat: [],
     chat_reads: {},
   };
@@ -401,6 +402,13 @@ export function makeSeed(now = new Date()): Db {
     const rep = db.users.find((u) => u.id === firstToday.delivery!.rep?.id);
     Object.assign(firstToday.delivery!, { status: "out", out_at: addDays(now, 0).toISOString(), out_by: rep && { id: rep.id, name: rep.name } });
   }
+
+  // The dollar rate of the last week (today's is left for the accountant to fix in the morning).
+  [1705, 1700, 1700, 1695, 1690, 1700, 1700].forEach((rate, i) => {
+    const d = addDays(now, -(7 - i));
+    d.setHours(8, 30, 0, 0);
+    db.usd_rates.push({ date: dayOf(d), rate, by: { id: accountant.id, name: accountant.name }, at: d.toISOString() });
+  });
 
   // Support chat: one finished conversation (أسواق الكوثر) and one waiting for an answer (the second shop).
   const staffUser = db.users.find((u) => u.role === "staff")!;

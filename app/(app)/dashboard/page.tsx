@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AlertTriangle, Banknote, Boxes, ClipboardList, PackageX, ShieldAlert, TrendingUp, UserPlus, Wallet } from "lucide-react";
 import { RankBars, SalesBars } from "@/components/charts";
 import { useApp } from "@/components/shell";
+import { UsdRateCard } from "@/components/usd-rate";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { OrderStatusBadge } from "@/components/status";
 import { Button, Card, CardHeader, ErrorBox, LimitBar, Money, PageHeader, Skeleton, Stat } from "@/components/ui";
@@ -50,6 +51,8 @@ export default function DashboardPage() {
           <span className="text-sm underline">{tr("عرض", "Show")}</span>
         </Link>
       )}
+
+      <UsdRateCard className="mb-4" />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {x ? (

@@ -20,6 +20,8 @@ import type {
   MyChat,
   DeliverInput,
   OrderEdit,
+  CommissionLine,
+  UsdRate,
   RepKind,
   MyShop,
   NewShopInput,
@@ -664,6 +666,7 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
     lines,
     total: o.total,
     ...(o.discount ? { subtotal: o.subtotal, discount: o.discount.amount, discount_percent: o.discount.percent } : {}),
+    ...(usdRateOn(db, dayOf(now)) ? { usd_rate: usdRateOn(db, dayOf(now))!.rate } : {}),
     paid: 0,
     returned: 0,
     cost,
@@ -777,6 +780,30 @@ export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, 
   };
   db.payments.push(p);
   audit(db, actor, "create", "payment", id, `تسديد ${p.number} من ${customer.name}: ${input.amount.toLocaleString("en")} د.ع`, `Payment ${p.number} from ${customer.name}: ${input.amount.toLocaleString("en")} IQD`, now);
+  // The rep earns his commission when the shop pays (not when it buys on credit): tell him what he earned.
+  const earned = new Map<number, number>();
+  for (const a of allocations) {
+    const inv = db.invoices.find((i) => i.id === a.invoice_id);
+    if (inv) earned.set(inv.rep_id, (earned.get(inv.rep_id) ?? 0) + a.amount * invoiceRate(db, inv));
+  }
+  for (const [repId, sum] of earned) {
+    const c = Math.round(sum);
+    if (c <= 0) continue;
+    notify(
+      db,
+      {
+        type: "commission_earned",
+        roles: ["rep"],
+        user_id: repId,
+        title: `عمولتك من تسديد ${customer.name}: ${c.toLocaleString("en")} د.ع`,
+        title_en: `Your commission from ${customer.name}'s payment: ${c.toLocaleString("en")} IQD`,
+        body: `دفع ${input.amount.toLocaleString("en")} د.ع${p.method === "online" ? " أونلاين" : ""}`,
+        body_en: `Paid ${input.amount.toLocaleString("en")} IQD`,
+        link: "/commissions",
+      },
+      now,
+    );
+  }
   return p;
 }
 
@@ -1096,10 +1123,75 @@ export function closeStocktake(db: Db, actor: DbUser, id: number, now: Date): St
 // ---------- commission ----------
 
 /** Commission rate of an invoice = the mix of its items' rates, weighted by money. */
-function invoiceRate(db: Db, inv: DbInvoice) {
-  if (!inv.total) return 0;
+export function invoiceRate(db: Db, inv: DbInvoice) {
+  const lines = inv.lines.reduce((s, l) => s + l.total, 0);
+  if (!lines) return 0;
   const weighted = inv.lines.reduce((s, l) => s + l.total * (itemOf(db, l.item_id).commission_percent / 100), 0);
-  return weighted / inv.total;
+  return weighted / lines;
+}
+
+/** Each payment on the reps' invoices in a month, and the commission it earned. */
+export function commissionLines(db: Db, month: string, repId?: number): CommissionLine[] {
+  const out: CommissionLine[] = [];
+  for (const p of db.payments) {
+    if (!p.date.startsWith(month)) continue;
+    for (const a of p.allocations) {
+      const inv = db.invoices.find((i) => i.id === a.invoice_id);
+      if (!inv || (repId && inv.rep_id !== repId)) continue;
+      const rate = invoiceRate(db, inv);
+      out.push({
+        payment_id: p.id,
+        payment_number: p.number,
+        date: p.date,
+        customer_id: inv.customer_id,
+        customer: db.customers.find((c) => c.id === inv.customer_id)?.name ?? "",
+        invoice_id: inv.id,
+        invoice_number: inv.number,
+        amount: a.amount,
+        rate: Math.round(rate * 1000) / 10,
+        commission: Math.round(a.amount * rate),
+        rep_id: inv.rep_id,
+      });
+    }
+  }
+  return out.sort((x, y) => y.date.localeCompare(x.date));
+}
+
+// ---------- the dollar rate ----------
+
+/** The accountant (or the manager) fixes today's rate: "$1 = 1,700 IQD". Set again the same day = changed. */
+export function setUsdRate(db: Db, actor: DbUser, rate: number, now: Date): UsdRate {
+  need(actor, ["accountant", "manager"]);
+  const r = Math.round(Number(rate));
+  if (!(r >= 500 && r <= 5000)) fail(422, "VALIDATION", "سعر غير معقول: اكتب كم ديناراً يساوي الدولار الواحد", "Not a sensible rate: how many dinars is one dollar", { rate: msg("بين 500 و 5000", "Between 500 and 5000") });
+  db.usd_rates ??= [];
+  const date = dayOf(now);
+  const old = db.usd_rates.find((x) => x.date === date);
+  const entry: UsdRate = { date, rate: r, by: person(actor), at: now.toISOString() };
+  if (old) Object.assign(old, entry);
+  else db.usd_rates.push(entry);
+  audit(db, actor, "update", "settings", 0, `سعر الصرف ${date}: 1$ = ${r.toLocaleString("en")} د.ع${old ? ` (كان ${old.rate.toLocaleString("en")})` : ""}`, `USD rate ${date}: $1 = ${r} IQD`, now);
+  if (actor.role !== "manager") {
+    notify(
+      db,
+      {
+        type: "usd_rate",
+        roles: ["manager"],
+        title: `سعر الصرف اليوم: 1$ = ${r.toLocaleString("en")} د.ع`,
+        title_en: `Today's rate: $1 = ${r.toLocaleString("en")} IQD`,
+        body: `ثبّته ${actor.name}${old ? ` بدل ${old.rate.toLocaleString("en")}` : ""}`,
+        body_en: `Set by ${actor.name}`,
+        link: "/accounts",
+      },
+      now,
+    );
+  }
+  return entry;
+}
+
+/** The rate of a day: that day's, or the last one before it. */
+export function usdRateOn(db: Db, date: string): UsdRate | undefined {
+  return [...(db.usd_rates ?? [])].filter((x) => x.date <= date).sort((a, b) => b.date.localeCompare(a.date))[0];
 }
 
 export function commissionRows(db: Db, month: string): CommissionRow[] {

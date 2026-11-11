@@ -14,7 +14,7 @@ import { useIdParam } from "@/lib/utils";
 
 export default function InvoiceView() {
   const id = useIdParam();
-  const { tr, dateTime, money, name, qty } = useFmt();
+  const { tr, dateTime, money, name, qty, num } = useFmt();
   const { user, lookups, itemById } = useApp();
   const inv = useLoad(() => api.getInvoice(id), [id]);
   const i = inv.data;
@@ -174,6 +174,12 @@ export default function InvoiceView() {
             </>
           )}
           <Row k={tr("المجموع", "Total")} v={<Money value={i.total} className="font-semibold" />} />
+          {!!i.usd_rate && (
+            <Row
+              k={<span className="text-xs text-muted">{tr(`بالدولار (1$ = ${num(i.usd_rate)})`, `In dollars ($1 = ${num(i.usd_rate)})`)}</span>}
+              v={<span className="num text-xs text-muted" dir="ltr">≈ ${(i.total / i.usd_rate).toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>}
+            />
+          )}
           {i.returned > 0 && <Row k={tr("المرتجع", "Returns")} v={<Money value={-i.returned} />} />}
           {seesMoney && (
             <>
@@ -224,7 +230,7 @@ export default function InvoiceView() {
   );
 }
 
-function Row({ k, v }: { k: string; v: React.ReactNode }) {
+function Row({ k, v }: { k: React.ReactNode; v: React.ReactNode }) {
   return (
     <div className="flex justify-between">
       <span className="text-muted">{k}</span>
