@@ -7,13 +7,14 @@
 // The page opens in 3D and lies down flat, like the design's video. Only the warehouse keeper can open it.
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Box, Minus, PackagePlus, Plus, Square, Warehouse as WarehouseIcon } from "lucide-react";
+import { Box, LayoutGrid, Minus, PackagePlus, Plus, Square, Warehouse as WarehouseIcon } from "lucide-react";
 import { buildMap } from "@/components/map/data";
 import { HallPanel, type Move } from "@/components/hall/panel";
 import { HallPlan } from "@/components/hall/plan";
 import { buildMissions, type Mission } from "@/components/hall/data";
 import { useNow } from "@/components/hall/live";
 import { useApp } from "@/components/shell";
+import { LayoutEditor, canArrange } from "@/components/warehouse-layout";
 import { Button, Card, Dialog, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
 import { PrintButton, ShipmentLabel } from "@/components/delivery/qr";
 import { api } from "@/lib/api";
@@ -52,6 +53,7 @@ export default function HallPage() {
   const [zoom, setZoom] = useState(1);
   // The order just confirmed: its shipment label opens, to print and stick on the packages.
   const [labelFor, setLabelFor] = useState<number | null>(null);
+  const [arranging, setArranging] = useState(false);
   const [intro] = useState(threeD);
 
   useEffect(() => {
@@ -70,10 +72,7 @@ export default function HallPage() {
   }, [items, lookups, shelf.data, batches.data, orders.data, whId]);
 
   const missions = useMemo(
-    () =>
-      view && orders.data && batches.data
-        ? buildMissions({ view, orders: orders.data, items, customers: customers.data ?? [], reps: lookups.reps, batches: batches.data, now })
-        : [],
+    () => (view && orders.data && batches.data ? buildMissions({ view, orders: orders.data, items, customers: customers.data ?? [], reps: lookups.reps, batches: batches.data, now }) : []),
     [view, orders.data, items, customers.data, lookups.reps, batches.data, now],
   );
 
@@ -89,7 +88,12 @@ export default function HallPage() {
   const moves: Move[] = [
     ...(receipts.data ?? [])
       .filter((r) => r.warehouse_id === whId && dayOfIso(r.created_at) === t)
-      .map((r): Move => ({ kind: "in", at: r.created_at, title: tr(`استلام ${r.number}`, `Receipt ${r.number}`), sub: tr(`${r.supplier} · ${r.lines.length} مواد`, `${r.supplier} · ${r.lines.length} items`) })),
+      .map((r): Move => ({
+        kind: "in",
+        at: r.created_at,
+        title: tr(`استلام ${r.number}`, `Receipt ${r.number}`),
+        sub: tr(`${r.supplier} · ${r.lines.length} مواد`, `${r.supplier} · ${r.lines.length} items`),
+      })),
     ...(invoices.data ?? [])
       .filter((i) => i.warehouse_id === whId && dayOfIso(i.date) === t)
       .map((i): Move => ({ kind: "out", at: i.date, title: tr(`فاتورة ${i.number}`, `Invoice ${i.number}`), sub: custName(i.customer_id) })),
@@ -98,7 +102,12 @@ export default function HallPage() {
       .map((x): Move => {
         const toHere = x.to_warehouse_id === whId;
         const other = lookups.warehouses.find((w) => w.id === (toHere ? x.from_warehouse_id : x.to_warehouse_id));
-        return { kind: "transfer", at: x.created_at, title: tr(`تحويل ${x.number}`, `Transfer ${x.number}`), sub: toHere ? tr(`وارد من ${other?.name ?? ""}`, `In from ${other?.name_en ?? ""}`) : tr(`صادر إلى ${other?.name ?? ""}`, `Out to ${other?.name_en ?? ""}`) };
+        return {
+          kind: "transfer",
+          at: x.created_at,
+          title: tr(`تحويل ${x.number}`, `Transfer ${x.number}`),
+          sub: toHere ? tr(`وارد من ${other?.name ?? ""}`, `In from ${other?.name_en ?? ""}`) : tr(`صادر إلى ${other?.name ?? ""}`, `Out to ${other?.name_en ?? ""}`),
+        };
       }),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
@@ -113,11 +122,19 @@ export default function HallPage() {
         title={tr("قاعة التجهيز", "Picking hall")}
         subtitle={tr("طلبات مخزنك ومسار تجهيز كل طلب على المخطط", "Your warehouse's orders and the picking route of each one")}
         actions={
-          <Button variant="action" href="/receipts/new">
-            <PackagePlus className="size-4" /> {tr("استلام بضاعة", "Receive goods")}
-          </Button>
+          <>
+            {view && canArrange(user, view.wh.id) && (
+              <Button onClick={() => setArranging(true)}>
+                <LayoutGrid className="size-4" /> {tr("ترتيب المخزن", "Arrange the warehouse")}
+              </Button>
+            )}
+            <Button variant="action" href="/receipts/new">
+              <PackagePlus className="size-4" /> {tr("استلام بضاعة", "Receive goods")}
+            </Button>
+          </>
         }
       />
+      {arranging && view && <LayoutEditor warehouse={view.wh} onClose={() => setArranging(false)} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
         {/* Missions panel */}
@@ -128,7 +145,9 @@ export default function HallPage() {
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-bold">{view ? name(view.wh) : "…"}</p>
-              <p className="text-[11px] text-muted">{tr("أمين المخزن", "Warehouse keeper")}: {user.name}</p>
+              <p className="text-[11px] text-muted">
+                {tr("أمين المخزن", "Warehouse keeper")}: {user.name}
+              </p>
             </div>
           </div>
           {view ? (
@@ -169,7 +188,13 @@ export default function HallPage() {
                   style={{ transformStyle: "preserve-3d" }}
                   className={cn(threeD && "drop-shadow-[0_30px_30px_rgb(0_0_0/0.25)]")}
                 >
-                  <HallPlan view={view} missions={missions} selected={selected} inPallets={todayReceipts.reduce((s, r) => s + r.lines.length, 0)} outPallets={moves.filter((m) => m.kind === "out").length} />
+                  <HallPlan
+                    view={view}
+                    missions={missions}
+                    selected={selected}
+                    inPallets={todayReceipts.reduce((s, r) => s + r.lines.length, 0)}
+                    outPallets={moves.filter((m) => m.kind === "out").length}
+                  />
                 </motion.div>
               </div>
             ) : (
@@ -201,11 +226,23 @@ export default function HallPage() {
                   </button>
                 ))}
               </div>
-              <button type="button" aria-label={tr("تصغير", "Zoom out")} onClick={() => setZoom((z) => Math.max(1, +(z - 0.25).toFixed(2)))} disabled={zoom <= 1} className="flex size-8 items-center justify-center rounded-lg border border-line-strong hover:bg-card-2 disabled:opacity-40">
+              <button
+                type="button"
+                aria-label={tr("تصغير", "Zoom out")}
+                onClick={() => setZoom((z) => Math.max(1, +(z - 0.25).toFixed(2)))}
+                disabled={zoom <= 1}
+                className="flex size-8 items-center justify-center rounded-lg border border-line-strong hover:bg-card-2 disabled:opacity-40"
+              >
                 <Minus className="size-4" />
               </button>
               <span className="num w-10 text-center font-semibold">{Math.round(zoom * 100)}%</span>
-              <button type="button" aria-label={tr("تكبير", "Zoom in")} onClick={() => setZoom((z) => Math.min(2, +(z + 0.25).toFixed(2)))} disabled={zoom >= 2} className="flex size-8 items-center justify-center rounded-lg border border-line-strong hover:bg-card-2 disabled:opacity-40">
+              <button
+                type="button"
+                aria-label={tr("تكبير", "Zoom in")}
+                onClick={() => setZoom((z) => Math.min(2, +(z + 0.25).toFixed(2)))}
+                disabled={zoom >= 2}
+                className="flex size-8 items-center justify-center rounded-lg border border-line-strong hover:bg-card-2 disabled:opacity-40"
+              >
                 <Plus className="size-4" />
               </button>
             </div>
@@ -264,7 +301,8 @@ function Timeline({ now, orders, receipts, selected, onPick }: { now: number; or
   };
   const pos = (h: number) => `${(h / 24) * 100}%`;
   const nowH = now ? hourOf(new Date(now).toISOString()) : null;
-  const tone = (o: Order) => (o.status === "pending" || o.status === "approved" ? "bg-action" : o.status === "needs_approval" ? "bg-warning" : o.status === "cancelled" ? "bg-line-strong" : "bg-success");
+  const tone = (o: Order) =>
+    o.status === "pending" || o.status === "approved" ? "bg-action" : o.status === "needs_approval" ? "bg-warning" : o.status === "cancelled" ? "bg-line-strong" : "bg-success";
   return (
     <div className="border-b border-line px-4 pb-3 pt-2" dir="ltr">
       <div className="relative h-12">
@@ -278,7 +316,12 @@ function Timeline({ now, orders, receipts, selected, onPick }: { now: number; or
         ))}
         <span className="absolute inset-x-0 top-[30px] h-px bg-line-strong" />
         {receipts.map((r) => (
-          <span key={`r${r.id}`} title={`${r.number} · ${time(r.created_at)}`} className="absolute top-[26px] size-2.5 -translate-x-1/2 rotate-45 rounded-[2px] bg-[var(--iso-glass-2)]" style={{ left: pos(hourOf(r.created_at)) }} />
+          <span
+            key={`r${r.id}`}
+            title={`${r.number} · ${time(r.created_at)}`}
+            className="absolute top-[26px] size-2.5 -translate-x-1/2 rotate-45 rounded-[2px] bg-[var(--iso-glass-2)]"
+            style={{ left: pos(hourOf(r.created_at)) }}
+          />
         ))}
         {orders.map((o) => (
           <button

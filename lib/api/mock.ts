@@ -7,6 +7,8 @@ import { ApiError, NETWORK_ERROR } from "./errors";
 import type { Api } from "./http";
 import type {
   AuditEntry,
+  Warehouse,
+  WarehouseInput,
   OnlineStatus,
   Batch,
   Customer,
@@ -84,6 +86,9 @@ import {
   switchShop,
   returnToWarehouse,
   unlockDelivery,
+  deliveryRepId,
+  notify,
+  person,
   startOnline,
   physicalQty,
   registerShop,
@@ -95,6 +100,7 @@ import {
 } from "./mock/rules";
 import { makeSeed } from "./mock/seed";
 import { fullSite, ordered } from "./site-defaults";
+import { layoutOf, zoneOfItem } from "./warehouse-layout";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const db0 = () => loadDb(() => makeSeed());
@@ -188,7 +194,11 @@ function batchView(db: Db, b: DbBatch, actor: DbUser, now: Date): Batch {
 }
 
 function customerView(db: Db, c: DbCustomer, actor: DbUser): Customer {
-  const last = db.orders.filter((o) => o.customer_id === c.id).map((o) => o.created_at).sort().pop();
+  const last = db.orders
+    .filter((o) => o.customer_id === c.id)
+    .map((o) => o.created_at)
+    .sort()
+    .pop();
   const { debt_limit, ...rest } = c;
   return { ...rest, last_order_at: last, ...(seesDebt(actor) ? { debt_limit, balance: customerBalance(db, c.id) } : {}) };
 }
@@ -202,6 +212,18 @@ function canSeeCustomer(actor: DbUser, c: { id: number; rep_id: number }) {
 /** A rep sells only the categories the manager gave him (none set = all). */
 function repMaySell(actor: DbUser, category: string) {
   return actor.role !== "rep" || !actor.rep_categories?.length || actor.rep_categories.includes(category);
+}
+
+/** The details of a new or changed warehouse, checked. `id` 0 = a new one. */
+function checkWarehouse(db: Db, input: WarehouseInput, id: number): Omit<Warehouse, "id" | "layout"> {
+  const errors: Record<string, string> = {};
+  const name = input.name.trim();
+  if (!name) errors.name = msg("الاسم مطلوب", "Name is required");
+  else if (db.warehouses.some((w) => w.id !== id && w.name.trim() === name)) errors.name = msg("يوجد مخزن بهذا الاسم", "A warehouse with this name exists");
+  if (!(input.capacity >= 1) || !Number.isInteger(input.capacity)) errors.capacity = msg("عدد صحيح من 1", "A whole number from 1");
+  if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
+  const placed = input.lat !== undefined && input.lng !== undefined;
+  return { name, name_en: input.name_en.trim() || name, capacity: input.capacity, ...(placed ? { lat: input.lat, lng: input.lng } : {}) };
 }
 
 /** A keeper / staff: batches, expiry dates and movements of their own warehouse only. */
@@ -405,7 +427,11 @@ export const mockApi: Api = {
       if (input.role === "rep" && input.rep_kinds && !input.rep_kinds.length) errors.rep_kinds = msg("اختر عمله: تسويق أو توصيل أو الاثنين", "Choose: marketing, delivery or both");
       // One warehouse keeper for each warehouse: he is the one who answers for its stock.
       const otherKeeper = input.role === "warehouse" && input.active && db.users.find((u) => u.id !== id && u.role === "warehouse" && u.active && u.warehouse_id === input.warehouse_id);
-      if (otherKeeper) errors.warehouse_id = msg(`لهذا المخزن أمين مخزن: ${otherKeeper.name}. أوقف حسابه أولاً أو اختر مخزناً آخر.`, `This warehouse already has a keeper: ${otherKeeper.name}. Disable him first or choose another warehouse.`);
+      if (otherKeeper)
+        errors.warehouse_id = msg(
+          `لهذا المخزن أمين مخزن: ${otherKeeper.name}. أوقف حسابه أولاً أو اختر مخزناً آخر.`,
+          `This warehouse already has a keeper: ${otherKeeper.name}. Disable him first or choose another warehouse.`,
+        );
       if (id === a.id && (!input.active || input.role !== "manager")) errors.role = msg("لا تستطيع إيقاف حسابك أو تغيير دورك", "You can't disable yourself or change your own role");
       if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
       const clean = {
@@ -441,7 +467,16 @@ export const mockApi: Api = {
       need(a, ["manager"]);
       if (!(s.reservation_hours >= 1 && s.reservation_hours <= 72)) fail(422, "VALIDATION", "مدة الحجز بين 1 و 72 ساعة", "Reservation must be 1 to 72 hours", { reservation_hours: "1-72" });
       db.settings = s;
-      audit(db, a, "update", "settings", 0, `تعديل الإعدادات: حجز ${s.reservation_hours} ساعة، تنبيه الصلاحية ${s.near_expiry_days} يوم`, `Settings: reservation ${s.reservation_hours}h, expiry alert ${s.near_expiry_days} days`, now);
+      audit(
+        db,
+        a,
+        "update",
+        "settings",
+        0,
+        `تعديل الإعدادات: حجز ${s.reservation_hours} ساعة، تنبيه الصلاحية ${s.near_expiry_days} يوم`,
+        `Settings: reservation ${s.reservation_hours}h, expiry alert ${s.near_expiry_days} days`,
+        now,
+      );
       return s;
     }),
   site: async () => {
@@ -463,9 +498,95 @@ export const mockApi: Api = {
       db.custom = next;
       // One line in the activity log for a change of identity or of names (not one for every drag).
       const names = (x: typeof next) => JSON.stringify([x.nav.labels, x.nav.group_labels, x.dashboard.labels, x.texts]);
-      if (JSON.stringify(old.brand) !== JSON.stringify(b)) audit(db, a, "update", "settings", 0, `تعديل هوية الموقع: ${b.name} (${b.company})`, `Site identity changed: ${b.name_en} (${b.company_en})`, now);
+      if (JSON.stringify(old.brand) !== JSON.stringify(b))
+        audit(db, a, "update", "settings", 0, `تعديل هوية الموقع: ${b.name} (${b.company})`, `Site identity changed: ${b.name_en} (${b.company_en})`, now);
       else if (names(old) !== names(next)) audit(db, a, "update", "settings", 0, "تعديل نصوص في الموقع (وضع التخصيص)", "Site texts rewritten (customize mode)", now);
       return next;
+    }),
+  createWarehouse: (input) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const w: Warehouse = { id: Math.max(0, ...db.warehouses.map((x) => x.id)) + 1, ...checkWarehouse(db, input, 0) };
+      db.warehouses.push(w);
+      audit(db, a, "create", "settings", w.id, `إضافة مخزن جديد: ${w.name} (${w.capacity.toLocaleString("en")} كارتون)`, `New warehouse: ${w.name_en}`, now);
+      return w;
+    }),
+  saveWarehouse: (id, input) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const w = db.warehouses.find((x) => x.id === id) ?? notFound();
+      Object.assign(w, checkWarehouse(db, input, id));
+      audit(db, a, "update", "settings", w.id, `تعديل المخزن ${w.name}`, `Updated warehouse ${w.name_en}`, now);
+      return w;
+    }),
+  saveLayout: (id, layout) =>
+    write((db, a, now) => {
+      need(a, ["manager", "warehouse"]);
+      const w = db.warehouses.find((x) => x.id === id) ?? notFound();
+      // A keeper arranges his own warehouse only.
+      if (a.role === "warehouse" && a.warehouse_id && a.warehouse_id !== id) fail(403, "FORBIDDEN", "ترتّب مخزنك فقط", "You arrange your own warehouse only");
+      const zones = layout.zones.map((z) => ({ code: z.code.trim().toUpperCase(), name: z.name.trim() }));
+      if (!zones.length) fail(422, "VALIDATION", "يحتاج المخزن منطقة واحدة على الأقل", "A warehouse needs at least one zone");
+      if (zones.some((z) => !z.name)) fail(422, "VALIDATION", "لكل منطقة اسم", "Every zone needs a name");
+      if (zones.some((z) => !/^[A-Z0-9-]{1,8}$/.test(z.code))) fail(422, "VALIDATION", "رمز المنطقة حروف وأرقام قصيرة", "A zone code is a few letters and digits");
+      if (new Set(zones.map((z) => z.code)).size !== zones.length) fail(422, "VALIDATION", "رمزان متشابهان لمنطقتين", "Two zones have the same code");
+      const codes = new Set(zones.map((z) => z.code));
+      const places: Record<string, string> = {};
+      for (const [item, zone] of Object.entries(layout.places)) {
+        if (!db.items.some((i) => String(i.id) === item)) continue;
+        if (!codes.has(zone)) fail(422, "VALIDATION", "مادة في منطقة غير موجودة", "An item is in a zone that doesn't exist");
+        places[item] = zone;
+      }
+      // Which items moved, for the activity log ("رز بسمتي: Z01 ← Z04"). Before the first layout, every item
+      // was in the zone of its category: the same rule the map uses.
+      const prev = layoutOf(w, db.items as unknown as Item[]);
+      const before: Record<string, string> = Object.fromEntries(db.items.map((i) => [String(i.id), zoneOfItem(prev, i as unknown as Item)]));
+      const moved = Object.entries(places).filter(([item, zone]) => before[item] && before[item] !== zone);
+      w.layout = { zones, places };
+      const names = moved
+        .slice(0, 4)
+        .map(([item, zone]) => `${db.items.find((i) => String(i.id) === item)?.name}: ${before[item]} ← ${zone}`)
+        .join("، ");
+      audit(
+        db,
+        a,
+        "update",
+        "settings",
+        w.id,
+        `ترتيب ${w.name}: ${zones.length} مناطق${moved.length ? `، نقل ${moved.length} مادة (${names}${moved.length > 4 ? "…" : ""})` : ""}`,
+        `Arranged ${w.name_en}: ${zones.length} zones${moved.length ? `, ${moved.length} item(s) moved` : ""}`,
+        now,
+      );
+      return w;
+    }),
+  loadShipment: (id) =>
+    write((db, a, now) => {
+      need(a, ["staff", "warehouse", "manager"]);
+      const o = db.orders.find((x) => x.id === id) ?? notFound();
+      const d = o.delivery ?? fail(409, "BAD_STATE", "الطلب لم يُجهَّز بعد", "The order isn't prepared yet");
+      if (!ownWarehouse(a, o.warehouse_id)) fail(403, "FORBIDDEN", "هذه الشحنة من مخزن آخر", "This shipment is from another warehouse");
+      if (d.status !== "ready") fail(409, "BAD_STATE", "خرجت الشحنة من المخزن", "The shipment already left");
+      if (d.loaded_at) return orderView(o, a); // pressed twice: nothing changes
+      d.loaded_at = now.toISOString();
+      d.loaded_by = person(a);
+      const customer = db.customers.find((c) => c.id === o.customer_id);
+      audit(db, a, "update", "order", o.id, `تحميل الشحنة ${o.number} (${customer?.name ?? ""}) في سيارة التوصيل`, `Shipment ${o.number} loaded`, now);
+      // The delivery rep: it is in his van, he scans its label and chooses his trip.
+      notify(
+        db,
+        {
+          type: "out_for_delivery",
+          roles: ["rep"],
+          user_id: deliveryRepId(o),
+          title: `حُمّلت شحنة ${customer?.name ?? ""} في سيارتك`,
+          title_en: `${customer?.name ?? ""}'s shipment is in your van`,
+          body: `${o.number}: امسح ملصقها، ثم اختر محلات جولتك.`,
+          body_en: `${o.number}: scan its label, then choose your trip.`,
+          link: "/deliveries",
+        },
+        now,
+      );
+      return orderView(o, a);
     }),
   renameWarehouse: (id, name, name_en) =>
     write((db, a, now) => {
@@ -517,7 +638,16 @@ export const mockApi: Api = {
           p.carton_price = carton;
           p.piece_price = piece;
           const t = db.tiers.find((x) => x.id === p.tier_id)?.name;
-          audit(db, a, "price_change", "item", it.id, `تغيير سعر ${it.name} (${t}: ${carton.toLocaleString("en")}/${piece.toLocaleString("en")}). الفواتير القديمة لا تتغير`, `Price change for ${it.name_en}. Old invoices keep their prices`, now);
+          audit(
+            db,
+            a,
+            "price_change",
+            "item",
+            it.id,
+            `تغيير سعر ${it.name} (${t}: ${carton.toLocaleString("en")}/${piece.toLocaleString("en")}). الفواتير القديمة لا تتغير`,
+            `Price change for ${it.name_en}. Old invoices keep their prices`,
+            now,
+          );
         }
       }
       return itemView(db, it, a, now);
@@ -592,9 +722,7 @@ export const mockApi: Api = {
         }
         Object.assign(it, { ...input, name: input.name.trim(), name_en: input.name_en.trim() });
         if (changed.length) {
-          const t = changed
-            .map((p) => `${db.tiers.find((x) => x.id === p.tier_id)?.name}: ${p.carton_price.toLocaleString("en")}/${p.piece_price.toLocaleString("en")}`)
-            .join("، ");
+          const t = changed.map((p) => `${db.tiers.find((x) => x.id === p.tier_id)?.name}: ${p.carton_price.toLocaleString("en")}/${p.piece_price.toLocaleString("en")}`).join("، ");
           audit(db, a, "price_change", "item", it.id, `تغيير سعر ${it.name} (${t}). الفواتير القديمة لا تتغير`, `Price change for ${it.name_en}. Old invoices keep their prices`, now);
         }
         audit(db, a, "update", "item", it.id, `تعديل المادة ${it.name}`, `Updated item ${it.name_en}`, now);
@@ -630,9 +758,7 @@ export const mockApi: Api = {
         by_warehouse: db.warehouses.map((w) => {
           const live = physicalQty(db, it.id, w.id, today);
           const sellable = sellableQty(db, it.id, w.id, now);
-          const expired = db.batches
-            .filter((b) => b.item_id === it.id && b.warehouse_id === w.id && b.expiry_date < today)
-            .reduce((s, b) => s + b.qty_left, 0);
+          const expired = db.batches.filter((b) => b.item_id === it.id && b.warehouse_id === w.id && b.expiry_date < today).reduce((s, b) => s + b.qty_left, 0);
           if (!ownWarehouse(a, w.id)) return { warehouse_id: w.id, on_shelf: sellable, sellable, reserved: 0, expired: 0 };
           return { warehouse_id: w.id, on_shelf: live + expired, sellable, reserved: live - sellable, expired };
         }),
@@ -824,7 +950,13 @@ export const mockApi: Api = {
 
   // Orders
   // orderView hides the delivery PIN from everyone except the shop owner of the order.
-  listOrders: () => read((db, a) => db.orders.filter((o) => canSeeOrder(a, o)).map((o) => orderView(o, a)).reverse()),
+  listOrders: () =>
+    read((db, a) =>
+      db.orders
+        .filter((o) => canSeeOrder(a, o))
+        .map((o) => orderView(o, a))
+        .reverse(),
+    ),
   getOrder: (id) =>
     read((db, a) => {
       const o = db.orders.find((x) => x.id === id);
@@ -917,10 +1049,13 @@ export const mockApi: Api = {
   listPayments: () =>
     read((db, a) => {
       need(a, ["manager", "rep", "accountant", "shop"]);
-      return db.payments.filter((p) => {
-        const c = db.customers.find((x) => x.id === p.customer_id);
-        return !!c && canSeeCustomer(a, c);
-      }).slice().reverse();
+      return db.payments
+        .filter((p) => {
+          const c = db.customers.find((x) => x.id === p.customer_id);
+          return !!c && canSeeCustomer(a, c);
+        })
+        .slice()
+        .reverse();
     }),
   getPayment: (id) =>
     read((db, a) => {
@@ -959,7 +1094,10 @@ export const mockApi: Api = {
   listReturns: () =>
     read((db, a) => {
       need(a, ["manager", "rep", "accountant", "warehouse", "shop"]);
-      return db.returns.filter((r) => canSeeOrder(a, { customer_id: r.customer_id, rep_id: r.rep_id, warehouse_id: db.invoices.find((i) => i.id === r.invoice_id)?.warehouse_id ?? 0 })).map((r) => ({ ...returnView(r), warehouse_id: db.invoices.find((i) => i.id === r.invoice_id)?.warehouse_id })).reverse();
+      return db.returns
+        .filter((r) => canSeeOrder(a, { customer_id: r.customer_id, rep_id: r.rep_id, warehouse_id: db.invoices.find((i) => i.id === r.invoice_id)?.warehouse_id ?? 0 }))
+        .map((r) => ({ ...returnView(r), warehouse_id: db.invoices.find((i) => i.id === r.invoice_id)?.warehouse_id }))
+        .reverse();
     }),
   getReturn: (id) =>
     read((db, a) => {
@@ -1022,8 +1160,7 @@ export const mockApi: Api = {
         last7,
       };
       if (seesProfit(a)) {
-        base.month_profit =
-          monthInv.reduce((s, i) => s + i.total - i.cost, 0) - monthRet.reduce((s, r) => s + r.amount - r.cost, 0);
+        base.month_profit = monthInv.reduce((s, i) => s + i.total - i.cost, 0) - monthRet.reduce((s, r) => s + r.amount - r.cost, 0);
       }
       if (!seesDebt(a)) {
         base.total_debt = 0;

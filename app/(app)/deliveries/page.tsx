@@ -14,7 +14,7 @@ import { PhotoCapture } from "@/components/delivery/photo";
 import { ProblemNote, ReportProblem } from "@/components/delivery/problem";
 import { TripPanel, buildTrip, saveTrip, useTrip } from "@/components/delivery/trip";
 import { QrScanner } from "@/components/delivery/scanner";
-import { DeliveryChip } from "@/components/delivery/status";
+import { DeliveryChip, LoadButton } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, PageHeader, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
@@ -267,8 +267,13 @@ export default function DeliveriesPage() {
                     </div>
                   )}
                   {isRep && d.status === "ready" && (
-                    <p className="mt-3 rounded-lg bg-card-2 px-3 py-2 text-xs text-muted">{tr("امسح QR الملصق عند استلامها من المخزن", "Scan the label's QR when you take it")}</p>
+                    <p className={cn("mt-3 rounded-lg px-3 py-2 text-xs", d.loaded_at ? "bg-success-soft font-semibold text-success" : "bg-card-2 text-muted")}>
+                      {d.loaded_at
+                        ? tr(`حمّلها ${d.loaded_by?.name ?? ""} في سيارتك: امسح ملصقها، ثم اختر جولتك`, `${d.loaded_by?.name ?? ""} loaded it in your van: scan its label, then pick your trip`)
+                        : tr("تُحمَّل في سيارتك من المخزن، ثم امسح QR الملصق", "It is loaded in your van at the warehouse; then scan the label's QR")}
+                    </p>
                   )}
+                  {!isRep && d.status === "ready" && <LoadButton order={o} role={user.role} className="mt-3 w-full" onDone={orders.reload} />}
                 </motion.article>
               );
             })}

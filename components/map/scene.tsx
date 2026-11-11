@@ -76,10 +76,7 @@ function buildScene() {
     ];
   };
 
-  const truck = (x: number, y: number): Shape[] => [
-    ...solid(x, y, 0.05, 1.5, 0.7, 0.75),
-    ...solid(x + 1.5, y + 0.02, 0.05, 0.55, 0.66, 0.6, { top: "#f5b48a", left: ACTION, right: "#b8521c" }),
-  ];
+  const truck = (x: number, y: number): Shape[] => [...solid(x, y, 0.05, 1.5, 0.7, 0.75), ...solid(x + 1.5, y + 0.02, 0.05, 0.55, 0.66, 0.6, { top: "#f5b48a", left: ACTION, right: "#b8521c" })];
 
   // Ground and roads
   add("ground", -100, solid(0, 0, -0.8, 28, 21, 0.8, { top: "var(--iso-ground)", left: "var(--iso-ground-side)", right: "var(--iso-ground-side)" }));
@@ -147,10 +144,40 @@ function buildScene() {
 
   // Trees
   const trees: [number, number][] = [
-    [1.2, 1.2], [2.5, 1.0], [1.0, 2.7], [1.3, 4.3], [1.2, 6.6], [1.4, 8.7], [1.2, 10.9], [1.6, 13.2], [2.6, 14.7],
-    [3, 19.6], [5.2, 19.8], [7.4, 19.5], [9.6, 19.7], [12, 19.6], [19, 19.6], [21.5, 19.8], [24, 19.6], [26.5, 19.4],
-    [26.8, 2], [26.6, 4.6], [26.8, 7.1], [26.5, 10], [26.7, 12.6], [26.6, 15.2],
-    [9.8, 14], [11.3, 15.1], [12.7, 13.8], [18.6, 12.4], [20.6, 13.6], [22.7, 12.3], [24.6, 13.8], [19.3, 1.2], [21.6, 1.0], [23.9, 1.3],
+    [1.2, 1.2],
+    [2.5, 1.0],
+    [1.0, 2.7],
+    [1.3, 4.3],
+    [1.2, 6.6],
+    [1.4, 8.7],
+    [1.2, 10.9],
+    [1.6, 13.2],
+    [2.6, 14.7],
+    [3, 19.6],
+    [5.2, 19.8],
+    [7.4, 19.5],
+    [9.6, 19.7],
+    [12, 19.6],
+    [19, 19.6],
+    [21.5, 19.8],
+    [24, 19.6],
+    [26.5, 19.4],
+    [26.8, 2],
+    [26.6, 4.6],
+    [26.8, 7.1],
+    [26.5, 10],
+    [26.7, 12.6],
+    [26.6, 15.2],
+    [9.8, 14],
+    [11.3, 15.1],
+    [12.7, 13.8],
+    [18.6, 12.4],
+    [20.6, 13.6],
+    [22.7, 12.3],
+    [24.6, 13.8],
+    [19.3, 1.2],
+    [21.6, 1.0],
+    [23.9, 1.3],
   ];
   trees.forEach(([x, y], i) => add(`tree-${i}`, x + y, tree(x, y)));
 
@@ -176,25 +203,21 @@ function ShapeEl({ s }: { s: Shape }) {
 
 // ---------- the component ----------
 
-export function SiteScene({
-  warehouses,
-  myWarehouseId,
-  onEnter,
-}: {
-  warehouses: MapWarehouse[];
-  myWarehouseId?: number;
-  onEnter: (id: number, origin: { x: number; y: number }) => void;
-}) {
+export function SiteScene({ warehouses, myWarehouseId, onEnter }: { warehouses: MapWarehouse[]; myWarehouseId?: number; onEnter: (id: number, origin: { x: number; y: number }) => void }) {
   const { tr, name, num, lang } = useFmt();
   const reduce = useReducedMotion();
   const [hover, setHover] = useState<number | null>(null);
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
 
   const enter = (id: number) => {
-    const b = pct(SCENE.badge[id]);
+    const at = SCENE.badge[id];
+    if (!at) return onEnter(id, { x: 0.5, y: 0.5 });
+    const b = pct(at);
     onEnter(id, { x: b.x / 100, y: (b.y + 12) / 100 });
   };
-
+  // The drawing has the first two warehouses. Any warehouse added later shows as a card under it.
+  const drawn = warehouses.filter((w) => SCENE.badge[w.wh.id]);
+  const extra = warehouses.filter((w) => !SCENE.badge[w.wh.id]);
 
   return (
     <div className="relative mx-auto w-full max-w-5xl select-none">
@@ -239,11 +262,10 @@ export function SiteScene({
             </motion.g>
           );
         })}
-
       </svg>
 
       {/* How full each warehouse is, floating above it */}
-      {warehouses.map((w) => {
+      {drawn.map((w) => {
         const b = pct(SCENE.badge[w.wh.id]);
         const full = w.fill >= 0.85;
         return (
@@ -267,10 +289,11 @@ export function SiteScene({
                 full ? "bg-action text-on-action ring-action/25" : "bg-primary text-on-primary ring-primary/25",
               )}
             >
-              {Math.round(w.fill * 100)}%
-              {/* The alerts count sits on the circle's edge (it used to sit on the edge of the whole label, far away) */}
+              {Math.round(w.fill * 100)}%{/* The alerts count sits on the circle's edge (it used to sit on the edge of the whole label, far away) */}
               {w.alerts > 0 && (
-                <span className="num absolute -end-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-card">{w.alerts}</span>
+                <span className="num absolute -end-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-card">
+                  {w.alerts}
+                </span>
               )}
             </span>
             <span className="whitespace-nowrap rounded-full bg-card/90 px-2.5 py-0.5 text-[11px] font-semibold text-text shadow backdrop-blur">
@@ -285,7 +308,7 @@ export function SiteScene({
       <AnimatePresence>
         {hover !== null &&
           (() => {
-            const w = warehouses.find((x) => x.wh.id === hover);
+            const w = drawn.find((x) => x.wh.id === hover);
             if (!w) return null;
             const b = pct(SCENE.badge[w.wh.id]);
             return (
@@ -321,6 +344,33 @@ export function SiteScene({
           })()}
       </AnimatePresence>
 
+      {extra.length > 0 && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {extra.map((w) => (
+            <button
+              key={w.wh.id}
+              type="button"
+              onClick={() => enter(w.wh.id)}
+              className="flex items-center gap-3 rounded-2xl border border-line bg-card p-3 text-start shadow-sm transition hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md"
+            >
+              <span className={cn("num flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-bold", w.fill >= 0.85 ? "bg-action text-on-action" : "bg-primary text-on-primary")}>
+                {Math.round(w.fill * 100)}%
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-bold">
+                  {name(w.wh)}
+                  {myWarehouseId === w.wh.id && <span className="text-primary-ink"> · {tr("مخزنك", "yours")}</span>}
+                </span>
+                <span className="block text-xs text-muted">
+                  <span className="num">{num(Math.round(w.cartons))}</span> / <span className="num">{num(w.wh.capacity)}</span> {tr("كارتون", "cartons")} · <span className="num">{w.alerts}</span>{" "}
+                  {tr("تنبيه", "alerts")}
+                </span>
+              </span>
+              <Forward className="size-4 shrink-0 text-faint" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

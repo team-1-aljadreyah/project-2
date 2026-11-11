@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, type Variants } from "motion/react";
-import { ChevronLeft, ChevronRight, ClipboardList, Home, Layers, Package, PackagePlus, Route, Truck, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardList, Home, Layers, LayoutGrid, Package, PackagePlus, Route, Truck, X } from "lucide-react";
 import { buildMap, mapNumbers, peopleToday, type MapZone } from "@/components/map/data";
 import { SiteScene } from "@/components/map/scene";
 import { MapStats } from "@/components/map/stats";
@@ -14,6 +14,7 @@ import { ZoneDetail } from "@/components/map/zone-detail";
 import { ZonesView } from "@/components/map/zones";
 import { useApp } from "@/components/shell";
 import { useWarehouseFilter } from "@/components/warehouse-filter";
+import { LayoutEditor, canArrange } from "@/components/warehouse-layout";
 import { Button, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
@@ -77,14 +78,12 @@ export default function MapPage() {
   const [threeD, setThreeD] = useState(true);
   const [showPath, setShowPath] = useState(true);
   const [hoverZone, setHoverZone] = useState<string | null>(null);
+  const [arranging, setArranging] = useState(false);
   const view3d = threeD && wide;
   const Sep = lang === "ar" ? ChevronLeft : ChevronRight;
 
   const views = useMemo(
-    () =>
-      shelf.data && batches.data && orders.data
-        ? buildMap({ items, warehouses: lookups.warehouses, shelf: shelf.data, batches: batches.data, orders: orders.data, reps: lookups.reps })
-        : null,
+    () => (shelf.data && batches.data && orders.data ? buildMap({ items, warehouses: lookups.warehouses, shelf: shelf.data, batches: batches.data, orders: orders.data, reps: lookups.reps }) : null),
     [items, lookups, shelf.data, batches.data, orders.data],
   );
   const people = useMemo(() => peopleToday(orders.data ?? [], invoices.data ?? [], lookups.reps), [orders.data, invoices.data, lookups.reps]);
@@ -122,7 +121,9 @@ export default function MapPage() {
     } else open();
   };
 
-  const crumbs: { label: string; onClick?: () => void }[] = [{ label: tr("المخازن", "Warehouses"), onClick: level.name !== "site" ? () => go({ name: "site" }, { dir: -1, ox: 0.5, oy: 0.5 }) : undefined }];
+  const crumbs: { label: string; onClick?: () => void }[] = [
+    { label: tr("المخازن", "Warehouses"), onClick: level.name !== "site" ? () => go({ name: "site" }, { dir: -1, ox: 0.5, oy: 0.5 }) : undefined },
+  ];
   if (current) crumbs.push({ label: name(current.wh), onClick: level.name === "zone" ? up : undefined });
   if (zone) crumbs.push({ label: `${zone.code} · ${zone.category}` });
 
@@ -144,6 +145,11 @@ export default function MapPage() {
             <Button href="/orders">
               <ClipboardList className="size-4" /> {tr("طلبات تنتظر", "Waiting orders")} <span className="num rounded-md bg-primary-soft px-1.5 text-xs text-primary-ink">{waiting}</span>
             </Button>
+            {current && canArrange(user, current.wh.id) && (
+              <Button onClick={() => setArranging(true)}>
+                <LayoutGrid className="size-4" /> {tr("ترتيب المخزن", "Arrange the warehouse")}
+              </Button>
+            )}
             {canMove && (
               <Button variant="action" href="/receipts/new">
                 <PackagePlus className="size-4" /> {tr("استلام بضاعة", "Receive goods")}
@@ -172,7 +178,12 @@ export default function MapPage() {
             ))}
           </nav>
           {level.name !== "site" && (
-            <button type="button" onClick={up} aria-label={tr("رجوع لمستوى أعلى", "Back up one level")} className="flex size-9 items-center justify-center rounded-xl border border-line bg-card text-muted shadow-sm hover:text-text">
+            <button
+              type="button"
+              onClick={up}
+              aria-label={tr("رجوع لمستوى أعلى", "Back up one level")}
+              className="flex size-9 items-center justify-center rounded-xl border border-line bg-card text-muted shadow-sm hover:text-text"
+            >
               <X className="size-4" />
             </button>
           )}
@@ -225,9 +236,7 @@ export default function MapPage() {
                       />
                     </div>
                   )}
-                  {level.name === "warehouse" && current && (
-                    <ZonesView view={current} view3d={view3d} hovered={hoverZone} onHover={setHoverZone} onPick={pickZone} />
-                  )}
+                  {level.name === "warehouse" && current && <ZonesView view={current} view3d={view3d} hovered={hoverZone} onHover={setHoverZone} onPick={pickZone} />}
                   {level.name === "zone" && current && zone && <ZoneDetail view={current} zone={zone} showPath={showPath} other={other} />}
                 </motion.div>
               </AnimatePresence>
@@ -235,10 +244,9 @@ export default function MapPage() {
           </div>
         </div>
 
+        {arranging && current && <LayoutEditor warehouse={current.wh} onClose={() => setArranging(false)} />}
         {/* The numbers bar stays at the bottom while you move around */}
-        <div className="relative z-30 border-t border-line bg-card/60 p-3 backdrop-blur sm:p-4">
-          {numbers ? <MapStats n={numbers} /> : <Skeleton className="h-20" />}
-        </div>
+        <div className="relative z-30 border-t border-line bg-card/60 p-3 backdrop-blur sm:p-4">{numbers ? <MapStats n={numbers} /> : <Skeleton className="h-20" />}</div>
       </div>
     </>
   );

@@ -4,6 +4,7 @@
 // so a screen can never miss a translation, and you read both while you work.
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { LOCALE_KEY } from "./boot";
+import { currencyVersion, subscribeCurrency, usdDivisor } from "./currency";
 import { subscribeTexts, textsVersion, translate } from "./texts";
 
 export type Lang = "ar" | "en";
@@ -51,7 +52,8 @@ export interface Fmt {
   name: (o: { name: string; name_en?: string } | undefined | null) => string;
 }
 
-export function makeFmt(lang: Lang): Fmt {
+/** `usd`: the dollar rate to show amounts in dollars (lib/currency.ts), or 0 for dinars. */
+export function makeFmt(lang: Lang, usd = 0): Fmt {
   // The manager may have rewritten this text (customize mode, lib/texts.ts).
   const tr: Tr = (ar, en) => translate(ar, en, lang);
   const nf = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
@@ -67,6 +69,12 @@ export function makeFmt(lang: Lang): Fmt {
     num: (n) => (n === undefined || n === null ? "-" : nf.format(n)),
     money: (n, opts) => {
       if (n === undefined || n === null) return "-";
+      if (usd > 0) {
+        // In dollars: the amount at today's rate, with cents ("$1,234.56").
+        const d = (Math.abs(n) / usd).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const sign = n < 0 ? "-" : opts?.sign && n > 0 ? "+" : "";
+        return opts?.bare ? `${sign}${d}` : `${sign}$${d}`;
+      }
       const v = nf.format(Math.abs(n));
       const sign = n < 0 ? "-" : opts?.sign && n > 0 ? "+" : "";
       if (opts?.bare) return `${sign}${v}`;
@@ -106,10 +114,11 @@ export function makeFmt(lang: Lang): Fmt {
 /** Everything a screen needs to show text, money and dates in the chosen language. */
 export function useFmt(): Fmt {
   const lang = useSyncExternalStore(subscribe, readLang, () => "ar" as Lang);
-  // A rewritten text draws the pages again.
+  // A rewritten text draws the pages again, and so does the dinar / dollar switch.
   const texts = useSyncExternalStore(subscribeTexts, textsVersion, () => 0);
+  const cur = useSyncExternalStore(subscribeCurrency, currencyVersion, () => 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => makeFmt(lang), [lang, texts]);
+  return useMemo(() => makeFmt(lang, usdDivisor()), [lang, texts, cur]);
 }
 
 /** Keeps <html lang dir> in sync when the language changes. */

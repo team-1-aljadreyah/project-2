@@ -68,6 +68,32 @@ export interface Warehouse {
   /** Where it is (the start of every delivery trip). */
   lat?: number;
   lng?: number;
+  /** How the goods are placed inside (set by the manager or its keeper). None = one zone per category. */
+  layout?: WarehouseLayout;
+}
+
+/** A zone of a warehouse: a rack or an area on the floor ("Z03 · زيوت"). */
+export interface WarehouseZone {
+  /** Short code on the shelf labels, like Z03. Never changes, even when the zone is renamed or moved. */
+  code: string;
+  name: string;
+}
+
+/** The inside of a warehouse: its zones in walking order, and the zone of every item. */
+export interface WarehouseLayout {
+  zones: WarehouseZone[];
+  /** Item id → zone code. An item not listed goes to the zone named like its category (or the first one). */
+  places: Record<string, string>;
+}
+
+/** A new warehouse, or the changes to one (the manager). */
+export interface WarehouseInput {
+  name: string;
+  name_en: string;
+  /** How many cartons it can hold. */
+  capacity: number;
+  lat?: number;
+  lng?: number;
 }
 
 export interface PriceTier {
@@ -277,6 +303,9 @@ export interface Delivery {
   rep?: Person;
   /** The 4-digit delivery PIN. Sent ONLY to the shop owner of this order; everyone else gets it hidden. */
   pin?: string;
+  /** The warehouse staff loaded it into the delivery rep's van (the step before he scans it and leaves). */
+  loaded_at?: string;
+  loaded_by?: Person;
   out_at?: string;
   out_by?: Person;
   delivered_at?: string;
@@ -613,32 +642,9 @@ export interface CommissionRow {
   closed: boolean;
 }
 
-export type AuditAction =
-  | "create"
-  | "update"
-  | "cancel"
-  | "reverse"
-  | "transfer"
-  | "price_change"
-  | "approve"
-  | "confirm"
-  | "close"
-  | "login";
+export type AuditAction = "create" | "update" | "cancel" | "reverse" | "transfer" | "price_change" | "approve" | "confirm" | "close" | "login";
 
-export type AuditEntity =
-  | "item"
-  | "batch"
-  | "receipt"
-  | "order"
-  | "invoice"
-  | "payment"
-  | "return"
-  | "transfer"
-  | "stocktake"
-  | "customer"
-  | "user"
-  | "commission"
-  | "settings";
+export type AuditEntity = "item" | "batch" | "receipt" | "order" | "invoice" | "payment" | "return" | "transfer" | "stocktake" | "customer" | "user" | "commission" | "settings";
 
 export interface AuditEntry {
   id: number;
@@ -651,7 +657,28 @@ export interface AuditEntry {
   summary_en: string;
 }
 
-export type NotificationType = "low_stock" | "near_expiry" | "expired" | "needs_approval" | "shop_order" | "order_confirmed" | "new_shop" | "account_approved" | "out_for_delivery" | "delivered" | "delivery_locked" | "support_message" | "support_reply" | "delivery_problem" | "commission_earned" | "usd_rate" | "order_accepted" | "order_rejected" | "order_review" | "refund" | "supply_order";
+export type NotificationType =
+  | "low_stock"
+  | "near_expiry"
+  | "expired"
+  | "needs_approval"
+  | "shop_order"
+  | "order_confirmed"
+  | "new_shop"
+  | "account_approved"
+  | "out_for_delivery"
+  | "delivered"
+  | "delivery_locked"
+  | "support_message"
+  | "support_reply"
+  | "delivery_problem"
+  | "commission_earned"
+  | "usd_rate"
+  | "order_accepted"
+  | "order_rejected"
+  | "order_review"
+  | "refund"
+  | "supply_order";
 
 export interface AppNotification {
   id: number;

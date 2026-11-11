@@ -1,7 +1,11 @@
 // Turns the stock data into the shape the warehouse map needs:
-// warehouses → zones (one per category) → cells (one per item), plus who is working today and the numbers of the bottom bar.
+// warehouses → zones (the warehouse's own layout, or one per category) → cells (one per item),
+// plus who is working today and the numbers of the bottom bar.
 import type { ShelfRow } from "@/lib/api";
 import type { Batch, Invoice, Item, Order, Warehouse } from "@/lib/api/types";
+import { layoutOf, zoneOfItem } from "@/lib/api/warehouse-layout";
+
+export { layoutOf, nextZoneCode, zoneOfItem } from "@/lib/api/warehouse-layout";
 import { dayOfIso, daysUntil, today } from "@/lib/utils";
 
 export type CellStatus = "ok" | "low" | "near" | "expired" | "empty";
@@ -67,15 +71,16 @@ export function buildMap({
   reps: { id: number; name: string }[];
 }): MapWarehouse[] {
   const active = items.filter((i) => i.active);
-  const categories = [...new Set(active.map((i) => i.category))];
   const shelfBy = new Map(shelf.map((r) => [r.item_id, r]));
   const open = orders.filter(isOpen);
   const repName = (id: number) => reps.find((r) => r.id === id)?.name ?? "";
 
   return warehouses.map((wh) => {
-    const zones: MapZone[] = categories.map((category, zi) => {
+    const layout = layoutOf(wh, items);
+    const zoneOf = new Map(active.map((i) => [i.id, zoneOfItem(layout, i)]));
+    const zones: MapZone[] = layout.zones.map((z, zi) => {
       const cells: MapCell[] = active
-        .filter((i) => i.category === category)
+        .filter((i) => zoneOf.get(i.id) === z.code)
         .map((item, ai) => {
           const rows = shelfBy.get(item.id)?.by_warehouse ?? [];
           const here = rows.find((w) => w.warehouse_id === wh.id);
@@ -87,9 +92,7 @@ export function buildMap({
 
           // Pieces that expire soon in this warehouse, and how many days the first of them has left.
           const nearBatches = batches.filter((b) => b.item_id === item.id && b.warehouse_id === wh.id && b.qty_left > 0 && b.status === "near_expiry");
-          const near = nearBatches.length
-            ? { pieces: nearBatches.reduce((s, b) => s + b.qty_left, 0), days: Math.min(...nearBatches.map((b) => daysUntil(b.expiry_date))) }
-            : undefined;
+          const near = nearBatches.length ? { pieces: nearBatches.reduce((s, b) => s + b.qty_left, 0), days: Math.min(...nearBatches.map((b) => daysUntil(b.expiry_date))) } : undefined;
 
           const waiting = open.filter((o) => o.warehouse_id === wh.id && o.lines.some((l) => l.item_id === item.id));
           const neededBy = [...new Set(waiting.map((o) => repName(o.rep_id)).filter(Boolean))];
@@ -103,7 +106,7 @@ export function buildMap({
 
           return {
             item,
-            code: `Z${pad(zi + 1)}-A${pad(ai + 1)}`,
+            code: `${z.code}-A${pad(ai + 1)}`,
             onShelf,
             sellable,
             reserved,
@@ -117,13 +120,14 @@ export function buildMap({
         });
       const cartons = cells.reduce((s, c) => s + c.onShelf / c.item.pieces_per_carton, 0);
       return {
-        code: `Z${pad(zi + 1)}`,
+        code: z.code,
         index: zi,
-        category,
+        // The zone's name (it was the category's name before warehouses could be arranged).
+        category: z.name,
         cells,
         cartons,
         // Each zone gets an equal share of the warehouse space.
-        fill: Math.min(1, cartons / (wh.capacity / categories.length)),
+        fill: Math.min(1, cartons / (wh.capacity / layout.zones.length)),
         alerts: cells.filter((c) => c.status === "low" || c.status === "near" || c.status === "expired").length,
         pending: cells.reduce((s, c) => s + c.pending, 0),
       };

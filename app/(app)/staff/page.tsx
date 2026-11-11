@@ -8,7 +8,7 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import { AlertTriangle, ArrowUpLeft, ArrowUpRight, ClipboardList, Headset, PackageCheck, Truck, Warehouse } from "lucide-react";
-import { DeliveryChip } from "@/components/delivery/status";
+import { DeliveryChip, LoadButton } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
 import { Button, Card, RefLink, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -112,7 +112,12 @@ export default function StaffHome() {
         <motion.div variants={rise}>
           <Card className="p-4">
             <h2 className="mb-1 font-bold">{tr("شحنات جاهزة لمندوبي التوصيل", "Shipments ready for the delivery reps")}</h2>
-            <p className="mb-3 text-xs text-muted">{tr("سلّم كل شحنة لمندوبها، وهو يمسح ملصقها عند الاستلام.", "Hand each shipment to its rep; he scans its label when he takes it.")}</p>
+            <p className="mb-3 text-xs text-muted">
+              {tr(
+                "حمّل كل شحنة في سيارة مندوبها واضغط «حمّلتها». يُبلَّغ المندوب، فيمسح ملصقها ويختار جولته.",
+                "Load each shipment into its rep's van and press “Loaded”. The rep is told, scans its label and picks his trip.",
+              )}
+            </p>
             {loading ? (
               <Skeleton className="h-32" />
             ) : !ready.length ? (
@@ -120,20 +125,21 @@ export default function StaffHome() {
             ) : (
               <ul className="space-y-2">
                 {ready.map((o) => (
-                  <li key={o.id}>
-                    <Link href={`/orders/${o.id}`} className="flex items-center gap-3 rounded-2xl border border-line p-3 hover:bg-card-2">
-                      <PackageCheck className="size-5 shrink-0 text-action" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold">{cust.get(o.customer_id)?.name}</span>
-                        <span className="block text-xs text-muted">
-                          <span className="num" dir="ltr">
-                            {o.number}
-                          </span>{" "}
-                          · {tr("مندوب التوصيل", "Delivery rep")}: <b>{o.delivery?.rep?.name ?? repName(o.rep_id)}</b>
-                        </span>
+                  <li key={o.id} className="box-row flex flex-wrap items-center gap-3 rounded-2xl border border-line p-3">
+                    <PackageCheck className="size-5 shrink-0 text-action" />
+                    <span className="min-w-0 flex-1">
+                      <Link href={`/orders/${o.id}`} className="box-link-main block truncate text-sm font-semibold">
+                        {cust.get(o.customer_id)?.name}
+                      </Link>
+                      <span className="block text-xs text-muted">
+                        <span className="num" dir="ltr">
+                          {o.number}
+                        </span>{" "}
+                        · {tr("مندوب التوصيل", "Delivery rep")}: <b>{o.delivery?.rep?.name ?? repName(o.rep_id)}</b>
                       </span>
-                      <DeliveryChip d={o.delivery!} tr={tr} />
-                    </Link>
+                    </span>
+                    <DeliveryChip d={o.delivery!} tr={tr} />
+                    <LoadButton order={o} role={user.role} onDone={orders.reload} />
                   </li>
                 ))}
               </ul>

@@ -93,9 +93,7 @@ export default function StockPage() {
     <>
       <PageHeader
         title={tr("المخزون", "Stock")}
-        subtitle={
-          user.role === "warehouse" || user.role === "staff" ? name(lookups.warehouses.find((w) => w.id === user.warehouse_id)) : tr("المخزنين: الصناعة والحر", "Both warehouses: Al-Sinaa and Al-Hur")
-        }
+        subtitle={user.role === "warehouse" || user.role === "staff" ? name(lookups.warehouses.find((w) => w.id === user.warehouse_id)) : lookups.warehouses.map((w) => name(w)).join(tr("، ", ", "))}
         actions={
           user.role !== "accountant" &&
           user.role !== "staff" && (

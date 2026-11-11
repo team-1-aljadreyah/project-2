@@ -5,7 +5,7 @@
 // and sends saved offline orders when the internet comes back.
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Bell, CloudOff, Volume2, VolumeX, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Wifi, WifiOff, X } from "lucide-react";
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
@@ -16,6 +16,7 @@ import { ShopSwitcher } from "@/components/shop-switcher";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
+import { setCurrency, setCurrencyContext, subscribeCurrency, currencyVersion, wantedCurrency } from "@/lib/currency";
 import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
@@ -35,6 +36,8 @@ interface AppData {
   items: Item[];
   itemById: Map<number, Item>;
   reloadItems: () => void;
+  /** Load the warehouses, tiers and settings again (after the manager changed one). */
+  reloadLookups: () => void;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -90,10 +93,17 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
       items: items.data,
       itemById: new Map(items.data.map((i) => [i.id, i])),
       reloadItems: items.reload,
+      reloadLookups: lookups.reload,
     };
-  }, [user, lookups.data, items.data, items.reload]);
+  }, [user, lookups.data, items.data, items.reload, lookups.reload]);
 
   const allowed = canOpen(user.role, path, user.rep_kinds);
+
+  // Amounts in dollars: only the manager and the accountant, at the day's rate.
+  const usdRate = lookups.data?.usd_rate?.rate ?? 0;
+  useEffect(() => {
+    setCurrencyContext({ rate: usdRate, allowed: user.role === "manager" || user.role === "accountant" });
+  }, [usdRate, user.role]);
 
   // Customize mode is the manager's only: it goes off if another job logs in on this tab.
   useEffect(() => {
@@ -104,7 +114,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
     <div className="min-h-dvh md:flex">
       <Sidebar user={user} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar user={user} warehouses={lookups.data?.warehouses ?? []} />
+        <TopBar user={user} warehouses={lookups.data?.warehouses ?? []} usdRate={usdRate} />
         <OfflineBar />
         {user.role === "manager" && <CustomizeBar />}
         <main className="mx-auto w-full max-w-7xl flex-1 px-3 pt-4 pb-28 sm:px-5 md:pb-10">
@@ -306,7 +316,8 @@ function BottomBar({ user }: { user: User }) {
   );
 }
 
-function TopBar({ user, warehouses }: { user: User; warehouses: Lookups["warehouses"] }) {
+// The top bar sits outside the pages' data (useApp), so it gets the dollar rate from the frame.
+function TopBar({ user, warehouses, usdRate }: { user: User; warehouses: Lookups["warehouses"]; usdRate: number }) {
   const { tr } = useFmt();
   const [menu, setMenu] = useState(false);
   return (
@@ -331,6 +342,7 @@ function TopBar({ user, warehouses }: { user: User; warehouses: Lookups["warehou
       <NetworkDot />
       {user.role === "manager" && <CustomizeToggle />}
       <Bell2 user={user} />
+      {(user.role === "manager" || user.role === "accountant") && <CurrencySwitch rate={usdRate} />}
       <LanguageSwitch />
       <ThemeToggle />
       <div className="relative">
@@ -499,5 +511,33 @@ function Bell2({ user }: { user: User }) {
         )}
       </Link>
     </>
+  );
+}
+
+/** Dinars ⇄ dollars, for the manager and the accountant: every amount on the site, at the day's rate. */
+function CurrencySwitch({ rate }: { rate: number }) {
+  const { tr, num } = useFmt();
+  useSyncExternalStore(subscribeCurrency, currencyVersion, () => 0);
+  const usd = wantedCurrency() === "USD";
+  return (
+    <button
+      type="button"
+      onClick={() => setCurrency(usd ? "IQD" : "USD")}
+      disabled={!rate}
+      aria-pressed={usd}
+      title={
+        rate
+          ? tr(`عرض المبالغ ${usd ? "بالدينار" : "بالدولار"} (1$ = ${num(rate)} د.ع)`, `Show amounts in ${usd ? "dinars" : "dollars"} ($1 = ${num(rate)} IQD)`)
+          : tr("ثبّت سعر الدولار أولاً", "Set the dollar rate first")
+      }
+      className={cn(
+        "inline-flex h-10 items-center gap-1 rounded-xl border px-2.5 text-sm font-bold transition disabled:opacity-40",
+        usd ? "border-success/40 bg-success-soft text-success" : "border-line bg-card text-muted hover:text-text",
+      )}
+    >
+      <span className={cn("num", !usd && "text-text")}>{tr("د.ع", "IQD")}</span>
+      <span className="text-faint">/</span>
+      <span className={cn("num", usd && "text-success")}>$</span>
+    </button>
   );
 }

@@ -3,7 +3,7 @@
 // Where a shipment is, the same on every page, and the delivery block of the order page.
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Check, KeyRound, Lock, PackageCheck, ShieldCheck, Truck, Warehouse } from "lucide-react";
+import { Check, Container, KeyRound, Lock, PackageCheck, ShieldCheck, Truck, Warehouse } from "lucide-react";
 import { Button, Card, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Delivery, Order, Role } from "@/lib/api/types";
@@ -16,11 +16,15 @@ import { PrintButton, ShipmentLabel } from "./qr";
 export function deliveryLabel(d: Delivery, tr: Tr) {
   if (d.locked) return tr("مقفلة: رموز خاطئة", "Locked: wrong PINs");
   if (d.problem && d.status === "out") return tr("تعذّر التسليم", "Couldn't deliver");
+  if (d.status === "ready" && d.loaded_at) return tr("محمّلة في السيارة", "Loaded in the van");
   return { ready: tr("جاهزة في المخزن", "Ready at the warehouse"), out: tr("في الطريق", "On the way"), delivered: tr("تم التسليم", "Delivered") }[d.status];
 }
 
 export function DeliveryChip({ d, tr }: { d: Delivery; tr: Tr }) {
-  const tone = d.locked || (d.problem && d.status === "out") ? "bg-danger-soft text-danger" : { ready: "bg-card-2 text-muted", out: "bg-warning-soft text-warning", delivered: "bg-success-soft text-success" }[d.status];
+  const tone =
+    d.locked || (d.problem && d.status === "out")
+      ? "bg-danger-soft text-danger"
+      : { ready: "bg-card-2 text-muted", out: "bg-warning-soft text-warning", delivered: "bg-success-soft text-success" }[d.status];
   return <span className={cn("inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold", tone)}>{deliveryLabel(d, tr)}</span>;
 }
 
@@ -35,7 +39,9 @@ export function PinCard({ pin, compact }: { pin: string; compact?: boolean }) {
       <p className="num mt-1 text-4xl font-bold tracking-[0.35em]" dir="ltr">
         {pin}
       </p>
-      <p className="mt-1 text-xs text-muted">{tr("أعطه لمندوب التوصيل فقط بعد أن تستلم البضاعة وتتأكد أنها سليمة وكاملة.", "Give it to the delivery rep only after you get the goods complete and in good shape.")}</p>
+      <p className="mt-1 text-xs text-muted">
+        {tr("أعطه لمندوب التوصيل فقط بعد أن تستلم البضاعة وتتأكد أنها سليمة وكاملة.", "Give it to the delivery rep only after you get the goods complete and in good shape.")}
+      </p>
     </div>
   );
 }
@@ -48,9 +54,25 @@ export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; 
   const photo = useLoad(() => (d.has_photo ? api.getDeliveryPhoto(order.id) : Promise.resolve(null)), [order.id, d.has_photo]);
   const [busy, setBusy] = useState(false);
   const steps = [
-    { on: true, icon: Warehouse, t: tr("جاهزة في المخزن", "Ready at the warehouse"), s: tr("طُبع ملصق QR للشحنة", "The QR label was printed") },
-    { on: d.status !== "ready", icon: Truck, t: tr("خرجت مع مندوب التوصيل", "Out with the delivery rep"), s: d.out_by ? `${d.out_by.name} · ${dateTime(d.out_at)} · ${tr("بمسح QR", "QR scanned")}` : tr("عند مسح QR في المخزن", "When the QR is scanned") },
-    { on: d.status === "delivered", icon: PackageCheck, t: tr("تم التسليم للمحل", "Delivered to the shop"), s: d.delivered_by ? `${d.delivered_by.name} · ${dateTime(d.delivered_at)}` : tr("برمز الاستلام وصورة الشحنة", "With the PIN and a photo") },
+    { on: true, icon: Warehouse, t: tr("جاهزة في المخزن", "Ready at the warehouse"), s: tr("فُحصت البضاعة وطُبع ملصق QR للشحنة", "The goods were checked and the QR label printed") },
+    {
+      on: !!d.loaded_at || d.status !== "ready",
+      icon: Container,
+      t: tr("حُمّلت في سيارة التوصيل", "Loaded in the delivery van"),
+      s: d.loaded_by ? `${d.loaded_by.name} · ${dateTime(d.loaded_at)}` : tr("يحمّلها موظف المخزن", "The warehouse staff load it"),
+    },
+    {
+      on: d.status !== "ready",
+      icon: Truck,
+      t: tr("خرجت مع مندوب التوصيل", "Out with the delivery rep"),
+      s: d.out_by ? `${d.out_by.name} · ${dateTime(d.out_at)} · ${tr("بمسح QR", "QR scanned")}` : tr("عند مسح QR في المخزن", "When the QR is scanned"),
+    },
+    {
+      on: d.status === "delivered",
+      icon: PackageCheck,
+      t: tr("تم التسليم للمحل", "Delivered to the shop"),
+      s: d.delivered_by ? `${d.delivered_by.name} · ${dateTime(d.delivered_at)}` : tr("برمز الاستلام وصورة الشحنة", "With the PIN and a photo"),
+    },
   ];
 
   return (
@@ -104,6 +126,8 @@ export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; 
         </div>
       )}
 
+      {d.status === "ready" && !d.loaded_at && <LoadButton order={order} role={role} className="mt-3 w-full" />}
+
       {/* The warehouse and the manager: the label to print and stick on the packages, until they leave */}
       {(role === "warehouse" || role === "manager") && d.status === "ready" && (
         <div className="mt-3 space-y-2">
@@ -145,5 +169,46 @@ export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; 
         <p className="mt-2 text-xs text-warning">{tr(`رموز خاطئة حتى الآن: ${d.pin_attempts} من 5`, `Wrong PINs so far: ${d.pin_attempts} of 5`)}</p>
       )}
     </Card>
+  );
+}
+
+/**
+ * "I loaded it": the warehouse staff (or its keeper, or the manager) put the checked shipment into the
+ * delivery rep's van. The rep is told, then scans its label and chooses his trip.
+ * Shown only while the shipment waits at the warehouse and only to those jobs.
+ */
+export function LoadButton({ order, role, className, onDone }: { order: Order; role: Role; className?: string; onDone?: () => void }) {
+  const { tr } = useFmt();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const d = order.delivery;
+  if (!d || d.status !== "ready" || !["staff", "warehouse", "manager"].includes(role)) return null;
+  if (d.loaded_at)
+    return (
+      <span className={cn("inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[11px] font-semibold text-success", className && "justify-center")}>
+        <Check className="size-3.5" /> {tr(`حمّلها ${d.loaded_by?.name ?? ""}`, `Loaded by ${d.loaded_by?.name ?? ""}`)}
+      </span>
+    );
+  return (
+    <Button
+      size="sm"
+      variant="action"
+      className={className}
+      loading={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await api.loadShipment(order.id);
+          toast("success", tr("سُجّل التحميل، وأُبلغ مندوب التوصيل", "Loaded. The delivery rep was told"));
+          onDone?.();
+        } catch (e) {
+          toast("danger", errorText(e, tr));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Container className="size-4" /> {tr("حمّلتها في السيارة", "Loaded in the van")}
+    </Button>
   );
 }
