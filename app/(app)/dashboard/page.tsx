@@ -1,8 +1,13 @@
 "use client";
 
+// The dashboard. In the manager's customize mode every card here can be dragged to a new place, hidden
+// with the eye, and its title changed by clicking it. The arrangement is saved for everyone who sees
+// the dashboard (see lib/site.ts).
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { AlertTriangle, Banknote, Boxes, ClipboardList, PackageX, ShieldAlert, TrendingUp, UserPlus, Wallet } from "lucide-react";
 import { RankBars, SalesBars } from "@/components/charts";
+import { EditText, SortArea, SortItem, toggleIn, useSaveSite } from "@/components/customize";
 import { useApp } from "@/components/shell";
 import { UsdRateCard } from "@/components/usd-rate";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
@@ -10,11 +15,14 @@ import { OrderStatusBadge } from "@/components/status";
 import { Button, Card, CardHeader, ErrorBox, LimitBar, Money, PageHeader, Skeleton, Stat } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
+import { ordered, useLabel, useSite } from "@/lib/site";
 import { useLoad } from "@/lib/use-load";
 import { today } from "@/lib/utils";
 
+type Piece = { id: string; el: ReactNode; wide?: boolean };
+
 export default function DashboardPage() {
-  const { tr, money, date, ago, name } = useFmt();
+  const { tr, money, date, ago, name, lang } = useFmt();
   const { user, lookups } = useApp();
   const wh = useWarehouseFilter();
   const d = useLoad(() => api.dashboard(wh), [wh]);
@@ -22,6 +30,9 @@ export default function DashboardPage() {
   const orders = useLoad(() => api.listOrders(), []);
   const daily = useLoad(() => api.dailySales(today(), wh), [wh]);
   const customers = useLoad(() => api.listCustomers(), []);
+  const site = useSite();
+  const lab = useLabel();
+  const save = useSaveSite();
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
   const hour = new Date().getHours();
   const hello = hour < 12 ? tr("صباح الخير", "Good morning") : hour < 17 ? tr("مساء الخير", "Good afternoon") : tr("مساء الخير", "Good evening");
@@ -30,61 +41,119 @@ export default function DashboardPage() {
   const x = d.data;
   const waiting = (orders.data ?? []).filter((o) => (o.status === "needs_approval" || o.status === "pending") && inWarehouse(wh, o.warehouse_id)).slice(0, 6);
 
-  return (
-    <>
-      <PageHeader title={`${hello}${tr("، ", ", ")}${user.name.split(" ")[0]}`} subtitle={date(new Date().toISOString())} actions={<Button href="/reports">{tr("كل التقارير", "All reports")}</Button>} />
+  // ----- customization: names, order, hidden -----
+  const dash = site.dashboard;
+  /** A title the manager can change by clicking it (customize mode). */
+  const T = (id: string, ar: string, en: string) => (
+    <EditText
+      value={lab(dash.labels[id], ar, en)}
+      onSave={(v) => save((s) => ({ ...s, dashboard: { ...s.dashboard, labels: { ...s.dashboard.labels, [id]: { ...s.dashboard.labels[id], [lang]: v } } } }))}
+    />
+  );
+  const inOrder = (list: Piece[]) => ordered(list, dash.order, (p) => p.id);
+  // The cards of one area take their new order; the other area's cards keep theirs after them.
+  const reorder = (ids: string[]) => save((s) => ({ ...s, dashboard: { ...s.dashboard, order: [...ids, ...s.dashboard.order.filter((id) => !ids.includes(id))] } }));
+  const hide = (id: string) => save((s) => ({ ...s, dashboard: { ...s.dashboard, hidden: toggleIn(s.dashboard.hidden, id) } }));
+  const area = (list: Piece[], className: string) => (
+    <SortArea ids={list.map((p) => p.id)} onOrder={reorder} grid>
+      <div className={className}>
+        {list.map((p) => (
+          <SortItem key={p.id} id={p.id} hidden={dash.hidden.includes(p.id)} onHide={() => hide(p.id)} className={p.wide ? "xl:col-span-2" : undefined}>
+            {p.el}
+          </SortItem>
+        ))}
+      </div>
+    </SortArea>
+  );
 
-      {(customers.data ?? []).some((c) => c.pending) && user.role === "manager" && (
-        <Link href="/customers" className="mb-4 flex items-center gap-3 rounded-xl border border-action/30 bg-action/10 p-3 text-text">
-          <UserPlus className="size-5 shrink-0 text-action" />
-          <span className="flex-1 text-sm font-medium">
-            {tr(`${(customers.data ?? []).filter((c) => c.pending).length} محل جديد سجّل من الموقع وينتظر موافقتك`, `${(customers.data ?? []).filter((c) => c.pending).length} new shop(s) signed up online and wait for your approval`)}
-          </span>
-          <span className="text-sm underline">{tr("مراجعة", "Review")}</span>
-        </Link>
-      )}
-
-      {x && x.needs_approval > 0 && user.role === "manager" && (
-        <Link href="/orders" className="mb-4 flex items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3 text-warning">
-          <ShieldAlert className="size-5 shrink-0" />
-          <span className="flex-1 text-sm font-medium">{tr(`${x.needs_approval} طلب يتجاوز سقف الدين وينتظر موافقتك`, `${x.needs_approval} order(s) over the debt limit wait for your approval`)}</span>
-          <span className="text-sm underline">{tr("عرض", "Show")}</span>
-        </Link>
-      )}
-
-      <UsdRateCard className="mb-4" />
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {x ? (
-          <>
-            <Stat label={tr("مبيعات اليوم", "Sales today")} value={<Money value={x.today_sales} />} hint={tr(`${x.today_invoices} فاتورة`, `${x.today_invoices} invoices`)} icon={<TrendingUp className="size-4" />} tone="primary" />
-            <Stat label={tr("المقبوض اليوم", "Collected today")} value={<Money value={x.today_collected} />} icon={<Banknote className="size-4" />} tone="success" href="/payments" />
-            <Stat label={tr("مجموع الديون", "Total debt")} value={<Money value={x.total_debt} />} hint={x.over_limit_customers ? tr(`${x.over_limit_customers} زبون فوق السقف`, `${x.over_limit_customers} over limit`) : undefined} icon={<Wallet className="size-4" />} tone="warning" href="/customers" />
-            {x.month_profit !== undefined ? (
-              <Stat label={tr("ربح الشهر", "Profit this month")} value={<Money value={x.month_profit} />} hint={`${tr("مبيعات", "Sales")} ${money(x.month_sales)}`} icon={<TrendingUp className="size-4" />} tone="success" href="/reports" />
+  const stats: Piece[] = x
+    ? inOrder([
+        {
+          id: "s_sales",
+          el: (
+            <Stat
+              label={T("s_sales", "مبيعات اليوم", "Sales today")}
+              value={<Money value={x.today_sales} />}
+              hint={tr(`${x.today_invoices} فاتورة`, `${x.today_invoices} invoices`)}
+              icon={<TrendingUp className="size-4" />}
+              tone="primary"
+            />
+          ),
+        },
+        {
+          id: "s_collected",
+          el: <Stat label={T("s_collected", "المقبوض اليوم", "Collected today")} value={<Money value={x.today_collected} />} icon={<Banknote className="size-4" />} tone="success" href="/payments" />,
+        },
+        {
+          id: "s_debt",
+          el: (
+            <Stat
+              label={T("s_debt", "مجموع الديون", "Total debt")}
+              value={<Money value={x.total_debt} />}
+              hint={x.over_limit_customers ? tr(`${x.over_limit_customers} زبون فوق السقف`, `${x.over_limit_customers} over limit`) : undefined}
+              icon={<Wallet className="size-4" />}
+              tone="warning"
+              href="/customers"
+            />
+          ),
+        },
+        {
+          id: "s_month",
+          el:
+            x.month_profit !== undefined ? (
+              <Stat
+                label={T("s_month", "ربح الشهر", "Profit this month")}
+                value={<Money value={x.month_profit} />}
+                hint={`${tr("مبيعات", "Sales")} ${money(x.month_sales)}`}
+                icon={<TrendingUp className="size-4" />}
+                tone="success"
+                href="/reports"
+              />
             ) : (
-              <Stat label={tr("مبيعات الشهر", "Sales this month")} value={<Money value={x.month_sales} />} />
-            )}
-          </>
-        ) : (
-          Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-28" />)
-        )}
-      </div>
+              <Stat label={T("s_month_sales", "مبيعات الشهر", "Sales this month")} value={<Money value={x.month_sales} />} />
+            ),
+        },
+        { id: "s_pending", el: <Stat label={T("s_pending", "طلبات بانتظار التثبيت", "Orders waiting")} value={x.pending_orders} icon={<ClipboardList className="size-4" />} href="/orders" /> },
+        {
+          id: "s_low",
+          el: (
+            <Stat label={T("s_low", "مواد تحت الحد الأدنى", "Items below minimum")} value={x.low_stock} tone={x.low_stock ? "danger" : undefined} icon={<Boxes className="size-4" />} href="/stock" />
+          ),
+        },
+        {
+          id: "s_near",
+          el: (
+            <Stat
+              label={T("s_near", "دفعات قريبة الانتهاء", "Batches expiring soon")}
+              value={x.near_expiry}
+              tone={x.near_expiry ? "warning" : undefined}
+              icon={<AlertTriangle className="size-4" />}
+              href="/stock"
+            />
+          ),
+        },
+        {
+          id: "s_expired",
+          el: (
+            <Stat
+              label={T("s_expired", "دفعات منتهية في المخزن", "Expired batches")}
+              value={x.expired_batches}
+              tone={x.expired_batches ? "danger" : undefined}
+              icon={<PackageX className="size-4" />}
+              href="/stock"
+            />
+          ),
+        },
+      ])
+    : [];
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {x && (
-          <>
-            <Stat label={tr("طلبات بانتظار التثبيت", "Orders waiting")} value={x.pending_orders} icon={<ClipboardList className="size-4" />} href="/orders" />
-            <Stat label={tr("مواد تحت الحد الأدنى", "Items below minimum")} value={x.low_stock} tone={x.low_stock ? "danger" : undefined} icon={<Boxes className="size-4" />} href="/stock" />
-            <Stat label={tr("دفعات قريبة الانتهاء", "Batches expiring soon")} value={x.near_expiry} tone={x.near_expiry ? "warning" : undefined} icon={<AlertTriangle className="size-4" />} href="/stock" />
-            <Stat label={tr("دفعات منتهية في المخزن", "Expired batches")} value={x.expired_batches} tone={x.expired_batches ? "danger" : undefined} icon={<PackageX className="size-4" />} href="/stock" />
-          </>
-        )}
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-        <Card>
-          <CardHeader title={tr("آخر 7 أيام", "Last 7 days")} subtitle={tr("المبيعات مقابل المقبوض", "Sales vs. money collected")} />
+  const cards: Piece[] = inOrder([
+    { id: "c_usd", wide: true, el: <UsdRateCard /> },
+    {
+      id: "c_last7",
+      el: (
+        <Card className="h-full">
+          <CardHeader title={T("c_last7", "آخر 7 أيام", "Last 7 days")} subtitle={tr("المبيعات مقابل المقبوض", "Sales vs. money collected")} />
           <div className="p-3">
             {x ? (
               <SalesBars
@@ -99,8 +168,13 @@ export default function DashboardPage() {
             )}
           </div>
         </Card>
-        <Card>
-          <CardHeader title={tr("مبيعات اليوم حسب المندوب", "Today by rep")} />
+      ),
+    },
+    {
+      id: "c_reps",
+      el: (
+        <Card className="h-full">
+          <CardHeader title={T("c_reps", "مبيعات اليوم حسب المندوب", "Today by rep")} />
           <div className="p-4">
             {daily.data && daily.data.by_rep.length ? (
               <RankBars rows={daily.data.by_rep.map((r) => ({ label: r.label, value: r.sales, sub: tr(`${r.invoices} فاتورة`, `${r.invoices} invoices`) }))} />
@@ -109,11 +183,20 @@ export default function DashboardPage() {
             )}
           </div>
         </Card>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader title={tr("أعلى الديون", "Highest debts")} action={<Button size="sm" variant="ghost" href="/customers">{tr("الكل", "All")}</Button>} />
+      ),
+    },
+    {
+      id: "c_debts",
+      el: (
+        <Card className="h-full">
+          <CardHeader
+            title={T("c_debts", "أعلى الديون", "Highest debts")}
+            action={
+              <Button size="sm" variant="ghost" href="/customers">
+                {tr("الكل", "All")}
+              </Button>
+            }
+          />
           <ul className="divide-y divide-line">
             {(debts.data ?? []).slice(0, 6).map((r) => (
               <li key={r.customer.id}>
@@ -131,8 +214,20 @@ export default function DashboardPage() {
             ))}
           </ul>
         </Card>
-        <Card>
-          <CardHeader title={tr("طلبات تنتظر", "Orders waiting")} action={<Button size="sm" variant="ghost" href="/orders">{tr("الكل", "All")}</Button>} />
+      ),
+    },
+    {
+      id: "c_waiting",
+      el: (
+        <Card className="h-full">
+          <CardHeader
+            title={T("c_waiting", "طلبات تنتظر", "Orders waiting")}
+            action={
+              <Button size="sm" variant="ghost" href="/orders">
+                {tr("الكل", "All")}
+              </Button>
+            }
+          />
           <ul className="divide-y divide-line">
             {waiting.map((o) => (
               <li key={o.id}>
@@ -153,7 +248,50 @@ export default function DashboardPage() {
             {!waiting.length && <li className="p-6 text-center text-sm text-muted">{tr("لا توجد طلبات معلقة", "Nothing waiting")}</li>}
           </ul>
         </Card>
-      </div>
+      ),
+    },
+  ]);
+
+  return (
+    <>
+      <PageHeader
+        title={`${hello}${tr("، ", ", ")}${user.name.split(" ")[0]}`}
+        subtitle={date(new Date().toISOString())}
+        actions={<Button href="/reports">{tr("كل التقارير", "All reports")}</Button>}
+      />
+
+      {(customers.data ?? []).some((c) => c.pending) && user.role === "manager" && (
+        <Link href="/customers" className="mb-4 flex items-center gap-3 rounded-xl border border-action/30 bg-action/10 p-3 text-text">
+          <UserPlus className="size-5 shrink-0 text-action" />
+          <span className="flex-1 text-sm font-medium">
+            {tr(
+              `${(customers.data ?? []).filter((c) => c.pending).length} محل جديد سجّل من الموقع وينتظر موافقتك`,
+              `${(customers.data ?? []).filter((c) => c.pending).length} new shop(s) signed up online and wait for your approval`,
+            )}
+          </span>
+          <span className="text-sm underline">{tr("مراجعة", "Review")}</span>
+        </Link>
+      )}
+
+      {x && x.needs_approval > 0 && user.role === "manager" && (
+        <Link href="/orders" className="mb-4 flex items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3 text-warning">
+          <ShieldAlert className="size-5 shrink-0" />
+          <span className="flex-1 text-sm font-medium">{tr(`${x.needs_approval} طلب يتجاوز سقف الدين وينتظر موافقتك`, `${x.needs_approval} order(s) over the debt limit wait for your approval`)}</span>
+          <span className="text-sm underline">{tr("عرض", "Show")}</span>
+        </Link>
+      )}
+
+      {x ? (
+        area(stats, "grid grid-cols-2 gap-3 lg:grid-cols-4")
+      ) : (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }, (_, i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4">{area(cards, "grid gap-4 xl:grid-cols-2")}</div>
     </>
   );
 }

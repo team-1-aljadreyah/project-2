@@ -94,6 +94,7 @@ import {
   sweep,
 } from "./mock/rules";
 import { makeSeed } from "./mock/seed";
+import { fullSite, ordered } from "./site-defaults";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const db0 = () => loadDb(() => makeSeed());
@@ -364,7 +365,7 @@ export const mockApi: Api = {
       warehouses: db.warehouses,
       tiers: db.tiers,
       reps: db.users.filter((u) => u.role === "rep").map((u) => ({ id: u.id, name: u.name, phone: u.phone, ...(u.rep_kinds?.length ? { kinds: u.rep_kinds } : {}) })),
-      categories: [...new Set(db.items.map((i) => i.category))],
+      categories: ordered([...new Set(db.items.map((i) => i.category))], db.custom?.categories ?? [], (c) => c),
       settings: db.settings,
       usd_rate: usdRateOn(db, dayOf(new Date())) ?? null,
     })),
@@ -442,6 +443,83 @@ export const mockApi: Api = {
       db.settings = s;
       audit(db, a, "update", "settings", 0, `تعديل الإعدادات: حجز ${s.reservation_hours} ساعة، تنبيه الصلاحية ${s.near_expiry_days} يوم`, `Settings: reservation ${s.reservation_hours}h, expiry alert ${s.near_expiry_days} days`, now);
       return s;
+    }),
+  site: async () => {
+    await wait(40);
+    return structuredClone(db0().custom ?? null);
+  },
+  saveSite: (s) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const next = fullSite(s);
+      const b = next.brand;
+      if (!b.name.trim() || !b.company.trim()) fail(422, "VALIDATION", "اسم الشركة مطلوب", "The company name is required", { name: msg("مطلوب", "Required") });
+      if (b.logo) {
+        if (!/^data:image\/(jpeg|png|webp);base64,/.test(b.logo)) fail(422, "VALIDATION", "الملف ليس صورة", "The file is not a picture");
+        if (b.logo.length > 400_000) fail(422, "VALIDATION", "الصورة كبيرة جداً", "The picture is too big");
+      }
+      const old = fullSite(db.custom);
+      db.custom = next;
+      // One line in the activity log for a change of identity or of names (not one for every drag).
+      const names = (x: typeof next) => JSON.stringify([x.nav.labels, x.nav.group_labels, x.dashboard.labels]);
+      if (JSON.stringify(old.brand) !== JSON.stringify(b)) audit(db, a, "update", "settings", 0, `تعديل هوية الموقع: ${b.name} (${b.company})`, `Site identity changed: ${b.name_en} (${b.company_en})`, now);
+      else if (names(old) !== names(next)) audit(db, a, "update", "settings", 0, "تعديل أسماء في القائمة أو لوحة التحكم", "Renamed menu or dashboard texts", now);
+      return next;
+    }),
+  renameWarehouse: (id, name, name_en) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      if (!name.trim()) fail(422, "VALIDATION", "الاسم مطلوب", "Name is required", { name: msg("مطلوب", "Required") });
+      const w = db.warehouses.find((x) => x.id === id) ?? notFound();
+      const was = w.name;
+      w.name = name.trim();
+      w.name_en = name_en.trim() || w.name_en;
+      audit(db, a, "update", "settings", w.id, `تغيير اسم المخزن «${was}» إلى «${w.name}»`, `Warehouse renamed to ${w.name_en}`, now);
+      return w;
+    }),
+  renameCategory: (from, to) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const name = to.trim();
+      if (!name) fail(422, "VALIDATION", "الاسم مطلوب", "Name is required", { name: msg("مطلوب", "Required") });
+      if (name === from) return;
+      if (db.items.some((i) => i.category === name)) fail(422, "VALIDATION", "يوجد صنف بهذا الاسم", "A category with this name exists", { name: msg("موجود", "Exists") });
+      const swap = (c: string) => (c === from ? name : c);
+      // Everywhere the name is kept: the items, the reps' allowed categories, the counts, the saved order.
+      for (const it of db.items) it.category = swap(it.category);
+      for (const u of db.users) if (u.rep_categories) u.rep_categories = u.rep_categories.map(swap);
+      for (const st of db.stocktakes) if (st.category) st.category = swap(st.category);
+      if (db.custom) db.custom.categories = db.custom.categories.map(swap);
+      audit(db, a, "update", "settings", 0, `تغيير اسم الصنف «${from}» إلى «${name}»`, `Category "${from}" renamed to "${name}"`, now);
+    }),
+  quickItem: (id, change) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const it = db.items.find((x) => x.id === id) ?? notFound();
+      if (change.name !== undefined) {
+        const n = change.name.trim();
+        if (!n) fail(422, "VALIDATION", "الاسم مطلوب", "Name is required");
+        if (db.items.some((x) => x.id !== id && x.name.trim() === n)) fail(422, "VALIDATION", "توجد مادة بنفس الاسم", "An item with this name exists");
+        it.name = n;
+      }
+      if (change.name_en !== undefined && change.name_en.trim()) it.name_en = change.name_en.trim();
+      if (change.name !== undefined || change.name_en !== undefined) audit(db, a, "update", "item", it.id, `تعديل اسم المادة ${it.name}`, `Renamed item ${it.name_en}`, now);
+      if (change.tier_id !== undefined && (change.carton_price !== undefined || change.piece_price !== undefined)) {
+        const p = it.prices.find((x) => x.tier_id === change.tier_id) ?? notFound();
+        const carton = change.carton_price ?? p.carton_price;
+        const piece = change.piece_price ?? p.piece_price;
+        if (!(carton > 0) || !(piece > 0)) fail(422, "VALIDATION", "السعر يجب أن يكون أكبر من صفر", "The price must be above zero");
+        if (carton !== p.carton_price || piece !== p.piece_price) {
+          // The old price is remembered, as in the full item form (an order written offline before now keeps it).
+          db.price_changes ??= [];
+          db.price_changes.push({ item_id: it.id, tier_id: p.tier_id, carton_price: p.carton_price, piece_price: p.piece_price, until: now.toISOString() });
+          p.carton_price = carton;
+          p.piece_price = piece;
+          const t = db.tiers.find((x) => x.id === p.tier_id)?.name;
+          audit(db, a, "price_change", "item", it.id, `تغيير سعر ${it.name} (${t}: ${carton.toLocaleString("en")}/${piece.toLocaleString("en")}). الفواتير القديمة لا تتغير`, `Price change for ${it.name_en}. Old invoices keep their prices`, now);
+        }
+      }
+      return itemView(db, it, a, now);
     }),
   saveTier: (id, name, name_en) =>
     write((db, a, now) => {

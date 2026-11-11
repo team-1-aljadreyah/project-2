@@ -12,6 +12,7 @@ import { Badge, Button, Card, DataTable, Dialog, Empty, ErrorBox, Field, Input, 
 import { api, ApiError } from "@/lib/api";
 import type { Item, NewSupplyOrder, SupplyOrder, SupplyStatus, Unit, Warehouse } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { useBrand } from "@/lib/site";
 import { useLoad } from "@/lib/use-load";
 import { downloadCsv, today } from "@/lib/utils";
 import { downloadXlsx, type Cell } from "@/lib/xlsx";
@@ -115,9 +116,9 @@ function SupplyBadge({ status }: { status: SupplyStatus }) {
 }
 
 /** The order as rows for the files: a header block, then the items table, then the total. */
-function fileRows(o: SupplyOrder, warehouse: Warehouse | undefined, items: Map<number, Item>, tr: (a: string, e: string) => string, date: (s: string) => string): { rows: Cell[][]; bold: number[] } {
+function fileRows(o: SupplyOrder, warehouse: Warehouse | undefined, items: Map<number, Item>, tr: (a: string, e: string) => string, date: (s: string) => string, company: string): { rows: Cell[][]; bold: number[] } {
   const head: Cell[][] = [
-    [tr("شركة النهرين للمواد الغذائية بالجملة", "Al-Nahrain Wholesale Foods")],
+    [company],
     [tr("طلب توريد", "Supply order"), o.number],
     [tr("المخزن", "Warehouse"), warehouse ? tr(warehouse.name, warehouse.name_en) : ""],
     [tr("المورّد", "Supplier"), o.supplier, o.supplier_phone ?? ""],
@@ -146,6 +147,7 @@ function fileRows(o: SupplyOrder, warehouse: Warehouse | undefined, items: Map<n
 
 function RowActions({ order, warehouse, onCancel }: { order: SupplyOrder; warehouse?: Warehouse; onCancel: () => void }) {
   const { tr, date } = useFmt();
+  const brand = useBrand();
   const { user, itemById } = useApp();
   const canReceive = (user.role === "warehouse" && user.warehouse_id === order.warehouse_id) || user.role === "manager";
   const canCancel = (user.role === "accountant" || user.role === "manager") && order.status === "sent";
@@ -155,7 +157,7 @@ function RowActions({ order, warehouse, onCancel }: { order: SupplyOrder; wareho
       <Button
         size="sm"
         onClick={() => {
-          const { rows, bold } = fileRows(order, warehouse, itemById, tr, date);
+          const { rows, bold } = fileRows(order, warehouse, itemById, tr, date, brand.company);
           downloadXlsx(order.number, rows, { rtl: true, bold, sheet: order.number, widths: [6, 30, 16, 10, 10, 14, 16, 10] });
         }}
         title={tr("نزّل الطلب ملف Excel", "Download as Excel")}
@@ -165,7 +167,7 @@ function RowActions({ order, warehouse, onCancel }: { order: SupplyOrder; wareho
       <Button
         size="sm"
         onClick={() => {
-          const { rows } = fileRows(order, warehouse, itemById, tr, date);
+          const { rows } = fileRows(order, warehouse, itemById, tr, date, brand.company);
           downloadCsv(order.number, rows.map((r) => r.map((c) => (c === null || c === undefined ? "" : c))));
         }}
         title={tr("نزّل الطلب ملف CSV", "Download as CSV")}

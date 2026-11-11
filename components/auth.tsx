@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import { ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck, Truck, WifiOff, type LucideIcon } from "lucide-react";
-import { LogoMark } from "@/components/logo";
+import { BrandName, LogoMark } from "@/components/logo";
 import { LanguageSwitch, ThemeToggle } from "@/components/switches";
 import { useFmt } from "@/lib/i18n";
 
@@ -33,7 +33,7 @@ export function BrandPanel({ variant }: { variant: "login" | "register" }) {
       <div className="relative flex items-center gap-3">
         <LogoMark size={48} />
         <div>
-          <p className="text-lg font-bold">{tr("شركة النهرين", "Al-Nahrain Co.")}</p>
+          <p className="text-lg font-bold"><BrandName company /></p>
           <p className="text-sm opacity-75">{tr("للمواد الغذائية بالجملة · كربلاء", "Wholesale foods · Karbala")}</p>
         </div>
       </div>

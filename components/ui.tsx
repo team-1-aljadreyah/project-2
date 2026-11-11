@@ -4,11 +4,14 @@
 // Keeping them in one place means every screen looks and behaves the same.
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
 import { useFmt } from "@/lib/i18n";
+import { useSite } from "@/lib/site";
 import { cn } from "@/lib/utils";
+import { pageTitle } from "./nav";
 
 // ---------- Button ----------
 
@@ -258,6 +261,10 @@ export function CardHeader({ title, action, subtitle }: { title: ReactNode; acti
 export function PageHeader({ title, subtitle, back, actions }: { title: ReactNode; subtitle?: ReactNode; back?: string; actions?: ReactNode }) {
   const { lang, tr } = useFmt();
   const BackIcon = lang === "ar" ? ArrowRight : ArrowLeft;
+  // A page the manager renamed in the menu shows its new name here too.
+  const path = usePathname();
+  const labels = useSite().nav.labels;
+  if (typeof title === "string") title = pageTitle(title, path, labels, lang);
   return (
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-2">

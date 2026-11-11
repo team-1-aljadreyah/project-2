@@ -1,18 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, Package, Plus } from "lucide-react";
+import { useRef, useState } from "react";
+import { AlertTriangle, ImagePlus, Package, Plus } from "lucide-react";
+import { EditText } from "@/components/customize";
 import { ItemForm } from "@/components/item-form";
 import { useApp } from "@/components/shell";
 import { useWarehouseFilter } from "@/components/warehouse-filter";
-import { Badge, Button, Card, DataTable, Empty, Money, PageHeader, SearchBox, Segmented, Select, type Column } from "@/components/ui";
-import type { Item } from "@/lib/api/types";
+import { Badge, Button, Card, DataTable, Empty, Money, PageHeader, SearchBox, Segmented, Select, errorText, useToast, type Column } from "@/components/ui";
+import { api } from "@/lib/api";
+import type { Item, ItemQuick } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { shrinkImage } from "@/lib/image";
+import { useCustomizing } from "@/lib/site";
 import { daysUntil, matches, priceOf } from "@/lib/utils";
 
 export default function ItemsPage() {
-  const { tr, name, qty, money } = useFmt();
-  const { user, items, lookups } = useApp();
+  const { tr, name, qty, money, lang } = useFmt();
+  const { user, items, lookups, reloadItems } = useApp();
+  const toast = useToast();
+  // Customize mode (manager): the name and the prices are changed in the list, and a photo column shows.
+  const editing = useCustomizing() && user.role === "manager";
+  const quick = (id: number, change: ItemQuick) =>
+    api
+      .quickItem(id, change)
+      .then(() => {
+        reloadItems();
+        toast("success", tr("تم الحفظ، ويظهر التغيير في كل الصفحات", "Saved. The change shows on every page"));
+      })
+      .catch((e) => toast("danger", errorText(e, tr)));
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [f, setF] = useState<"all" | "low" | "inactive">("all");
@@ -22,17 +37,34 @@ export default function ItemsPage() {
   // The stock shown: the chosen warehouse only (manager / accountant filter), or both.
   const stockOf = (i: Item) => (wh ? (i.stock.by_warehouse.find((w) => w.warehouse_id === wh)?.qty ?? 0) : i.stock.total);
   const low = (i: Item) => stockOf(i) < (wh ? i.min_stock / 2 : i.min_stock);
-  const rows = items.filter(
-    (i) => (f === "all" ? i.active : f === "low" ? i.active && low(i) : !i.active) && (!cat || i.category === cat) && matches(q, i.name, i.name_en, i.barcode, i.category),
-  );
+  const rows = items.filter((i) => (f === "all" ? i.active : f === "low" ? i.active && low(i) : !i.active) && (!cat || i.category === cat) && matches(q, i.name, i.name_en, i.barcode, i.category));
   const seesCost = user.role !== "rep";
 
   const columns: Column<Item>[] = [
-    { key: "n", head: tr("المادة", "Item"), cell: (i) => name(i) },
+    ...(editing ? [{ key: "ph", head: tr("الصورة", "Photo"), cell: (i: Item) => <PhotoCell item={i} onDone={reloadItems} /> }] : []),
+    { key: "n", head: tr("المادة", "Item"), cell: (i) => <EditText value={name(i)} onSave={(v) => quick(i.id, lang === "ar" ? { name: v } : { name_en: v })} /> },
     { key: "c", head: tr("الصنف", "Category"), cell: (i) => <span className="text-muted">{i.category}</span> },
     { key: "p", head: tr("بالكارتون", "Per carton"), cell: (i) => <span className="num">{i.pieces_per_carton}</span>, align: "center" },
-    { key: "pc", head: tr("سعر الكارتون", "Carton price"), cell: (i) => <Money value={priceOf(i, tier, "carton")} />, align: "end" },
-    { key: "pp", head: tr("سعر القطعة", "Piece price"), cell: (i) => <Money value={priceOf(i, tier, "piece")} />, align: "end" },
+    {
+      key: "pc",
+      head: tr("سعر الكارتون", "Carton price"),
+      cell: (i) => (
+        <EditText numeric value={priceOf(i, tier, "carton")} onSave={(v) => quick(i.id, { tier_id: tier, carton_price: Number(v) })}>
+          <Money value={priceOf(i, tier, "carton")} />
+        </EditText>
+      ),
+      align: "end",
+    },
+    {
+      key: "pp",
+      head: tr("سعر القطعة", "Piece price"),
+      cell: (i) => (
+        <EditText numeric value={priceOf(i, tier, "piece")} onSave={(v) => quick(i.id, { tier_id: tier, piece_price: Number(v) })}>
+          <Money value={priceOf(i, tier, "piece")} />
+        </EditText>
+      ),
+      align: "end",
+    },
     ...(seesCost ? [{ key: "cost", head: tr("متوسط الشراء/قطعة", "Avg cost/pc"), cell: (i: Item) => <Money value={i.avg_cost} className="text-muted" />, align: "end" as const }] : []),
     {
       key: "s",
@@ -58,7 +90,10 @@ export default function ItemsPage() {
     <>
       <PageHeader
         title={tr("المواد والأسعار", "Items and prices")}
-        subtitle={tr(`${items.filter((i) => i.active).length} مادة · الكمية المعروضة هي المتوفرة للبيع (بدون المنتهي والمحجوز)`, `${items.filter((i) => i.active).length} items · quantities are sellable stock (no expired, no held)`)}
+        subtitle={tr(
+          `${items.filter((i) => i.active).length} مادة · الكمية المعروضة هي المتوفرة للبيع (بدون المنتهي والمحجوز)`,
+          `${items.filter((i) => i.active).length} items · quantities are sellable stock (no expired, no held)`,
+        )}
         actions={
           user.role === "manager" && (
             <Button variant="primary" onClick={() => setAdd(true)}>
@@ -99,7 +134,7 @@ export default function ItemsPage() {
           rows={rows}
           columns={columns}
           rowKey={(i) => i.id}
-          onRowHref={user.role === "rep" ? undefined : (i) => `/items/${i.id}`}
+          onRowHref={user.role === "rep" || editing ? undefined : (i) => `/items/${i.id}`}
           mobile={(i) => (
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -111,7 +146,9 @@ export default function ItemsPage() {
               </div>
               <div className="text-end text-sm">
                 <p className="num font-semibold">{money(priceOf(i, tier, "carton"))}</p>
-                <p className="num text-xs text-muted">{money(priceOf(i, tier, "piece"))} / {tr("قطعة", "pc")}</p>
+                <p className="num text-xs text-muted">
+                  {money(priceOf(i, tier, "piece"))} / {tr("قطعة", "pc")}
+                </p>
                 {low(i) && <Badge tone="danger">{tr("قليل", "Low")}</Badge>}
               </div>
             </div>
@@ -120,6 +157,49 @@ export default function ItemsPage() {
         />
       </Card>
       {add && <ItemForm open onClose={() => setAdd(false)} />}
+    </>
+  );
+}
+
+/** Customize mode: the item's photo in the list. A click picks a new one. */
+function PhotoCell({ item, onDone }: { item: Item; onDone: () => void }) {
+  const { tr } = useFmt();
+  const toast = useToast();
+  const file = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => file.current?.click()}
+        aria-label={tr("تغيير الصورة", "Change the photo")}
+        className="flex size-10 items-center justify-center overflow-hidden rounded-lg bg-card-2 text-faint outline-1 outline-offset-2 outline-dashed outline-action/70 hover:bg-action/10"
+      >
+        {item.image ? (
+          // A data URL or the backend's link: a plain <img> (next/image needs known hosts).
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.image} alt="" className="size-full object-cover" />
+        ) : (
+          <ImagePlus className="size-4" />
+        )}
+      </button>
+      <input
+        ref={file}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          try {
+            await api.setItemImage(item.id, await shrinkImage(f));
+            onDone();
+            toast("success", tr("تم تغيير الصورة", "Photo changed"));
+          } catch (err) {
+            toast("danger", errorText(err, tr));
+          }
+        }}
+      />
     </>
   );
 }

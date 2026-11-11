@@ -172,7 +172,8 @@ export function ShopStore({ customer }: { customer: Customer }) {
   const price = (it: Item, unit: Unit) => priceOf(it, customer.tier_id, unit);
 
   const active = items.filter((i) => i.active);
-  const categories = useMemo(() => [...new Set(items.filter((i) => i.active).map((i) => i.category))], [items]);
+  // In the manager's order (lookups), only the categories that have something to sell.
+  const categories = useMemo(() => lookups.categories.filter((c) => items.some((i) => i.active && i.category === c)), [items, lookups.categories]);
   const catIndex = (c: string) => Math.max(0, categories.indexOf(c));
   const shown = active.filter((i) => (cat === "all" || i.category === cat) && matches(q, i.name, i.name_en, i.barcode));
   const pg = usePages(shown, 12);

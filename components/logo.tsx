@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useId } from "react";
 import { useFmt } from "@/lib/i18n";
+import { useBrand, useSite } from "@/lib/site";
+import { cn } from "@/lib/utils";
 
 /**
  * The Al-Nahrain mark.
@@ -10,10 +12,19 @@ import { useFmt } from "@/lib/i18n";
  * - Its dot is an orange sun.
  * - The two waves inside are the two rivers, Tigris and Euphrates ("Al-Nahrain" = "the two rivers").
  * Colors come from the design tokens, so the mark follows day/night mode.
+ *
+ * If the manager uploaded his own logo (customize mode), that picture shows instead.
+ * `logo`: a picture to show now (the preview while choosing), or null for the drawn mark.
  */
-export function LogoMark({ size = 36, className }: { size?: number; className?: string }) {
+export function LogoMark({ size = 36, className, logo }: { size?: number; className?: string; logo?: string | null }) {
   // Each logo on the page needs its own gradient id.
   const id = useId();
+  const saved = useSite().brand.logo;
+  const src = logo === undefined ? saved : logo;
+  if (src)
+    // A data URL: a plain <img> (next/image needs known hosts).
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={src} alt="" width={size} height={size} className={cn("shrink-0 object-cover", className)} style={{ borderRadius: size * 0.27 }} />;
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" className={className} aria-hidden>
       <defs>
@@ -38,13 +49,20 @@ export function LogoMark({ size = 36, className }: { size?: number; className?: 
 
 export function Logo({ small, href = "/" }: { small?: boolean; href?: string }) {
   const { tr } = useFmt();
+  const brand = useBrand();
   return (
     <Link href={href} className="flex min-w-0 items-center gap-2.5" aria-label={tr("الصفحة الرئيسية", "Home page")}>
       <LogoMark size={small ? 32 : 38} />
       <span className="min-w-0 leading-tight">
-        <span className="block truncate text-[17px] font-bold text-text">{tr("النهرين", "Al-Nahrain")}</span>
-        {!small && <span className="block truncate text-xs text-muted">{tr("للمواد الغذائية بالجملة", "Wholesale foods")}</span>}
+        <span className="block truncate text-[17px] font-bold text-text">{brand.name}</span>
+        {!small && <span className="block truncate text-xs text-muted">{brand.tagline}</span>}
       </span>
     </Link>
   );
+}
+
+/** The company's name as the manager set it: the short one, or the full one (`company`). */
+export function BrandName({ company }: { company?: boolean }) {
+  const brand = useBrand();
+  return <>{company ? brand.company : brand.name}</>;
 }

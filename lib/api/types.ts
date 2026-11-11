@@ -674,6 +674,54 @@ export interface Settings {
   auto_confirm_rep_orders: boolean;
 }
 
+/** A name in the two languages (only the ones the manager changed). */
+export interface Label {
+  ar?: string;
+  en?: string;
+}
+
+/** The company's identity, shown in the menu, the login page, the invoices and the files. */
+export interface Brand {
+  name: string;
+  name_en: string;
+  tagline: string;
+  tagline_en: string;
+  /** The full name printed on invoices. */
+  company: string;
+  company_en: string;
+  phone: string;
+  /** The logo picture (a small data URL). None = the drawn mark. */
+  logo?: string;
+}
+
+/** What the manager customized (see lib/site.ts). */
+export interface SiteCustom {
+  brand: Brand;
+  nav: {
+    /** Page addresses in the manager's order. */
+    order: string[];
+    /** Pages hidden from the manager's menu. */
+    hidden: string[];
+    /** Pages the manager moved to another group (address → group). */
+    groups: Record<string, string>;
+    /** New names for pages (for everyone). */
+    labels: Record<string, Label>;
+    group_labels: Record<string, Label>;
+  };
+  dashboard: { order: string[]; hidden: string[]; labels: Record<string, Label> };
+  /** The item categories in the manager's order. */
+  categories: string[];
+}
+
+/** A quick change to an item from the list (customize mode). */
+export interface ItemQuick {
+  name?: string;
+  name_en?: string;
+  tier_id?: number;
+  carton_price?: number;
+  piece_price?: number;
+}
+
 export interface Page<T> {
   items: T[];
   page: number;

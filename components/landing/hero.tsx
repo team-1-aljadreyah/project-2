@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRef } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Bell, PackageX, ShieldAlert, TrendingUp, Wallet } from "lucide-react";
-import { LogoMark } from "@/components/logo";
+import { BrandName, LogoMark } from "@/components/logo";
 import { useFmt } from "@/lib/i18n";
 import { Stars } from "./shared";
 
@@ -84,7 +84,7 @@ function DashboardMock() {
       <div className="flex items-center justify-between gap-3 border-b border-white/5 pb-3">
         <div className="flex items-center gap-2">
           <LogoMark size={28} />
-          <span className="text-sm font-bold">{tr("النهرين", "Al-Nahrain")}</span>
+          <span className="text-sm font-bold"><BrandName /></span>
         </div>
         <div className="hidden gap-1 rounded-full bg-white/5 p-1 text-xs sm:flex">
           {[tr("لوحة التحكم", "Dashboard"), tr("الطلبات", "Orders"), tr("المخزون", "Stock"), tr("الزبائن", "Customers")].map((t, i) => (
