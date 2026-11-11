@@ -4,9 +4,12 @@
 // a drawn map of Karbala's areas with the day's stops on a route, a bubble on the next stop,
 // and a card for the next shop (call, WhatsApp, "visited"). Plus the customer sheet (the design's product screen).
 import { useSyncExternalStore } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { Check, CheckCircle2, MessageCircle, Phone, ShoppingCart, Store, Wallet } from "lucide-react";
 import { Button, Dialog, LimitBar } from "@/components/ui";
+import { curve, shopPlace, warehousePlace } from "@/components/delivery/live-map";
+import { CityMap, type LatLng, type MapMarker } from "@/components/map3d/city-map";
+import { useApp } from "@/components/shell";
 import type { Customer } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn, today } from "@/lib/utils";
@@ -112,151 +115,41 @@ export function toggleVisit(userId: number, customerId: number) {
   window.dispatchEvent(new Event(EVENT));
 }
 
-// ---------- The drawn map ----------
-
-const W = 360;
-const H = 260;
-// Places on the map for the areas (spread out, away from the edges and the river).
-const SLOTS = [
-  [70, 60], [150, 45], [240, 55], [310, 85], [55, 135], [130, 120], [215, 125], [295, 160],
-  [80, 205], [160, 195], [240, 210], [315, 225],
-] as const;
-const DEPOT = { x: 185, y: 235 }; // the company's main warehouse, where the day starts
-
-function hash(s: string) {
-  let h = 0;
-  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return h;
-}
-
-/** Every area gets a fixed place on the map (the same every day), without two areas on the same place. */
-function areaPlaces(areas: string[]) {
-  const used = new Set<number>();
-  const out = new Map<string, { x: number; y: number }>();
-  for (const a of [...areas].sort()) {
-    let i = hash(a) % SLOTS.length;
-    while (used.has(i)) i = (i + 1) % SLOTS.length;
-    used.add(i);
-    out.set(a, { x: SLOTS[i][0], y: SLOTS[i][1] });
-  }
-  return out;
-}
-
-/** A soft, wavy route through the points (like the design's GPS line). */
-function wavy(points: { x: number; y: number }[]) {
-  if (!points.length) return "";
-  let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1];
-    const b = points[i];
-    const mx = (a.x + b.x) / 2;
-    const my = (a.y + b.y) / 2;
-    // Push the middle sideways a little, alternating, so the line bends like streets.
-    const k = i % 2 ? 14 : -14;
-    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-    d += ` Q ${mx + (-(b.y - a.y) / len) * k} ${my + ((b.x - a.x) / len) * k} ${b.x} ${b.y}`;
-  }
-  return d;
-}
+// ---------- The map of the day's route ----------
+// The same 3D city map as everywhere (components/map3d): the warehouse, the day's shops numbered in order,
+// the next one highlighted, the visited ones greyed, and the glowing route between them. Tap a shop to open it.
 
 export function RouteMap({ stops, visited, onPick }: { stops: Stop[]; visited: number[]; onPick: (c: Customer) => void }) {
-  const { tr } = useFmt();
-  const still = useReducedMotion();
-  const places = areaPlaces([...new Set(stops.map((s) => s.customer.area))]);
-  // Shops in the same area sit around the area's point, not on top of each other.
-  const seen = new Map<string, number>();
-  const pts = stops.map((s) => {
-    const p = places.get(s.customer.area)!;
-    const n = seen.get(s.customer.area) ?? 0;
-    seen.set(s.customer.area, n + 1);
-    return { x: p.x + (n % 2 ? 16 : -10) * Math.min(n, 1) + n * 4, y: p.y + n * 12 };
-  });
-  const nextIdx = stops.findIndex((s) => !visited.includes(s.customer.id));
-  const route = wavy([DEPOT, ...pts]);
-  // The van stands at the last visited shop (or at the warehouse before the first visit).
-  const lastDone = [...stops.keys()].filter((i) => visited.includes(stops[i].customer.id)).pop();
-  // Before the first visit it waits next to the warehouse (not on top of it).
-  const van = lastDone === undefined ? { x: DEPOT.x + 30, y: DEPOT.y + 14 } : pts[lastDone];
-
+  const { tr, num } = useFmt();
+  const { lookups } = useApp();
+  const start = warehousePlace(lookups.warehouses[0]);
+  const places = stops.map((s) => ({ s, p: shopPlace(s.customer) })).filter((x) => x.p) as { s: Stop; p: LatLng }[];
+  const nextIdx = places.findIndex((x) => !visited.includes(x.s.customer.id));
+  const markers: MapMarker[] = [
+    ...(start ? [{ id: "wh", kind: "warehouse" as const, ...start, label: tr("المخزن", "Warehouse") }] : []),
+    ...places.map((x, i) => ({
+      id: `s${x.s.customer.id}`,
+      kind: "shop" as const,
+      ...x.p,
+      index: i + 1,
+      label: x.s.customer.name,
+      active: i === nextIdx,
+      done: visited.includes(x.s.customer.id),
+      onClick: () => onPick(x.s.customer),
+    })),
+  ];
+  const pts = [...(start ? [start] : []), ...places.map((x) => x.p)];
+  const route = pts.slice(1).flatMap((p, i) => curve(pts[i], p, 16).slice(i ? 1 : 0));
+  const done = places.length ? places.filter((x) => visited.includes(x.s.customer.id)).length / places.length : 0;
+  if (!places.length) return <p className="py-10 text-center text-sm text-muted">{tr("لا توجد محلات بموقع على الخريطة اليوم", "No shops with a map location today")}</p>;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={tr("خريطة جولة اليوم", "Today's route map")} style={{ direction: "ltr" }}>
-      <rect width={W} height={H} rx="20" className="fill-[var(--iso-ground)]" />
-      {/* The city: a river, two parks and some streets (drawn, not a real map) */}
-      <path d="M -10 150 C 60 120, 110 175, 175 150 S 290 95, 370 120" fill="none" className="stroke-[var(--iso-glass)]" strokeWidth="16" strokeLinecap="round" opacity="0.7" />
-      <ellipse cx="45" cy="225" rx="40" ry="22" className="fill-[var(--iso-tree)]" opacity="0.35" />
-      <ellipse cx="300" cy="30" rx="45" ry="20" className="fill-[var(--iso-tree)]" opacity="0.35" />
-      {[40, 100, 190, 270, 330].map((x) => (
-        <line key={`v${x}`} x1={x} y1="0" x2={x + 20} y2={H} className="stroke-[var(--iso-road)]" strokeWidth="6" />
-      ))}
-      {[30, 95, 185, 245].map((y) => (
-        <line key={`h${y}`} x1="0" y1={y} x2={W} y2={y - 12} className="stroke-[var(--iso-road)]" strokeWidth="6" />
-      ))}
-
-      {/* The route: grey for all of it, orange for the part already done */}
-      <path d={route} fill="none" className="stroke-[var(--line-strong)]" strokeWidth="3" strokeDasharray="2 6" strokeLinecap="round" />
-      {lastDone !== undefined && (
-        <path d={wavy([DEPOT, ...pts.slice(0, lastDone + 1)])} fill="none" className="stroke-action" strokeWidth="3.5" strokeLinecap="round" />
-      )}
-
-      {/* The warehouse */}
-      <g transform={`translate(${DEPOT.x} ${DEPOT.y})`}>
-        <rect x="-11" y="-11" width="22" height="22" rx="6" className="fill-primary" />
-        <path d="M -6 3 V -2 L 0 -6 L 6 -2 V 3 Z" className="fill-[var(--on-primary)]" />
-      </g>
-
-      {/* The stops */}
-      {stops.map((s, i) => {
-        const p = pts[i];
-        const done = visited.includes(s.customer.id);
-        const next = i === nextIdx;
-        return (
-          <g key={s.customer.id} transform={`translate(${p.x} ${p.y})`} onClick={() => onPick(s.customer)} className="cursor-pointer">
-            <title>{s.customer.name}</title>
-            {next && !still && (
-              <circle r="14" className="fill-action" opacity="0.25">
-                <animate attributeName="r" values="11;20;11" dur="1.8s" repeatCount="indefinite" />
-              </circle>
-            )}
-            <circle r="10" className={done ? "fill-success" : next ? "fill-action" : "fill-[var(--card)] stroke-[var(--line-strong)]"} strokeWidth="2" />
-            {done ? (
-              <path d="M -4 0 L -1 3 L 4 -3" fill="none" className="stroke-white" strokeWidth="2" strokeLinecap="round" />
-            ) : (
-              <text y="4" textAnchor="middle" className={cn("text-[10px] font-bold", next ? "fill-[var(--on-action)]" : "fill-text")}>
-                {i + 1}
-              </text>
-            )}
-          </g>
-        );
-      })}
-
-      {/* The van */}
-      <motion.g initial={false} animate={{ x: van.x, y: van.y - 18 }} transition={{ type: "spring", stiffness: 120, damping: 16 }}>
-        <rect x="-10" y="-7" width="20" height="13" rx="4" className="fill-primary stroke-[var(--iso-ground)]" strokeWidth="2" />
-        <circle cx="-5" cy="7" r="2.5" className="fill-primary" />
-        <circle cx="5" cy="7" r="2.5" className="fill-primary" />
-      </motion.g>
-
-      {/* The bubble on the next stop, like the design's "10 min" bubble */}
-      {nextIdx >= 0 && (
-        <g transform={`translate(${Math.min(W - 75, Math.max(75, pts[nextIdx].x))} ${Math.max(26, pts[nextIdx].y - 30)})`} className="pointer-events-none">
-          <rect x="-70" y="-17" width="140" height="26" rx="13" className="fill-[var(--card)] stroke-[var(--line)]" />
-          <circle cx="-56" cy="-4" r="9" className="fill-action" />
-          <text x="-56" y="-0.5" textAnchor="middle" className="fill-[var(--on-action)] text-[10px] font-bold">
-            {nextIdx + 1}
-          </text>
-          <text x="-42" y="0" className="fill-text text-[11px] font-bold">
-            {(() => {
-              const n = stops[nextIdx].customer.name;
-              return n.length > 16 ? n.slice(0, 15) + "…" : n;
-            })()}
-          </text>
-        </g>
-      )}
-    </svg>
+    <CityMap markers={markers} route={route} routeDone={done} className="h-80">
+      <span className="pointer-events-none absolute start-3 top-3 z-10 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
+        {tr(`${num(places.length)} محلات اليوم`, `${num(places.length)} shops today`)}
+      </span>
+    </CityMap>
   );
 }
-
-// ---------- The next-stop card (the design's courier card) ----------
 
 export function NextStopCard({ stop, index, total, done, userId, onOpen }: { stop?: Stop; index: number; total: number; done: number; userId: number; onOpen: (c: Customer) => void }) {
   const { tr, money } = useFmt();
