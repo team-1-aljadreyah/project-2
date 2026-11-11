@@ -62,7 +62,7 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
       {customer?.pending && (
         <div className="mb-4">
           <Notice tone="warning" title={tr("هذا المحل سجّل من الموقع وينتظر موافقتك", "This shop signed up online and waits for your approval")}>
-            {tr("تأكد من المعلومات، واختر نوع السعر ومندوب التوصيل وسقف الدين، ثم اضغط موافقة. سيصل إشعار إلى صاحب المحل ويستطيع الطلب مباشرة.", "Check the details, choose the price tier, delivery rep and debt limit, then approve. The owner gets a notification and can order at once.")}
+            {tr("تأكد من المعلومات، واختر نوع السعر والمندوب وسقف الدين، ثم اضغط موافقة. سيصل إشعار إلى صاحب المحل ويستطيع الطلب مباشرة.", "Check the details, choose the price tier, delivery rep and debt limit, then approve. The owner gets a notification and can order at once.")}
           </Notice>
         </div>
       )}
@@ -91,7 +91,7 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
             ))}
           </Select>
         </Field>
-        <Field label={tr("مندوب التوصيل", "Delivery")}>
+        <Field label={tr("المندوب", "Rep")}>
           <Select value={f.rep_id} onChange={(e) => set({ rep_id: Number(e.target.value) })}>
             {lookups.reps.map((r) => (
               <option key={r.id} value={r.id}>

@@ -84,7 +84,7 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
         <Field label={tr("الحد الأدنى (بالقطعة)", "Minimum stock (pieces)")} error={err.min_stock} hint={tr("إذا نزل المخزون عنه يصلك إشعار", "You get a notification below this")}>
           <NumberInput value={f.min_stock} onChange={(v) => set({ min_stock: v === "" ? 0 : v })} />
         </Field>
-        <Field label={tr("عمولة مندوب التوصيل %", "Delivery rep commission %")} error={err.commission_percent} hint={tr("على المبلغ المدفوع فعلاً", "On money actually paid")}>
+        <Field label={tr("عمولة المندوب %", "Rep commission %")} error={err.commission_percent} hint={tr("على المبلغ المدفوع فعلاً", "On money actually paid")}>
           <Input type="number" step="0.5" min={0} max={50} dir="ltr" value={f.commission_percent} onChange={(e) => set({ commission_percent: Number(e.target.value) })} />
         </Field>
         <div className="flex items-end">

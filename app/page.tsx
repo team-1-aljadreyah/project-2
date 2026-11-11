@@ -20,7 +20,7 @@ export default function LandingPage() {
   const { tr, lang } = useFmt();
   const session = useSession();
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
-  const enter = session ? homeOf(session.user.role) : "/login";
+  const enter = session ? homeOf(session.user.role, session.user.rep_kinds) : "/login";
   const enterLabel = session ? tr("ادخل إلى حسابك", "Go to my account") : tr("تسجيل الدخول", "Log in");
 
   // The page is dark, like the reference design. The rest of the site keeps the user's day/night choice,

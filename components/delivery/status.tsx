@@ -10,15 +10,17 @@ import type { Delivery, Order, Role } from "@/lib/api/types";
 import { useFmt, type Tr } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
+import { ProblemNote } from "./problem";
 import { PrintButton, ShipmentLabel } from "./qr";
 
 export function deliveryLabel(d: Delivery, tr: Tr) {
   if (d.locked) return tr("مقفلة: رموز خاطئة", "Locked: wrong PINs");
+  if (d.problem && d.status === "out") return tr("تعذّر التسليم", "Couldn't deliver");
   return { ready: tr("جاهزة في المخزن", "Ready at the warehouse"), out: tr("في الطريق", "On the way"), delivered: tr("تم التسليم", "Delivered") }[d.status];
 }
 
 export function DeliveryChip({ d, tr }: { d: Delivery; tr: Tr }) {
-  const tone = d.locked ? "bg-danger-soft text-danger" : { ready: "bg-card-2 text-muted", out: "bg-warning-soft text-warning", delivered: "bg-success-soft text-success" }[d.status];
+  const tone = d.locked || (d.problem && d.status === "out") ? "bg-danger-soft text-danger" : { ready: "bg-card-2 text-muted", out: "bg-warning-soft text-warning", delivered: "bg-success-soft text-success" }[d.status];
   return <span className={cn("inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold", tone)}>{deliveryLabel(d, tr)}</span>;
 }
 
@@ -92,6 +94,8 @@ export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; 
           )}
         </div>
       )}
+
+      <ProblemNote order={order} role={role} className="mt-3" />
 
       {/* The shop owner: his PIN, while the goods are on the way */}
       {role === "shop" && d.pin && d.status !== "delivered" && (

@@ -29,7 +29,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import type { Role } from "@/lib/api/types";
+import { repDoes, type RepKind, type Role } from "@/lib/api/types";
 
 export interface NavItem {
   href: string;
@@ -40,6 +40,8 @@ export interface NavItem {
   group: "main" | "sales" | "money" | "stock" | "admin";
   /** Shown in the bottom bar on phones. */
   mobile?: Role[];
+  /** For reps: only the reps who do this (marketing or delivery). Other roles aren't affected. */
+  kind?: RepKind;
 }
 
 export const NAV: NavItem[] = [
@@ -50,17 +52,17 @@ export const NAV: NavItem[] = [
   { href: "/accounts", ar: "ملف الحساب", en: "Account file", icon: Contact, roles: ["accountant"], group: "main", mobile: ["accountant"] },
   { href: "/hall", ar: "قاعة التجهيز", en: "Picking hall", icon: Warehouse, roles: ["warehouse"], group: "main", mobile: ["warehouse"] },
   { href: "/map", ar: "خريطة المخازن", en: "Warehouse map", icon: MapIcon, roles: ["manager", "warehouse", "accountant", "staff"], group: "main" },
-  { href: "/rep", ar: "الرئيسية", en: "Home", icon: Home, roles: ["rep"], group: "main", mobile: ["rep"] },
+  { href: "/rep", ar: "الرئيسية", en: "Home", icon: Home, roles: ["rep"], group: "main", mobile: ["rep"], kind: "sales" },
   { href: "/shop", ar: "اطلب الآن", en: "Order now", icon: Store, roles: ["shop"], group: "main", mobile: ["shop"] },
-  { href: "/orders/new", ar: "طلب جديد", en: "New order", icon: ShoppingCart, roles: ["rep", "manager"], group: "sales", mobile: ["rep"] },
+  { href: "/orders/new", ar: "طلب جديد", en: "New order", icon: ShoppingCart, roles: ["rep", "manager"], group: "sales", mobile: ["rep"], kind: "sales" },
   { href: "/orders", ar: "الطلبات", en: "Orders", icon: ClipboardList, roles: ["manager", "warehouse", "rep", "accountant", "shop", "staff"], group: "sales", mobile: ["manager", "warehouse", "accountant", "shop", "staff"] },
   { href: "/invoices", ar: "الفواتير", en: "Invoices", icon: ReceiptText, roles: ["manager", "accountant", "rep", "shop"], group: "sales" },
   { href: "/returns", ar: "المرتجعات", en: "Returns", icon: Undo2, roles: ["manager", "accountant", "rep", "warehouse"], group: "sales" },
-  { href: "/deliveries", ar: "التوصيل", en: "Deliveries", icon: PackageCheck, roles: ["rep", "manager", "warehouse", "accountant", "staff"], group: "sales", mobile: ["rep", "staff"] },
-  { href: "/customers", ar: "الزبائن والديون", en: "Customers", icon: Users, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["accountant"] },
+  { href: "/deliveries", ar: "التوصيل", en: "Deliveries", icon: PackageCheck, roles: ["rep", "manager", "warehouse", "accountant", "staff"], group: "sales", mobile: ["rep", "staff"], kind: "delivery" },
+  { href: "/customers", ar: "الزبائن والديون", en: "Customers", icon: Users, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["accountant"], kind: "sales" },
   { href: "/statement", ar: "كشف حسابي", en: "My statement", icon: FileText, roles: ["shop"], group: "money", mobile: ["shop"] },
   { href: "/payments", ar: "التسديدات", en: "Payments", icon: Wallet, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["rep", "manager", "accountant"] },
-  { href: "/commissions", ar: "العمولات", en: "Commission", icon: Percent, roles: ["manager", "accountant", "rep"], group: "money" },
+  { href: "/commissions", ar: "العمولات", en: "Commission", icon: Percent, roles: ["manager", "accountant", "rep"], group: "money", kind: "sales" },
   { href: "/stock", ar: "المخزون", en: "Stock", icon: Boxes, roles: ["manager", "warehouse", "accountant", "staff"], group: "stock", mobile: ["warehouse"] },
   { href: "/items", ar: "المواد والأسعار", en: "Items & prices", icon: Package, roles: ["manager", "warehouse", "accountant", "rep", "staff"], group: "stock" },
   { href: "/receipts", ar: "استلام البضاعة", en: "Receiving", icon: PackagePlus, roles: ["manager", "warehouse"], group: "stock", mobile: ["warehouse"] },
@@ -88,11 +90,17 @@ const EXTRA: { prefix: string; roles: Role[] }[] = [
   { prefix: "/returns/", roles: ["manager", "accountant", "rep", "warehouse", "shop"] },
 ];
 
-/** Can this role open this path? The most specific rule wins. */
-export function canOpen(role: Role, path: string) {
-  const rules = [...EXTRA.map((e) => ({ prefix: e.prefix, roles: e.roles })), ...NAV.map((n) => ({ prefix: n.href, roles: n.roles }))]
+/** Is this menu item for this user? (role, and for reps: marketing / delivery) */
+export function navFor(n: Pick<NavItem, "roles" | "kind">, user: { role: Role; rep_kinds?: RepKind[] }) {
+  if (!n.roles.includes(user.role)) return false;
+  return !(n.kind && user.role === "rep") || repDoes(user, n.kind);
+}
+
+/** Can this user open this path? The most specific rule wins. */
+export function canOpen(role: Role, path: string, kinds?: RepKind[]) {
+  const rules = [...EXTRA.map((e) => ({ prefix: e.prefix, roles: e.roles, kind: undefined })), ...NAV.map((n) => ({ prefix: n.href, roles: n.roles, kind: n.kind }))]
     .filter((r) => path === r.prefix || path.startsWith(r.prefix.endsWith("/") ? r.prefix : r.prefix + "/"))
     .sort((a, b) => b.prefix.length - a.prefix.length);
   if (!rules.length) return true;
-  return rules[0].roles.includes(role);
+  return navFor(rules[0], { role, rep_kinds: kinds });
 }

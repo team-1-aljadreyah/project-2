@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 import { RankBars } from "@/components/charts";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
 import { Button, Card, CardHeader, DataTable, Empty, Input, LimitBar, LoadingRows, Money, PageHeader, Segmented, Stat, type Column } from "@/components/ui";
 import { api, type SalesGroup } from "@/lib/api";
@@ -47,7 +48,8 @@ export default function ReportsPage() {
 function Daily() {
   const { tr, name } = useFmt();
   const [date, setDate] = useState(today());
-  const d = useLoad(() => api.dailySales(date), [date]);
+  const wh = useWarehouseFilter();
+  const d = useLoad(() => api.dailySales(date, wh), [date, wh]);
   const x = d.data;
   return (
     <div className="space-y-4">
@@ -69,7 +71,7 @@ function Daily() {
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardHeader title={tr("حسب مندوب التوصيل", "By delivery rep")} />
+              <CardHeader title={tr("حسب المندوب", "By rep")} />
               <div className="p-4">{x.by_rep.length ? <RankBars rows={x.by_rep.map((r) => ({ label: r.label, value: r.sales, sub: tr(`${r.invoices} فاتورة`, `${r.invoices} invoices`) }))} /> : <Empty title={tr("لا مبيعات", "No sales")} />}</div>
             </Card>
             <Card>
@@ -89,7 +91,8 @@ function Sales() {
   const [group, setGroup] = useState<SalesGroup>("item");
   const [from, setFrom] = useState(today(-29));
   const [to, setTo] = useState(today());
-  const rows = useLoad(() => api.salesReport(group, from, to), [group, from, to]);
+  const wh = useWarehouseFilter();
+  const rows = useLoad(() => api.salesReport(group, from, to, wh), [group, from, to, wh]);
   const showProfit = user.role === "manager" || user.role === "accountant";
   const data = rows.data ?? [];
   const sum = (k: "sales" | "returns" | "profit" | "invoices") => data.reduce((s, r) => s + (r[k] ?? 0), 0);
@@ -114,7 +117,7 @@ function Sales() {
           onChange={setGroup}
           options={[
             { value: "item", label: tr("حسب المادة", "By item") },
-            { value: "rep", label: tr("حسب مندوب التوصيل", "By delivery rep") },
+            { value: "rep", label: tr("حسب المندوب", "By rep") },
             { value: "warehouse", label: tr("حسب المخزن", "By warehouse") },
             { value: "customer", label: tr("حسب الزبون", "By customer") },
           ]}
@@ -195,6 +198,7 @@ function Expiry() {
   const { tr, name, qty } = useFmt();
   const { lookups, itemById } = useApp();
   const [days, setDays] = useState(lookups.settings.near_expiry_days);
+  const whE = useWarehouseFilter();
   const rows = useLoad(() => api.nearExpiry(days), [days]);
   return (
     <Card>
@@ -212,7 +216,7 @@ function Expiry() {
         <LoadingRows rows={3} />
       ) : (
         <DataTable
-          rows={rows.data ?? []}
+          rows={(rows.data ?? []).filter((r) => inWarehouse(whE, r.batch.warehouse_id))}
           rowKey={(r) => r.batch.id}
           onRowHref={(r) => `/items/${r.batch.item_id}`}
           columns={[
@@ -247,7 +251,7 @@ function Debts() {
           onRowHref={(r) => `/customers/${r.customer.id}`}
           columns={[
             { key: "n", head: tr("الزبون", "Customer"), cell: (r) => r.customer.name },
-            { key: "r", head: tr("مندوب التوصيل", "Delivery"), cell: (r) => lookups.reps.find((x) => x.id === r.customer.rep_id)?.name },
+            { key: "r", head: tr("المندوب", "Rep"), cell: (r) => lookups.reps.find((x) => x.id === r.customer.rep_id)?.name },
             { key: "o", head: tr("فواتير مفتوحة", "Open invoices"), cell: (r) => <span className="num">{r.open_invoices}</span>, align: "center" },
             { key: "a", head: tr("أقدم فاتورة", "Oldest"), cell: (r) => (r.oldest_open ? ago(r.oldest_open) : "-") },
             {

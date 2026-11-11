@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, ArrowRight, Boxes, Calculator, Headset, Eye, EyeOff, Info, LayoutDashboard, Loader2, Lock, Phone, Store, Truck, UserPlus, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ArrowRight, Boxes, Calculator, Headset, Eye, EyeOff, Info, LayoutDashboard, Loader2, Lock, Phone, Store, Megaphone, Truck, UserPlus, type LucideIcon } from "lucide-react";
 import { rise, stagger } from "@/components/auth";
 import { LoginArt } from "@/components/login-art";
 import { LogoMark } from "@/components/logo";
@@ -23,10 +23,13 @@ import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 // Demo accounts, so the client can try every role. Shown only while the site runs on fake data.
-const DEMO: { phone: string; role: Role; name: string; icon: LucideIcon }[] = [
+const DEMO: { phone: string; role: Role; name: string; icon: LucideIcon; tag?: [string, string] }[] = [
   { phone: "07801000001", role: "manager", name: "حيدر الكعبي", icon: LayoutDashboard },
-  { phone: "07801000004", role: "rep", name: "حسين علي", icon: Truck },
-  { phone: "07801000002", role: "warehouse", name: "كرار جاسم", icon: Boxes },
+  { phone: "07801000004", role: "rep", name: "حسين علي", icon: Truck, tag: ["تسويق وتوصيل", "marketing & delivery"] },
+  { phone: "07801000005", role: "rep", name: "عباس فاضل", icon: Megaphone, tag: ["تسويق", "marketing"] },
+  { phone: "07801000011", role: "rep", name: "علي حسن", icon: Truck, tag: ["توصيل", "delivery"] },
+  { phone: "07801000002", role: "warehouse", name: "كرار جاسم", icon: Boxes, tag: ["الصناعة", "Al-Sinaa"] },
+  { phone: "07801000003", role: "warehouse", name: "مصطفى عبد الأمير", icon: Boxes, tag: ["الحر", "Al-Hur"] },
   { phone: "07801000010", role: "staff", name: "سجاد كامل", icon: Headset },
   { phone: "07801000007", role: "accountant", name: "زينب كاظم", icon: Calculator },
   { phone: "07812345601", role: "shop", name: "أسواق الكوثر", icon: Store },
@@ -68,7 +71,7 @@ export default function LoginPage() {
     if (!session) return;
     // Right after pressing "login", login() already chose where to go: let it, and switch the flag off.
     if (loggingIn.current) loggingIn.current = false;
-    else router.replace(homeOf(session.user.role));
+    else router.replace(homeOf(session.user.role, session.user.rep_kinds));
   }, [session, router]);
 
   async function login(p: string, pw: string, key: string) {
@@ -80,7 +83,7 @@ export default function LoginPage() {
       setSession(s);
       // Back to the page you wanted before logging in, if your role may open it; otherwise your home page.
       const next = takeNext();
-      router.replace(next && canOpen(s.user.role, next) ? next : homeOf(s.user.role));
+      router.replace(next && canOpen(s.user.role, next, s.user.rep_kinds) ? next : homeOf(s.user.role, s.user.rep_kinds));
       // Next keeps this page's state for when you come back (after logging out). So leave it clean:
       // not "busy" (that disabled every button with a spinner forever) and without the password.
       setBusy(null);
@@ -238,6 +241,7 @@ export default function LoginPage() {
                     >
                       {busy === d.phone ? <Loader2 className="size-3.5 animate-spin" /> : <d.icon className="size-3.5" />}
                       {roleName(d.role, tr)}
+                      {d.tag && <span className="font-normal text-muted">· {tr(d.tag[0], d.tag[1])}</span>}
                       <span className="sr-only">{d.name}</span>
                     </button>
                   ))}

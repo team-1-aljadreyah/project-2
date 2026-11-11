@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowLeftRight, Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { useWarehouseFilter } from "@/components/warehouse-filter";
 import { Button, Card, DataTable, Dialog, Empty, ErrorBox, Field, LoadingRows, Notice, PageHeader, Segmented, Select, Stepper, Textarea, errorText, useToast, type Column } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { Transfer, Unit } from "@/lib/api/types";
@@ -14,6 +15,7 @@ export default function TransfersPage() {
   const { tr, dateTime, name, qty } = useFmt();
   const { lookups, itemById } = useApp();
   const list = useLoad(() => api.listTransfers(), []);
+  const wh = useWarehouseFilter();
   const [open, setOpen] = useState(false);
   const wName = (id: number) => name(lookups.warehouses.find((w) => w.id === id));
   const columns: Column<Transfer>[] = [
@@ -40,7 +42,7 @@ export default function TransfersPage() {
         ) : list.state.status === "error" ? (
           <ErrorBox error={list.state.error} onRetry={list.reload} />
         ) : (
-          <DataTable rows={list.data ?? []} columns={columns} rowKey={(t) => t.id} empty={<Empty icon={<ArrowLeftRight className="size-6" />} title={tr("لا يوجد تحويل بعد", "No transfers yet")} />} />
+          <DataTable rows={(list.data ?? []).filter((t) => !wh || t.from_warehouse_id === wh || t.to_warehouse_id === wh)} columns={columns} rowKey={(t) => t.id} empty={<Empty icon={<ArrowLeftRight className="size-6" />} title={tr("لا يوجد تحويل بعد", "No transfers yet")} />} />
         )}
       </Card>
       {open && <TransferDialog onClose={() => setOpen(false)} onDone={list.reload} />}

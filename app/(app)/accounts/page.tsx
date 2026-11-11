@@ -150,7 +150,7 @@ export default function AccountsPage() {
                   <Detail icon={Phone} k={tr("الهاتف", "Phone")} v={<span dir="ltr">{c.phone}</span>} />
                   <Detail icon={MapPin} k={tr("المنطقة", "Area")} v={c.area} />
                   <Detail icon={Store} k={tr("العنوان", "Address")} v={c.address || "—"} />
-                  <Detail icon={Truck} k={tr("مندوب التوصيل", "Delivery")} v={rep?.name ?? "—"} />
+                  <Detail icon={Truck} k={tr("المندوب", "Rep")} v={rep?.name ?? "—"} />
                   <Detail icon={Calendar} k={tr("زبون منذ", "Customer since")} v={firstInvoice ? date(firstInvoice.date) : "—"} />
                   <Detail icon={ReceiptText} k={tr("آخر طلب", "Last order")} v={c.last_order_at ? ago(c.last_order_at) : "—"} />
                 </dl>

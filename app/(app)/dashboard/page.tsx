@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AlertTriangle, Banknote, Boxes, ClipboardList, PackageX, ShieldAlert, TrendingUp, UserPlus, Wallet } from "lucide-react";
 import { RankBars, SalesBars } from "@/components/charts";
 import { useApp } from "@/components/shell";
+import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { OrderStatusBadge } from "@/components/status";
 import { Button, Card, CardHeader, ErrorBox, LimitBar, Money, PageHeader, Skeleton, Stat } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -14,10 +15,11 @@ import { today } from "@/lib/utils";
 export default function DashboardPage() {
   const { tr, money, date, ago, name } = useFmt();
   const { user, lookups } = useApp();
-  const d = useLoad(() => api.dashboard(), []);
+  const wh = useWarehouseFilter();
+  const d = useLoad(() => api.dashboard(wh), [wh]);
   const debts = useLoad(() => api.debts(), []);
   const orders = useLoad(() => api.listOrders(), []);
-  const daily = useLoad(() => api.dailySales(today()), []);
+  const daily = useLoad(() => api.dailySales(today(), wh), [wh]);
   const customers = useLoad(() => api.listCustomers(), []);
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
   const hour = new Date().getHours();
@@ -25,7 +27,7 @@ export default function DashboardPage() {
 
   if (d.state.status === "error") return <ErrorBox error={d.state.error} onRetry={d.reload} />;
   const x = d.data;
-  const waiting = (orders.data ?? []).filter((o) => o.status === "needs_approval" || o.status === "pending").slice(0, 6);
+  const waiting = (orders.data ?? []).filter((o) => (o.status === "needs_approval" || o.status === "pending") && inWarehouse(wh, o.warehouse_id)).slice(0, 6);
 
   return (
     <>
@@ -95,7 +97,7 @@ export default function DashboardPage() {
           </div>
         </Card>
         <Card>
-          <CardHeader title={tr("مبيعات اليوم حسب مندوب التوصيل", "Today by delivery rep")} />
+          <CardHeader title={tr("مبيعات اليوم حسب المندوب", "Today by rep")} />
           <div className="p-4">
             {daily.data && daily.data.by_rep.length ? (
               <RankBars rows={daily.data.by_rep.map((r) => ({ label: r.label, value: r.sales, sub: tr(`${r.invoices} فاتورة`, `${r.invoices} invoices`) }))} />

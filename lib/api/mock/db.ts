@@ -82,7 +82,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 13;
+export const DB_VERSION = 16;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

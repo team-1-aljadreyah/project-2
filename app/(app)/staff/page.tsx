@@ -121,7 +121,7 @@ export default function StaffHome() {
                           <span className="num" dir="ltr">
                             {o.number}
                           </span>{" "}
-                          · {tr("مندوب التوصيل", "Delivery rep")}: <b>{repName(o.rep_id)}</b>
+                          · {tr("مندوب التوصيل", "Delivery rep")}: <b>{o.delivery?.rep?.name ?? repName(o.rep_id)}</b>
                         </span>
                       </span>
                       <DeliveryChip d={o.delivery!} tr={tr} />

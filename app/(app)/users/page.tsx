@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Pencil, Plus } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { roleName } from "@/components/status";
+import { jobName, roleName } from "@/components/status";
+import { cn } from "@/lib/utils";
 import { Badge, Button, Card, DataTable, Dialog, ErrorBox, Field, Input, LoadingRows, PageHeader, Select, Switch, errorText, useToast, type Column } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { Role, User, UserInput } from "@/lib/api/types";
@@ -21,7 +22,7 @@ export default function UsersPage() {
   const columns: Column<User>[] = [
     { key: "n", head: tr("الاسم", "Name"), cell: (u) => <span className="font-medium">{u.name}</span> },
     { key: "p", head: tr("الهاتف", "Phone"), cell: (u) => <span dir="ltr" className="num">{u.phone}</span> },
-    { key: "r", head: tr("الدور", "Role"), cell: (u) => <Badge tone="primary">{roleName(u.role, tr)}</Badge> },
+    { key: "r", head: tr("الدور", "Role"), cell: (u) => <Badge tone="primary">{jobName(u, tr)}</Badge> },
     {
       key: "x",
       head: tr("مرتبط بـ", "Linked to"),
@@ -44,7 +45,7 @@ export default function UsersPage() {
     <>
       <PageHeader
         title={tr("المستخدمون والصلاحيات", "Users and roles")}
-        subtitle={tr("كلٌّ يرى ما يخصه فقط: مندوب التوصيل لا يرى سعر الشراء، وأمين المخزن لا يرى الديون", "Each person sees only their part: delivery reps never see cost, the warehouse never sees debts")}
+        subtitle={tr("كلٌّ يرى ما يخصه فقط: المندوب لا يرى سعر الشراء، وأمين المخزن لا يرى الديون", "Each person sees only their part: delivery reps never see cost, the warehouse never sees debts")}
         actions={
           <Button variant="primary" onClick={() => setEdit("new")}>
             <Plus className="size-4" /> {tr("مستخدم جديد", "New user")}
@@ -69,7 +70,7 @@ export default function UsersPage() {
                     {u.phone}
                   </span>
                 </span>
-                <Badge tone={u.active ? "primary" : "neutral"}>{roleName(u.role, tr)}</Badge>
+                <Badge tone={u.active ? "primary" : "neutral"}>{jobName(u, tr)}</Badge>
               </button>
             )}
           />
@@ -90,6 +91,7 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
     role: user?.role ?? "rep",
     warehouse_id: user?.warehouse_id ?? lookups.warehouses[0].id,
     customer_id: user?.customer_id,
+    rep_kinds: user?.rep_kinds?.length ? user.rep_kinds : ["sales", "delivery"],
     active: user?.active ?? true,
     password: "",
   });
@@ -144,6 +146,31 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
             ))}
           </Select>
         </Field>
+        {f.role === "rep" && (
+          <Field label={tr("عمل المندوب", "What the rep does")} error={err.rep_kinds} hint={tr("يمكن أن يعمل في الاثنين", "He can do both")}>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["sales", tr("تسويق: يزور المحلات ويأخذ الطلبات ويحصّل", "Marketing: visits shops, takes orders, collects")],
+                  ["delivery", tr("توصيل: يوصل الشحنات إلى المحلات", "Delivery: takes the shipments to the shops")],
+                ] as const
+              ).map(([k, label]) => {
+                const on = f.rep_kinds?.includes(k) ?? false;
+                return (
+                  <label key={k} className={cn("flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm", on ? "border-action bg-action/10" : "border-line")}>
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => set({ rep_kinds: on ? (f.rep_kinds ?? []).filter((x) => x !== k) : [...(f.rep_kinds ?? []), k] })}
+                      className="size-4 accent-[var(--action)]"
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+            </div>
+          </Field>
+        )}
         {(f.role === "warehouse" || f.role === "staff") && (
           <Field label={tr("المخزن", "Warehouse")} error={err.warehouse_id}>
             <Select value={f.warehouse_id} onChange={(e) => set({ warehouse_id: Number(e.target.value) })}>

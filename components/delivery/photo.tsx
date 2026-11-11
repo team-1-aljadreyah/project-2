@@ -6,18 +6,9 @@
 import { useRef, useState } from "react";
 import { Camera, Loader2, RotateCcw } from "lucide-react";
 import { useFmt } from "@/lib/i18n";
+import { shrinkImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
 
-async function shrink(file: File, max = 900, quality = 0.72): Promise<string> {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bmp.width * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  bmp.close();
-  return canvas.toDataURL("image/jpeg", quality);
-}
 
 export function PhotoCapture({ value, onChange, error }: { value: string | null; onChange: (dataUrl: string | null) => void; error?: string }) {
   const { tr } = useFmt();
@@ -38,7 +29,7 @@ export function PhotoCapture({ value, onChange, error }: { value: string | null;
           if (!f) return;
           setBusy(true);
           try {
-            onChange(await shrink(f));
+            onChange(await shrinkImage(f));
           } finally {
             setBusy(false);
           }

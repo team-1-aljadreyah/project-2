@@ -27,6 +27,8 @@ import type {
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
 import {
   approveOrder,
+  setOrderDiscount,
+  updateOrder,
   approveShop,
   allocate,
   audit,
@@ -59,6 +61,11 @@ import {
   orderView,
   dispatchDelivery,
   deliverOrder,
+  reportDeliveryProblem,
+  addShop,
+  myShops,
+  switchShop,
+  returnToWarehouse,
   unlockDelivery,
   startOnline,
   physicalQty,
@@ -158,8 +165,14 @@ function canSeeCustomer(actor: DbUser, c: { id: number; rep_id: number }) {
   return true;
 }
 
-function canSeeOrder(actor: DbUser, o: { customer_id: number; rep_id: number; warehouse_id: number }) {
-  if (actor.role === "rep") return o.rep_id === actor.id;
+/** A delivery rep sees the shops he has shipments for (name, area, phone), even if they aren't his. */
+function deliversTo(db: Db, actor: DbUser, customerId: number) {
+  return actor.role === "rep" && db.orders.some((o) => o.customer_id === customerId && o.delivery?.rep?.id === actor.id && o.delivery.status !== "delivered");
+}
+
+function canSeeOrder(actor: DbUser, o: { customer_id: number; rep_id: number; warehouse_id: number; delivery?: { rep?: { id: number } } }) {
+  // A rep sees his shops' orders, and the ones he delivers.
+  if (actor.role === "rep") return o.rep_id === actor.id || o.delivery?.rep?.id === actor.id;
   if (actor.role === "shop") return o.customer_id === actor.customer_id;
   if (actor.role === "warehouse" || actor.role === "staff") return !actor.warehouse_id || actor.warehouse_id === o.warehouse_id;
   return true;
@@ -185,7 +198,7 @@ function notFound(): never {
 
 // ---------- reports ----------
 
-function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | "customer", from: string, to: string): SalesRow[] {
+function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | "customer", from: string, to: string, warehouseId?: number): SalesRow[] {
   const rows = new Map<string, SalesRow>();
   const showProfit = seesProfit(actor);
   const row = (key: string, label: string, label_en: string) => {
@@ -218,6 +231,7 @@ function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | 
   };
   for (const inv of db.invoices) {
     if (!inRange(inv.date)) continue;
+    if (warehouseId && inv.warehouse_id !== warehouseId) continue;
     if (group === "item") {
       for (const l of inv.lines) {
         const r = row(String(l.item_id), ...labelOf("item", l.item_id));
@@ -239,6 +253,7 @@ function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | 
     if (!inRange(ret.created_at)) continue;
     const inv = db.invoices.find((i) => i.id === ret.invoice_id);
     if (!inv) continue;
+    if (warehouseId && inv.warehouse_id !== warehouseId) continue;
     if (group === "item") {
       for (const l of ret.lines) {
         const r = row(String(l.item_id), ...labelOf("item", l.item_id));
@@ -305,7 +320,7 @@ export const mockApi: Api = {
     read((db) => ({
       warehouses: db.warehouses,
       tiers: db.tiers,
-      reps: db.users.filter((u) => u.role === "rep").map((u) => ({ id: u.id, name: u.name, phone: u.phone })),
+      reps: db.users.filter((u) => u.role === "rep").map((u) => ({ id: u.id, name: u.name, phone: u.phone, ...(u.rep_kinds?.length ? { kinds: u.rep_kinds } : {}) })),
       categories: [...new Set(db.items.map((i) => i.category))],
       settings: db.settings,
     })),
@@ -331,6 +346,10 @@ export const mockApi: Api = {
       if (!id && (!input.password || input.password.length < 6)) errors.password = msg("6 أحرف على الأقل", "At least 6 characters");
       if ((input.role === "warehouse" || input.role === "staff") && !input.warehouse_id) errors.warehouse_id = msg("اختر المخزن", "Choose the warehouse");
       if (input.role === "shop" && !input.customer_id) errors.customer_id = msg("اختر المحل", "Choose the shop");
+      if (input.role === "rep" && input.rep_kinds && !input.rep_kinds.length) errors.rep_kinds = msg("اختر عمله: تسويق أو توصيل أو الاثنين", "Choose: marketing, delivery or both");
+      // One warehouse keeper for each warehouse: he is the one who answers for its stock.
+      const otherKeeper = input.role === "warehouse" && input.active && db.users.find((u) => u.id !== id && u.role === "warehouse" && u.active && u.warehouse_id === input.warehouse_id);
+      if (otherKeeper) errors.warehouse_id = msg(`لهذا المخزن أمين مخزن: ${otherKeeper.name}. أوقف حسابه أولاً أو اختر مخزناً آخر.`, `This warehouse already has a keeper: ${otherKeeper.name}. Disable him first or choose another warehouse.`);
       if (id === a.id && (!input.active || input.role !== "manager")) errors.role = msg("لا تستطيع إيقاف حسابك أو تغيير دورك", "You can't disable yourself or change your own role");
       if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
       const clean = {
@@ -338,6 +357,7 @@ export const mockApi: Api = {
         phone,
         role: input.role,
         warehouse_id: input.role === "warehouse" || input.role === "staff" ? input.warehouse_id : undefined,
+        rep_kinds: input.role === "rep" ? (input.rep_kinds?.length ? input.rep_kinds : (["sales", "delivery"] as const).slice()) : undefined,
         customer_id: input.role === "shop" ? input.customer_id : undefined,
         active: input.active,
       };
@@ -394,6 +414,18 @@ export const mockApi: Api = {
   getItem: (id) =>
     read((db, a, now) => {
       const it = db.items.find((x) => x.id === id) ?? notFound();
+      return itemView(db, it, a, now);
+    }),
+  setItemImage: (id, image) =>
+    write((db, a, now) => {
+      need(a, ["manager", "warehouse"]);
+      const it = db.items.find((x) => x.id === id) ?? notFound();
+      if (image !== null) {
+        if (!/^data:image\/(jpeg|png|webp);base64,/.test(image)) fail(422, "VALIDATION", "الملف ليس صورة", "The file is not a picture");
+        // ~300 KB: the page shrinks the photo first, so a bigger one means it skipped that.
+        if (image.length > 400_000) fail(422, "VALIDATION", "الصورة كبيرة جداً", "The picture is too big");
+        it.image = image;
+      } else delete it.image;
       return itemView(db, it, a, now);
     }),
   saveItem: (id, input) =>
@@ -469,7 +501,7 @@ export const mockApi: Api = {
     read((db, a) => {
       need(a, ["manager", "warehouse", "accountant", "staff"]);
       return db.receipts
-        .filter((r) => a.role !== "warehouse" || !a.warehouse_id || r.warehouse_id === a.warehouse_id)
+        .filter((r) => (a.role !== "warehouse" && a.role !== "staff") || !a.warehouse_id || r.warehouse_id === a.warehouse_id)
         .map((r) => receiptView(r, a))
         .reverse();
     }),
@@ -509,11 +541,11 @@ export const mockApi: Api = {
     }),
 
   // Customers
-  listCustomers: () => read((db, a) => db.customers.filter((c) => canSeeCustomer(a, c)).map((c) => customerView(db, c, a))),
+  listCustomers: () => read((db, a) => db.customers.filter((c) => canSeeCustomer(a, c) || deliversTo(db, a, c.id)).map((c) => customerView(db, c, a))),
   getCustomer: (id) =>
     read((db, a) => {
       const c = db.customers.find((x) => x.id === id);
-      if (!c || !canSeeCustomer(a, c)) notFound();
+      if (!c || !(canSeeCustomer(a, c) || deliversTo(db, a, c.id))) notFound();
       return customerView(db, c, a);
     }),
   saveCustomer: (id, input) =>
@@ -618,6 +650,16 @@ export const mockApi: Api = {
       return r.ok ? { ...r, order: orderView(r.order, a) } : r;
     }),
   unlockDelivery: (id) => write((db, a, now) => orderView(unlockDelivery(db, a, id, now), a)),
+  myShops: () => read((db, a) => myShops(db, a)),
+  switchShop: (customerId) =>
+    write((db, a) => {
+      const { password: _p, ...user } = switchShop(db, a, customerId);
+      void _p;
+      return user;
+    }),
+  addShop: (input) => write((db, a, now) => addShop(db, a, input, now)),
+  reportDeliveryProblem: (input) => write((db, a, now) => reportDeliveryProblem(db, a, input, now).map((o) => orderView(o, a))),
+  returnToWarehouse: (id) => write((db, a, now) => orderView(returnToWarehouse(db, a, id, now), a)),
   getDeliveryPhoto: (id) =>
     read((db, a) => {
       const o = db.orders.find((x) => x.id === id);
@@ -631,6 +673,8 @@ export const mockApi: Api = {
       return invoiceView(db, inv, seesProfit(a));
     }),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),
+  updateOrder: (id, input) => write((db, a, now) => orderView(updateOrder(db, a, id, input, now), a)),
+  setOrderDiscount: (id, percent) => write((db, a, now) => orderView(setOrderDiscount(db, a, id, percent, now), a)),
   cancelOrder: (id, reason) => write((db, a, now) => cancelOrder(db, a, id, reason, now)),
 
   // Invoices
@@ -721,15 +765,19 @@ export const mockApi: Api = {
   closedMonths: () => read((db) => Object.keys(db.closed_months).sort()),
 
   // Reports
-  dashboard: () =>
+  dashboard: (warehouseId) =>
     read((db, a, now): Dashboard => {
       need(a, ["manager", "accountant", "warehouse"]);
       const today = dayOf(now);
       const month = today.slice(0, 7);
       const invDay = (i: { date: string }) => dayOf(new Date(i.date));
-      const todays = db.invoices.filter((i) => invDay(i) === today);
-      const monthInv = db.invoices.filter((i) => invDay(i).startsWith(month));
-      const monthRet = db.returns.filter((r) => dayOf(new Date(r.created_at)).startsWith(month));
+      // One warehouse only (the manager's / accountant's filter): its invoices, orders and batches.
+      // Money (debts, payments) belongs to the shop, not to a warehouse, so it stays for the whole company.
+      const wh = warehouseId || undefined;
+      const invs = wh ? db.invoices.filter((i) => i.warehouse_id === wh) : db.invoices;
+      const todays = invs.filter((i) => invDay(i) === today);
+      const monthInv = invs.filter((i) => invDay(i).startsWith(month));
+      const monthRet = db.returns.filter((r) => dayOf(new Date(r.created_at)).startsWith(month) && (!wh || invs.some((i) => i.id === r.invoice_id)));
       const balances = db.customers.map((c) => ({ c, b: customerBalance(db, c.id) }));
       const last7 = Array.from({ length: 7 }, (_, k) => {
         const d = new Date(now);
@@ -737,7 +785,7 @@ export const mockApi: Api = {
         const ds = dayOf(d);
         return {
           date: ds,
-          sales: db.invoices.filter((i) => invDay(i) === ds).reduce((s, i) => s + i.total, 0),
+          sales: invs.filter((i) => invDay(i) === ds).reduce((s, i) => s + i.total, 0),
           collected: db.payments.filter((p) => dayOf(new Date(p.date)) === ds).reduce((s, p) => s + p.amount, 0),
         };
       });
@@ -748,11 +796,12 @@ export const mockApi: Api = {
         month_sales: monthInv.reduce((s, i) => s + i.total, 0) - monthRet.reduce((s, r) => s + r.amount, 0),
         total_debt: balances.reduce((s, x) => s + Math.max(0, x.b), 0),
         over_limit_customers: balances.filter((x) => x.b > x.c.debt_limit).length,
-        pending_orders: db.orders.filter((o) => o.status === "pending" && canSeeOrder(a, o)).length,
-        needs_approval: db.orders.filter((o) => o.status === "needs_approval").length,
-        low_stock: db.items.filter((it) => it.active && physicalQty(db, it.id, undefined, today) < it.min_stock).length,
-        near_expiry: db.batches.filter((b) => b.qty_left > 0 && batchStatus(db, b, today) === "near_expiry").length,
-        expired_batches: db.batches.filter((b) => b.qty_left > 0 && batchStatus(db, b, today) === "expired").length,
+        pending_orders: db.orders.filter((o) => o.status === "pending" && canSeeOrder(a, o) && (!wh || o.warehouse_id === wh)).length,
+        needs_approval: db.orders.filter((o) => o.status === "needs_approval" && (!wh || o.warehouse_id === wh)).length,
+        // One warehouse: under half the minimum there (the minimum is for the whole company).
+        low_stock: db.items.filter((it) => it.active && physicalQty(db, it.id, wh, today) < (wh ? it.min_stock / 2 : it.min_stock)).length,
+        near_expiry: db.batches.filter((b) => b.qty_left > 0 && (!wh || b.warehouse_id === wh) && batchStatus(db, b, today) === "near_expiry").length,
+        expired_batches: db.batches.filter((b) => b.qty_left > 0 && (!wh || b.warehouse_id === wh) && batchStatus(db, b, today) === "expired").length,
         last7,
       };
       if (seesProfit(a)) {
@@ -766,11 +815,11 @@ export const mockApi: Api = {
       }
       return base;
     }),
-  dailySales: (date) =>
+  dailySales: (date, warehouseId) =>
     read((db, a): DailySales => {
       need(a, ["manager", "accountant"]);
-      const by_rep = salesRows(db, a, "rep", date, date);
-      const by_warehouse = salesRows(db, a, "warehouse", date, date);
+      const by_rep = salesRows(db, a, "rep", date, date, warehouseId || undefined);
+      const by_warehouse = salesRows(db, a, "warehouse", date, date, warehouseId || undefined);
       return {
         date,
         sales: by_warehouse.reduce((s, r) => s + r.sales, 0),
@@ -781,10 +830,10 @@ export const mockApi: Api = {
         by_warehouse,
       };
     }),
-  salesReport: (group, from, to) =>
+  salesReport: (group, from, to, warehouseId) =>
     read((db, a) => {
       need(a, ["manager", "accountant"]);
-      return salesRows(db, a, group, from, to);
+      return salesRows(db, a, group, from, to, warehouseId || undefined);
     }),
   slowMoving: (days) =>
     read((db, a, now): SlowItem[] => {

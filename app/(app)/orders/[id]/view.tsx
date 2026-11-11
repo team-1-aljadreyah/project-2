@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Ban, CheckCircle2, Clock, FileText, PackageCheck, ShieldCheck } from "lucide-react";
+import { Ban, CheckCircle2, Clock, FileText, PackageCheck, Pencil, ShieldCheck } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { OrderStatusBadge, SourceBadge } from "@/components/status";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
@@ -11,6 +11,8 @@ import type { Batch } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { DeliveryPanel } from "@/components/delivery/status";
+import { OrderTotals } from "@/components/discount";
+import { editOrderInBag } from "@/components/shop-store";
 import { piecesOf, useIdParam } from "@/lib/utils";
 
 export default function OrderView() {
@@ -38,6 +40,11 @@ export default function OrderView() {
   const canConfirm = ["manager", "warehouse", "accountant"].includes(user.role) && (o.status === "pending" || o.status === "expired");
   const canApprove = user.role === "manager" && o.status === "needs_approval";
   const canCancel = open && (user.role === "manager" || o.created_by.id === user.id);
+  const canEditDiscount =
+    open && (user.role === "manager" || (user.role === "rep" && o.rep_id === user.id) || (user.role === "warehouse" && (!user.warehouse_id || user.warehouse_id === o.warehouse_id)));
+  const waitsFor = o.approval_for ?? ["debt"];
+  // The shop owner changes his own order until the warehouse confirms it.
+  const canEditLines = open && user.role === "shop" && user.customer_id === o.customer_id;
 
   async function act(key: string, fn: () => Promise<unknown>, ok: string, after?: (r: unknown) => void) {
     setBusy(key);
@@ -86,6 +93,18 @@ export default function OrderView() {
                 <FileText className="size-4" /> {tr("الفاتورة", "Invoice")}
               </Button>
             )}
+            {canEditLines && (
+              <Button
+                variant="action"
+                onClick={() => {
+                  // The lines go into his store's bag; he changes them there and saves.
+                  editOrderInBag(user.id, o.customer_id, o);
+                  router.push("/shop");
+                }}
+              >
+                <Pencil className="size-4" /> {tr("تعديل الطلب", "Change the order")}
+              </Button>
+            )}
             {canCancel && (
               <Button variant="danger" onClick={() => setCancel(true)}>
                 <Ban className="size-4" /> {tr("إلغاء الطلب", "Cancel order")}
@@ -93,7 +112,7 @@ export default function OrderView() {
             )}
             {canApprove && (
               <Button variant="action" loading={busy === "approve"} onClick={() => act("approve", () => api.approveOrder(o.id), tr("تمت الموافقة، وأصبح الطلب بانتظار التثبيت", "Approved. The order now waits to be confirmed"))}>
-                <ShieldCheck className="size-4" /> {tr("موافقة على تجاوز السقف", "Approve over limit")}
+                <ShieldCheck className="size-4" /> {waitsFor.includes("debt") ? tr("موافقة على تجاوز السقف", "Approve over limit") : tr("موافقة على الخصم", "Approve the discount")}
               </Button>
             )}
             {canConfirm && (
@@ -113,9 +132,18 @@ export default function OrderView() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
-          {o.delivery && <DeliveryPanel order={o} role={user.role} shop={c?.name ?? ""} rep={rep?.name ?? ""} area={c?.area} />}
+          {o.delivery && <DeliveryPanel order={o} role={user.role} shop={c?.name ?? ""} rep={o.delivery.rep?.name ?? rep?.name ?? ""} area={c?.area} />}
           {o.status === "needs_approval" && (
-            <Notice tone="warning" title={tr("هذا الطلب يتجاوز سقف دين الزبون", "This order passes the customer's debt limit")}>
+            <Notice
+              tone="warning"
+              title={
+                waitsFor.includes("debt") && waitsFor.includes("discount")
+                  ? tr(`يتجاوز سقف دين الزبون، وفيه خصم ${o.discount?.percent}%`, `Over the debt limit, with a ${o.discount?.percent}% discount`)
+                  : waitsFor.includes("discount")
+                    ? tr(`فيه خصم ${o.discount?.percent}%: أكثر مما يعطيه المندوب أو أمين المخزن وحده (3%)`, `It has a ${o.discount?.percent}% discount: more than a rep or keeper gives alone (3%)`)
+                    : tr("هذا الطلب يتجاوز سقف دين الزبون", "This order passes the customer's debt limit")
+              }
+            >
               {user.role === "manager" ? tr("وافق عليه إذا كنت تثق بالزبون، أو ألغِه.", "Approve it if you trust the customer, or cancel it.") : tr("ينتظر موافقة المدير، والكمية محجوزة حتى ذلك الحين.", "Waiting for the manager. The stock stays held until then.")}
             </Notice>
           )}
@@ -158,10 +186,7 @@ export default function OrderView() {
                 );
               })}
             </ul>
-            <div className="flex items-center justify-between border-t border-line px-4 py-3">
-              <span className="font-semibold">{tr("المجموع", "Total")}</span>
-              <Money value={o.total} className="text-lg font-bold" />
-            </div>
+            <OrderTotals order={o} role={user.role} canEdit={canEditDiscount} onChanged={order.reload} />
           </Card>
           {seesBatches && open && (
             <p className="text-xs text-muted">{tr("الدفعات المعروضة هي التي ستُصرف عند التثبيت: الأقدم صلاحية أولاً، والمنتهية لا تُصرف أبداً.", "The batches shown will leave on confirm: oldest expiry first, expired never.")}</p>
@@ -186,7 +211,7 @@ export default function OrderView() {
             <div className="mt-3 border-t border-line pt-2">
               <KV k={tr("المنطقة", "Area")} v={c?.area} />
               <KV k={tr("نوع السعر", "Price tier")} v={name(lookups.tiers.find((t) => t.id === c?.tier_id))} />
-              <KV k={tr("مندوب التوصيل", "Delivery")} v={rep?.name} />
+              <KV k={tr("المندوب", "Rep")} v={rep?.name} />
               <KV k={tr("المصدر", "Source")} v={<SourceBadge source={o.source} />} />
               {c?.balance !== undefined && c.debt_limit !== undefined && (
                 <>

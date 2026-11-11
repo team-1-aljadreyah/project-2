@@ -1,9 +1,22 @@
 "use client";
 
 // Colored labels for statuses, so every screen names them the same way.
-import type { BatchStatus, InvoiceStatus, OrderSource, OrderStatus, Role } from "@/lib/api/types";
+import type { BatchStatus, InvoiceStatus, OrderSource, OrderStatus, RepKind, Role } from "@/lib/api/types";
 import { useFmt, type Tr } from "@/lib/i18n";
 import { Badge } from "./ui";
+
+/** A rep's job: marketing, delivery, or both. */
+export function repKindName(kinds: RepKind[] | undefined, tr: Tr) {
+  const sales = !kinds?.length || kinds.includes("sales");
+  const delivery = !kinds?.length || kinds.includes("delivery");
+  if (sales && delivery) return tr("مندوب تسويق وتوصيل", "Marketing & delivery rep");
+  return sales ? tr("مندوب تسويق", "Marketing rep") : tr("مندوب توصيل", "Delivery rep");
+}
+
+/** The name of a person's job: for a rep, which kind. */
+export function jobName(u: { role: Role; rep_kinds?: RepKind[] }, tr: Tr) {
+  return u.role === "rep" ? repKindName(u.rep_kinds, tr) : roleName(u.role, tr);
+}
 
 export function roleName(role: Role, tr: Tr) {
   switch (role) {
@@ -14,7 +27,7 @@ export function roleName(role: Role, tr: Tr) {
     case "staff":
       return tr("موظف المخزن", "Warehouse staff");
     case "rep":
-      return tr("مندوب التوصيل", "Delivery");
+      return tr("المندوب", "Rep");
     case "accountant":
       return tr("محاسب", "Accountant");
     case "shop":
@@ -57,5 +70,5 @@ export function SourceBadge({ source }: { source: OrderSource }) {
   const { tr } = useFmt();
   if (source === "shop") return <Badge tone="primary">{tr("من المحل", "Shop online")}</Badge>;
   if (source === "office") return <Badge>{tr("من المكتب", "Office")}</Badge>;
-  return <Badge>{tr("من مندوب التوصيل", "Delivery rep")}</Badge>;
+  return <Badge>{tr("من المندوب", "Rep")}</Badge>;
 }

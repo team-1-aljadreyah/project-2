@@ -3,6 +3,7 @@
 // The real backend must do the same things (see the client's requirements).
 import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
+import { DISCOUNT_MAX, SHOP_MAX_QTY, STAFF_DISCOUNT_MAX } from "../types";
 import type {
   AppNotification,
   RegisterInput,
@@ -18,6 +19,12 @@ import type {
   ChatThread,
   MyChat,
   DeliverInput,
+  OrderEdit,
+  RepKind,
+  MyShop,
+  NewShopInput,
+  ProblemInput,
+  ProblemReason,
   Delivery,
   OnlinePayment,
   GatewayInfo,
@@ -394,18 +401,25 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
 
   const customer = db.customers.find((c) => c.id === input.customer_id) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
   if (actor.role === "rep" && customer.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذا الزبون ليس من زبائنك", "This customer isn't yours");
+  if (actor.role === "rep" && actor.rep_kinds?.length && !actor.rep_kinds.includes("sales")) fail(403, "FORBIDDEN", "أنت مندوب توصيل فقط: الطلبات يأخذها مندوب التسويق", "You only deliver: the marketing rep takes orders");
   if (actor.role === "shop" && actor.customer_id !== customer.id) fail(403, "FORBIDDEN", "لا تستطيع الطلب لمحل آخر", "You can't order for another shop");
   if (!customer.active) {
     if (customer.pending) fail(409, "BAD_STATE", "الحساب بانتظار موافقة الشركة، ويمكنك الطلب بعد الموافقة", "This account is waiting for approval. You can order after it is approved");
     fail(409, "BAD_STATE", "حساب هذا الزبون موقوف", "This customer is not active");
   }
 
+  if (actor.role === "shop" && input.lines.some((l) => l.qty > SHOP_MAX_QTY)) {
+    fail(422, "VALIDATION", `الحد الأعلى ${SHOP_MAX_QTY} لكل مادة في الطلب الواحد`, `Up to ${SHOP_MAX_QTY} of each item per order`);
+  }
   const warehouseId = input.warehouse_id ?? db.warehouses[0].id;
   const lines = orderLines(db, customer.tier_id, input.lines);
   checkStock(db, warehouseId, lines, now);
 
-  const total = lines.reduce((s, l) => s + l.total, 0);
+  const subtotal = lines.reduce((s, l) => s + l.total, 0);
+  const discount = makeDiscount(actor, subtotal, input.discount_percent ?? 0, now);
+  const total = subtotal - (discount?.amount ?? 0);
   const overLimit = committedDebt(db, customer.id, now.toISOString()) + total > customer.debt_limit;
+  const approval_for = [...(overLimit ? (["debt"] as const) : []), ...(discount?.needs_approval ? (["discount"] as const) : [])];
   const src: Order["source"] = source ?? (actor.role === "shop" ? "shop" : actor.role === "rep" ? "rep" : "office");
   const id = nextId(db, "order");
   const order: Order = {
@@ -416,9 +430,11 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     rep_id: customer.rep_id,
     warehouse_id: warehouseId,
     source: src,
-    status: overLimit ? "needs_approval" : "pending",
+    status: approval_for.length ? "needs_approval" : "pending",
     lines,
     total,
+    ...(discount ? { subtotal, discount } : {}),
+    ...(approval_for.length ? { approval_for: [...approval_for] } : {}),
     reserved_until: new Date(now.getTime() + db.settings.reservation_hours * 3_600_000).toISOString(),
     note: input.note?.trim() || undefined,
     created_at: now.toISOString(),
@@ -427,6 +443,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   db.orders.push(order);
   audit(db, actor, "create", "order", id, `طلب جديد ${order.number} لـ ${customer.name}`, `New order ${order.number} for ${customer.name}`, now);
 
+  if (discount?.needs_approval) notifyDiscount(db, order, customer.name, now);
   if (overLimit) {
     notify(
       db,
@@ -468,7 +485,137 @@ export function approveOrder(db: Db, actor: DbUser, id: number, now: Date): Orde
   o.status = "pending";
   o.approved_by = person(actor);
   o.reserved_until = new Date(now.getTime() + db.settings.reservation_hours * 3_600_000).toISOString();
-  audit(db, actor, "approve", "order", o.id, `موافقة على تجاوز سقف الدين للطلب ${o.number}`, `Approved over-limit order ${o.number}`, now);
+  const why = o.approval_for ?? ["debt"];
+  if (o.discount?.needs_approval) {
+    delete o.discount.needs_approval;
+    o.discount.approved_by = person(actor);
+  }
+  delete o.approval_for;
+  const ar = why.map((w) => (w === "debt" ? "تجاوز سقف الدين" : `خصم ${o.discount?.percent ?? ""}%`)).join(" و");
+  audit(db, actor, "approve", "order", o.id, `موافقة على ${ar} للطلب ${o.number}`, `Approved ${why.join(" + ")} for ${o.number}`, now);
+  return o;
+}
+
+// ---------- discounts ----------
+// The delivery rep (his own shops) and the warehouse keeper (his warehouse's orders) give up to 3% by themselves.
+// More than that, the order waits for the manager. The manager gives any discount up to 30% with no approval.
+
+function makeDiscount(actor: DbUser, subtotal: number, percent: number, now: Date): Order["discount"] {
+  const p = Math.round((Number(percent) || 0) * 10) / 10;
+  if (p === 0) return undefined;
+  if (!["manager", "rep", "warehouse"].includes(actor.role)) fail(403, "FORBIDDEN", "لا تستطيع إعطاء خصم", "You can't give a discount");
+  if (p < 0 || p > DISCOUNT_MAX) fail(422, "VALIDATION", `الخصم بين 0 و ${DISCOUNT_MAX}%`, `The discount is between 0 and ${DISCOUNT_MAX}%`, { discount_percent: msg(`حتى ${DISCOUNT_MAX}%`, `Up to ${DISCOUNT_MAX}%`) });
+  const needsOk = actor.role !== "manager" && p > STAFF_DISCOUNT_MAX;
+  return {
+    percent: p,
+    amount: Math.round((subtotal * p) / 100),
+    by: { ...person(actor), role: actor.role },
+    at: now.toISOString(),
+    ...(needsOk ? { needs_approval: true } : {}),
+  };
+}
+
+function notifyDiscount(db: Db, o: Order, customerName: string, now: Date) {
+  notify(
+    db,
+    {
+      type: "needs_approval",
+      roles: ["manager"],
+      title: `خصم ${o.discount!.percent}% يحتاج موافقتك: ${customerName}`,
+      title_en: `${o.discount!.percent}% discount needs your OK: ${customerName}`,
+      body: `${o.discount!.by.name} أعطى خصماً أكثر من ${STAFF_DISCOUNT_MAX}% على ${o.number}`,
+      body_en: `${o.discount!.by.name} gave more than ${STAFF_DISCOUNT_MAX}% on ${o.number}`,
+      link: `/orders/${o.id}`,
+    },
+    now,
+  );
+}
+
+/** The shop owner (or the manager) changes an order that isn't confirmed yet: the new lines replace the old
+ *  ones, at today's prices, the stock is held again, and the limit / discount are checked again. */
+export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit, now: Date): Order {
+  need(actor, ["shop", "manager"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if (actor.role === "shop" && actor.customer_id !== o.customer_id) fail(403, "FORBIDDEN", "هذا الطلب ليس لمحلك", "This order isn't for your shop");
+  if (o.status !== "pending" && o.status !== "needs_approval") fail(409, "BAD_STATE", "ثُبّت الطلب أو أُلغي، ولا يمكن تعديله الآن", "The order was confirmed or cancelled; it can't change now");
+  const wanted = (input.lines ?? []).filter((l) => l.qty > 0);
+  if (!wanted.length) fail(422, "VALIDATION", "الطلب فارغ. لإلغائه استخدم زر الإلغاء", "The order is empty. To drop it, cancel it");
+  if (actor.role === "shop" && wanted.some((l) => l.qty > SHOP_MAX_QTY)) {
+    fail(422, "VALIDATION", `الحد الأعلى ${SHOP_MAX_QTY} لكل مادة في الطلب الواحد`, `Up to ${SHOP_MAX_QTY} of each item per order`);
+  }
+  const customer = db.customers.find((c) => c.id === o.customer_id)!;
+  const lines = orderLines(db, customer.tier_id, wanted);
+  // Its own held stock doesn't count against it.
+  checkStock(db, o.warehouse_id, lines, now, o.id);
+  const subtotal = lines.reduce((s, l) => s + l.total, 0);
+  o.lines = lines;
+  if (o.discount) {
+    // Same percent on the new lines (and the same approval state).
+    o.discount = { ...o.discount, amount: Math.round((subtotal * o.discount.percent) / 100) };
+    o.subtotal = subtotal;
+  }
+  o.total = subtotal - (o.discount?.amount ?? 0);
+  if (input.note !== undefined) o.note = input.note.trim() || undefined;
+  const overLimit = committedDebt(db, customer.id, now.toISOString(), o.id) + o.total > customer.debt_limit;
+  const reasons = [...(overLimit ? (["debt"] as const) : []), ...(o.discount?.needs_approval ? (["discount"] as const) : [])];
+  if (reasons.length) {
+    o.status = "needs_approval";
+    o.approval_for = [...reasons];
+    // A bigger order needs the manager's OK again.
+    if (overLimit) delete o.approved_by;
+  } else {
+    o.status = "pending";
+    delete o.approval_for;
+  }
+  o.reserved_until = new Date(now.getTime() + db.settings.reservation_hours * 3_600_000).toISOString();
+  o.edited_at = now.toISOString();
+  audit(db, actor, "update", "order", o.id, `تعديل الطلب ${o.number} قبل التثبيت`, `Changed ${o.number} before confirming`, now);
+  if (actor.role === "shop") {
+    const n = {
+      type: "shop_order" as const,
+      title: `${customer.name} عدّل طلبه ${o.number}`,
+      title_en: `${customer.name} changed order ${o.number}`,
+      body: `المجموع الآن ${o.total.toLocaleString("en-US")} د.ع${o.status === "needs_approval" ? " · ينتظر موافقة المدير" : ""}`,
+      body_en: `New total ${o.total.toLocaleString("en-US")} IQD`,
+      link: `/orders/${o.id}`,
+    };
+    notify(db, { ...n, roles: ["manager"] }, now);
+    notify(db, { ...n, roles: ["rep"], user_id: o.rep_id }, now);
+  }
+  return o;
+}
+
+/** Give, change or remove (0) the discount of an order that isn't confirmed yet. */
+export function setOrderDiscount(db: Db, actor: DbUser, id: number, percent: number, now: Date): Order {
+  need(actor, ["manager", "rep", "warehouse"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if (o.status !== "pending" && o.status !== "needs_approval") fail(409, "BAD_STATE", "لا يتغير خصم طلب مثبّت", "A confirmed order's discount can't change");
+  if (actor.role === "rep" && o.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذا الطلب ليس لأحد زبائنك", "This order isn't for one of your shops");
+  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== o.warehouse_id) fail(403, "FORBIDDEN", "هذا الطلب من مخزن آخر", "This order is for another warehouse");
+  const customer = db.customers.find((c) => c.id === o.customer_id)!;
+  const subtotal = o.lines.reduce((s, l) => s + l.total, 0);
+  const discount = makeDiscount(actor, subtotal, percent, now);
+  if (discount) {
+    o.discount = discount;
+    o.subtotal = subtotal;
+  } else {
+    delete o.discount;
+    delete o.subtotal;
+  }
+  o.total = subtotal - (discount?.amount ?? 0);
+  // Ask again why the order would wait: the new total may be under (or over) the debt limit now.
+  const overLimit = committedDebt(db, customer.id, now.toISOString(), o.id) + o.total > customer.debt_limit;
+  const debtWasOk = o.approved_by && !(o.approval_for ?? []).includes("debt");
+  const reasons = [...(overLimit && !debtWasOk ? (["debt"] as const) : []), ...(discount?.needs_approval ? (["discount"] as const) : [])];
+  if (reasons.length) {
+    o.status = "needs_approval";
+    o.approval_for = [...reasons];
+  } else {
+    o.status = "pending";
+    delete o.approval_for;
+  }
+  audit(db, actor, "update", "order", o.id, discount ? `خصم ${discount.percent}% على ${o.number}` : `إلغاء خصم ${o.number}`, discount ? `${discount.percent}% discount on ${o.number}` : `Removed the discount of ${o.number}`, now);
+  if (discount?.needs_approval) notifyDiscount(db, o, customer.name, now);
   return o;
 }
 
@@ -516,6 +663,7 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
     date: now.toISOString(),
     lines,
     total: o.total,
+    ...(o.discount ? { subtotal: o.subtotal, discount: o.discount.amount, discount_percent: o.discount.percent } : {}),
     paid: 0,
     returned: 0,
     cost,
@@ -525,8 +673,11 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
   o.status = "confirmed";
   o.invoice_id = invId;
   o.reserved_until = undefined;
-  // The trip to the shop starts here: a QR code for the shipment label and a PIN for the shop owner.
+  // The trip to the shop starts here: a QR code for the shipment label and a PIN for the shop owner,
+  // and the delivery rep who takes it.
   o.delivery = newDelivery();
+  const carrier = deliveryRepFor(db, o.rep_id);
+  if (carrier) o.delivery.rep = person(carrier);
   audit(db, actor, "confirm", "order", o.id, `تثبيت الطلب ${o.number} وإصدار الفاتورة ${inv.number}`, `Confirmed ${o.number}, invoice ${inv.number}`, now);
   for (const l of lines) checkLowStock(db, l.item_id, now);
   const customer = db.customers.find((c) => c.id === o.customer_id);
@@ -544,7 +695,7 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
     },
     now,
   );
-  const shopUser = db.users.find((u) => u.role === "shop" && u.customer_id === o.customer_id);
+  const shopUser = shopOwnerOf(db, o.customer_id);
   if (shopUser) {
     notify(
       db,
@@ -704,7 +855,8 @@ export function createReturn(db: Db, actor: DbUser, input: NewReturn, now: Date)
       if (take <= 0) continue;
       sl.returned_pieces += take;
       pieces -= take;
-      lineAmount += Math.round((sl.total / sl.pieces) * take);
+      // What the shop really paid for these pieces: after the invoice's discount.
+      lineAmount += Math.round((sl.total / sl.pieces) * take * (1 - (inv.discount_percent ?? 0) / 100));
       // Put good pieces back into the batches they came from (latest expiry first), damaged ones are written off.
       let back = take;
       for (const use of [...sl.batches].reverse()) {
@@ -826,6 +978,9 @@ export function createTransfer(db: Db, actor: DbUser, input: NewTransfer, now: D
 
 export function createStocktake(db: Db, actor: DbUser, warehouseId: number, now: Date): Stocktake {
   need(actor, ["manager", "warehouse"]);
+  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== warehouseId) {
+    fail(403, "FORBIDDEN", "تستطيع جرد مخزنك فقط", "You can only count your own warehouse");
+  }
   if (db.stocktakes.some((s) => s.warehouse_id === warehouseId && s.status === "open")) {
     fail(409, "BAD_STATE", "يوجد جرد مفتوح لهذا المخزن", "There is already an open count for this warehouse");
   }
@@ -1073,12 +1228,93 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
   return { user, customer };
 }
 
+// ---------- A shop owner with several shops ----------
+
+/** Every shop of this owner (older accounts only have customer_id). */
+export function shopsOf(u: DbUser): number[] {
+  return [...new Set([...(u.customer_ids ?? []), ...(u.customer_id ? [u.customer_id] : [])])];
+}
+
+/** The owner's login of a shop. */
+export function shopOwnerOf(db: Db, customerId: number): DbUser | undefined {
+  return db.users.find((u) => u.role === "shop" && shopsOf(u).includes(customerId));
+}
+
+export function myShops(db: Db, actor: DbUser): MyShop[] {
+  need(actor, ["shop"]);
+  return shopsOf(actor)
+    .map((id) => db.customers.find((c) => c.id === id))
+    .filter((c): c is DbCustomer => !!c)
+    .map((c) => ({ id: c.id, name: c.name, area: c.area, active: c.active, ...(c.pending ? { pending: true } : {}) }));
+}
+
+/** Work on another of his shops: everything after this (orders, statement, chat) is for that shop. */
+export function switchShop(db: Db, actor: DbUser, customerId: number): DbUser {
+  need(actor, ["shop"]);
+  if (!shopsOf(actor).includes(customerId)) fail(403, "FORBIDDEN", "هذا المحل ليس لك", "This shop isn't yours");
+  actor.customer_ids = shopsOf(actor);
+  actor.customer_id = customerId;
+  return actor;
+}
+
+/** The owner adds another shop. Like a sign-up from the website: it waits for the manager (prices, limit). */
+export function addShop(db: Db, actor: DbUser, input: NewShopInput, now: Date): MyShop {
+  need(actor, ["shop"]);
+  const errors: Record<string, string> = {};
+  const name = (input.shop_name ?? "").trim();
+  const area = (input.area ?? "").trim();
+  const phone = (input.phone ?? "").replace(/\s/g, "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) || actor.phone;
+  if (name.length < 3) errors.shop_name = msg("اكتب اسم المحل", "Enter the shop name");
+  else if (db.customers.some((c) => c.name.trim() === name)) errors.shop_name = msg("يوجد محل بهذا الاسم", "A shop with this name exists");
+  if (!area) errors.area = msg("اختر المنطقة", "Choose the area");
+  if (!/^07\d{9}$/.test(phone)) errors.phone = msg("رقم عراقي من 11 رقم يبدأ بـ 07", "An 11-digit Iraqi number starting with 07");
+  if (shopsOf(actor).length >= 10) errors.shop_name = msg("حتى 10 محلات لكل حساب", "Up to 10 shops per account");
+  if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول المؤشرة", "Check the marked fields", errors);
+
+  // The same choice of delivery rep as a sign-up: the one who already serves that area.
+  const reps = db.users.filter((u) => u.role === "rep" && u.active);
+  const rep = reps
+    .map((r) => ({ r, same: db.customers.filter((c) => c.rep_id === r.id && c.area === area).length, all: db.customers.filter((c) => c.rep_id === r.id).length }))
+    .sort((a, b) => b.same - a.same || a.all - b.all)[0]?.r;
+  const tier = db.tiers.find((t) => t.id === 3) ?? db.tiers[db.tiers.length - 1];
+  const c: DbCustomer = {
+    id: nextId(db, "customer"),
+    name,
+    owner_name: actor.name,
+    phone,
+    area,
+    address: input.address?.trim() || `كربلاء - ${area}`,
+    tier_id: tier.id,
+    rep_id: rep?.id ?? 0,
+    debt_limit: 0,
+    active: false,
+    pending: true,
+  };
+  db.customers.push(c);
+  actor.customer_ids = [...shopsOf(actor), c.id];
+  audit(db, actor, "create", "customer", c.id, `${actor.name} أضاف محلاً آخر: ${c.name} (${area})`, `${actor.name} added another shop: ${c.name}`, now);
+  notify(
+    db,
+    {
+      type: "new_shop",
+      roles: ["manager"],
+      title: `محل إضافي لـ ${actor.name}: ${c.name}`,
+      title_en: `Another shop for ${actor.name}: ${c.name}`,
+      body: `${area}. صاحبه زبون لديكم. حدد نوع السعر وسقف الدين ووافق عليه`,
+      body_en: `${area}. The owner is already a customer. Set the tier and limit, then approve`,
+      link: `/customers/${c.id}`,
+    },
+    now,
+  );
+  return { id: c.id, name: c.name, area: c.area, active: false, pending: true };
+}
+
 /** The manager approved the shop (from the customer form, with its tier, rep and limit). */
 export function approveShop(db: Db, actor: DbUser, customer: DbCustomer, now: Date) {
   customer.pending = false;
   customer.active = true;
   audit(db, actor, "approve", "customer", customer.id, `موافقة على المحل ${customer.name} وتفعيل حسابه`, `Approved shop ${customer.name}`, now);
-  const owner = db.users.find((u) => u.role === "shop" && u.customer_id === customer.id);
+  const owner = shopOwnerOf(db, customer.id);
   if (owner) {
     notify(
       db,
@@ -1105,7 +1341,13 @@ export function rejectShop(db: Db, actor: DbUser, id: number, reason: string, no
   if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب الرفض", "Write the reason", { reason: msg("السبب مطلوب", "Reason is required") });
   c.pending = false;
   c.active = false;
-  for (const u of db.users) if (u.role === "shop" && u.customer_id === c.id) u.active = false;
+  // His login closes only if this was his only shop.
+  for (const u of db.users) {
+    if (u.role !== "shop" || !shopsOf(u).includes(c.id)) continue;
+    const others = shopsOf(u).filter((id) => id !== c.id && db.customers.some((x) => x.id === id && x.active));
+    if (!others.length) u.active = false;
+    else if (u.customer_id === c.id) u.customer_id = others[0];
+  }
   audit(db, actor, "cancel", "customer", c.id, `رفض تسجيل المحل ${c.name}: ${reason.trim()}`, `Refused sign-up of ${c.name}: ${reason.trim()}`, now);
   return c;
 }
@@ -1217,6 +1459,21 @@ function secureInt(max: number) {
   return a[0] % max;
 }
 
+/** Who delivers an order: its own rep if he does delivery, otherwise the delivery rep with the fewest
+ *  shipments still waiting or on the way. */
+export function deliveryRepFor(db: Db, orderRepId: number): DbUser | undefined {
+  const does = (u: DbUser, k: RepKind) => u.role === "rep" && u.active && (!u.rep_kinds?.length || u.rep_kinds.includes(k));
+  const own = db.users.find((u) => u.id === orderRepId);
+  if (own && does(own, "delivery")) return own;
+  const load = (id: number) => db.orders.filter((x) => x.delivery && x.delivery.status !== "delivered" && deliveryRepId(x) === id).length;
+  return db.users.filter((u) => does(u, "delivery")).sort((a, b) => load(a.id) - load(b.id))[0];
+}
+
+/** The rep who delivers this order. */
+export function deliveryRepId(o: Order) {
+  return o.delivery?.rep?.id ?? o.rep_id;
+}
+
 export function newDelivery(): Delivery {
   // Letters and digits that can't be mixed up when typed by hand (no 0/O, 1/I).
   const abc = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -1235,14 +1492,14 @@ export function dispatchDelivery(db: Db, actor: DbUser, rawCode: string, now: Da
   const code = normalizeCode(rawCode);
   const o = db.orders.find((x) => x.delivery?.code === code) ?? fail(404, "NOT_FOUND", "رمز شحنة غير معروف", "Unknown shipment code");
   const d = o.delivery!;
-  if (actor.role === "rep" && o.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذه الشحنة لمندوب توصيل آخر", "This shipment belongs to another delivery rep");
+  if (actor.role === "rep" && deliveryRepId(o) !== actor.id) fail(403, "FORBIDDEN", "هذه الشحنة لمندوب توصيل آخر", "This shipment belongs to another delivery rep");
   if (d.status === "delivered") fail(409, "BAD_STATE", "هذه الشحنة سُلِّمت من قبل", "This shipment was already delivered");
   if (d.status === "out") return o; // scanned twice: nothing changes
   Object.assign(d, { status: "out", out_at: now.toISOString(), out_by: person(actor) });
   const customer = db.customers.find((c) => c.id === o.customer_id);
   audit(db, actor, "update", "order", o.id, `خروج الشحنة ${o.number} مع ${actor.name} إلى ${customer?.name ?? ""}`, `Shipment ${o.number} out with ${actor.name}`, now);
   // Only the shop owner gets the PIN, in his own notification.
-  const shopUser = db.users.find((u) => u.role === "shop" && u.customer_id === o.customer_id);
+  const shopUser = shopOwnerOf(db, o.customer_id);
   if (shopUser) {
     notify(
       db,
@@ -1272,7 +1529,7 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
   need(actor, ["rep"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   const d = o.delivery ?? fail(409, "BAD_STATE", "هذا الطلب ليس له شحنة", "This order has no shipment");
-  if (o.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذه الشحنة لمندوب توصيل آخر", "This shipment belongs to another delivery rep");
+  if (deliveryRepId(o) !== actor.id) fail(403, "FORBIDDEN", "هذه الشحنة لمندوب توصيل آخر", "This shipment belongs to another delivery rep");
   if (d.status === "ready") fail(409, "BAD_STATE", "امسح رمز QR للشحنة في المخزن أولاً", "Scan the shipment's QR at the warehouse first");
   if (d.status === "delivered") fail(409, "BAD_STATE", "هذه الشحنة سُلِّمت من قبل", "This shipment was already delivered");
   if (d.locked) return { ok: false, left: 0, locked: true };
@@ -1306,10 +1563,11 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
   }
 
   Object.assign(d, { status: "delivered", delivered_at: now.toISOString(), delivered_by: person(actor), has_photo: true });
+  delete d.problem;
   db.delivery_photos[o.id] = input.photo;
   const customer = db.customers.find((c) => c.id === o.customer_id);
   audit(db, actor, "update", "order", o.id, `تسليم ${o.number} إلى ${customer?.name ?? ""} برمز الاستلام وصورة`, `${o.number} delivered with PIN and photo`, now);
-  const shopUser = db.users.find((u) => u.role === "shop" && u.customer_id === o.customer_id);
+  const shopUser = shopOwnerOf(db, o.customer_id);
   if (shopUser) {
     notify(db, { type: "delivered", roles: ["shop"], user_id: shopUser.id, title: `تم تسليم طلبك ${o.number}`, title_en: `Order ${o.number} delivered`, body: `سلّمه ${actor.name}`, body_en: `Delivered by ${actor.name}`, link: `/orders/${o.id}` }, now);
   }
@@ -1323,6 +1581,72 @@ export function unlockDelivery(db: Db, actor: DbUser, id: number, now: Date): Or
   if (!o.delivery?.locked) fail(409, "BAD_STATE", "الشحنة ليست مقفلة", "The shipment isn't locked");
   Object.assign(o.delivery!, { locked: false, pin_attempts: 0 });
   audit(db, actor, "update", "order", o.id, `فتح الشحنة المقفلة ${o.number}`, `Unlocked shipment ${o.number}`, now);
+  return o;
+}
+
+// ---------- Problems on the way ----------
+
+const PROBLEM_TEXT: Record<ProblemReason, [string, string]> = {
+  accident: ["تعرّض لحادث", "had an accident"],
+  vehicle: ["عطل في السيارة", "vehicle broke down"],
+  shop_closed: ["المحل مغلق", "the shop is closed"],
+  no_answer: ["صاحب المحل لا يرد", "the shop owner doesn't answer"],
+  refused: ["رفض المحل الاستلام", "the shop refused the goods"],
+  other: ["سبب آخر", "another reason"],
+};
+
+/** The delivery rep can't deliver: an accident, the shop closed... The shipments stay with him ("out"),
+ *  marked with the problem, and the manager is told at once (an accident is urgent). */
+export function reportDeliveryProblem(db: Db, actor: DbUser, input: ProblemInput, now: Date): Order[] {
+  need(actor, ["rep"]);
+  const ids = [...new Set(input.order_ids ?? [])];
+  if (!ids.length) fail(422, "VALIDATION", "اختر شحنة واحدة على الأقل", "Pick at least one shipment");
+  if (!PROBLEM_TEXT[input.reason]) fail(422, "VALIDATION", "اختر السبب", "Choose the reason", { reason: msg("مطلوب", "Required") });
+  const note = (input.note ?? "").trim().slice(0, 500);
+  if (input.reason === "other" && !note) fail(422, "VALIDATION", "اكتب ما حدث", "Write what happened", { note: msg("مطلوب عند اختيار سبب آخر", "Needed for another reason") });
+  const orders = ids.map((id) => {
+    const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+    if (deliveryRepId(o) !== actor.id) fail(403, "FORBIDDEN", "هذه الشحنة لمندوب توصيل آخر", "This shipment belongs to another delivery rep");
+    if (o.delivery?.status !== "out") fail(409, "BAD_STATE", `الشحنة ${o.number} ليست في الطريق معك`, `Shipment ${o.number} isn't out with you`);
+    return o;
+  });
+  const [ar, en] = PROBLEM_TEXT[input.reason];
+  const names = orders.map((o) => db.customers.find((c) => c.id === o.customer_id)?.name ?? "").filter(Boolean);
+  for (const o of orders) {
+    o.delivery!.problem = { reason: input.reason, ...(note ? { note } : {}), at: now.toISOString(), by: person(actor) };
+    audit(db, actor, "update", "order", o.id, `تعذّر تسليم ${o.number}: ${ar}${note ? ` (${note})` : ""}`, `Couldn't deliver ${o.number}: ${en}`, now);
+  }
+  const urgent = input.reason === "accident" || input.reason === "vehicle";
+  notify(
+    db,
+    {
+      type: "delivery_problem",
+      roles: ["manager"],
+      title: urgent ? `عاجل: ${actor.name} ${ar}` : `تعذّر التسليم: ${ar}`,
+      title_en: urgent ? `Urgent: ${actor.name} ${en}` : `Couldn't deliver: ${en}`,
+      body: `${orders.length} شحنة: ${names.join("، ")}.${note ? ` ${note}` : ""}${urgent ? " اتصل به الآن." : ""}`,
+      body_en: `${orders.length} shipment(s): ${names.join(", ")}.${note ? ` ${note}` : ""}${urgent ? " Call him now." : ""}`,
+      link: orders.length === 1 ? `/orders/${orders[0].id}` : "/deliveries",
+    },
+    now,
+  );
+  return orders;
+}
+
+/** The shipment comes back to the warehouse (after a problem, or any shipment that is out): it is "ready"
+ *  again, to go out later with a new QR scan. The PIN stays the same. */
+export function returnToWarehouse(db: Db, actor: DbUser, id: number, now: Date): Order {
+  need(actor, ["manager", "warehouse"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== o.warehouse_id) fail(403, "FORBIDDEN", "هذه الشحنة من مخزن آخر", "This shipment is from another warehouse");
+  const d = o.delivery ?? fail(409, "BAD_STATE", "هذا الطلب ليس له شحنة", "This order has no shipment");
+  if (d.status !== "out") fail(409, "BAD_STATE", "الشحنة ليست في الطريق", "The shipment isn't on the way");
+  const why = d.problem ? PROBLEM_TEXT[d.problem.reason][0] : "";
+  Object.assign(d, { status: "ready", pin_attempts: 0, locked: false });
+  delete d.out_at;
+  delete d.out_by;
+  delete d.problem;
+  audit(db, actor, "update", "order", o.id, `أُعيدت الشحنة ${o.number} إلى المخزن${why ? `: ${why}` : ""}`, `Shipment ${o.number} back at the warehouse`, now);
   return o;
 }
 
@@ -1376,7 +1700,7 @@ function addChat(db: Db, actor: DbUser, customerId: number, from: "shop" | "staf
     );
   }
   if (from === "staff" && before?.from === "shop") {
-    const shopUser = db.users.find((u) => u.role === "shop" && u.customer_id === customerId);
+    const shopUser = shopOwnerOf(db, customerId);
     if (shopUser) {
       notify(db, { type: "support_reply", roles: ["shop"], user_id: shopUser.id, title: `ردّ الدعم: ${actor.name}`, title_en: `Support replied: ${actor.name}`, body: m.text.slice(0, 120), body_en: m.text.slice(0, 120) }, now);
     }
