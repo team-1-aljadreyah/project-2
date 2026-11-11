@@ -51,6 +51,9 @@ export default function DeliveriesPage() {
   // Shipments with a problem first, so nobody misses them.
   const shown = list(tab).sort((a, b) => Number(!!b.delivery!.problem) - Number(!!a.delivery!.problem));
   const mineOut = isRep ? list("out") : [];
+  // Shops he can put in a trip: their shipments are with him, or ready at the warehouse for him to take.
+  const tripable = isRep ? [...list("out"), ...list("ready")] : [];
+  const tripShops = new Set(tripable.map((o) => o.customer_id));
   const stops = isRep && trip.length ? buildTrip(trip, withDelivery, cust, today()) : [];
   const toggle = (customerId: number) => setPicking((p) => (p ? (p.includes(customerId) ? p.filter((x) => x !== customerId) : [...p, customerId]) : p));
 
@@ -128,10 +131,26 @@ export default function DeliveriesPage() {
       />
 
       {/* Pick several shops for one trip */}
-      {isRep && tab === "out" && mineOut.length > 1 && !picking && (
-        <Button className="mb-3 w-full sm:w-auto" onClick={() => setPicking(stops.length ? trip.filter((id) => mineOut.some((o) => o.customer_id === id)) : [])}>
-          <Route className="size-4" /> {stops.length ? tr("عدّل محلات الجولة", "Change the trip's shops") : tr("اختر عدة محلات لجولة واحدة", "Pick several shops for one trip")}
-        </Button>
+      {/* Pick several shops for one trip: always in sight for a delivery rep */}
+      {isRep && (tab === "out" || tab === "ready") && !picking && (
+        tripShops.size > 1 ? (
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-action/40 bg-action/10 p-3">
+            <Route className="size-5 shrink-0 text-action" />
+            <p className="min-w-0 flex-1 text-sm">
+              {stops.length
+                ? tr("جولتك جاهزة في الأعلى. يمكنك تغيير محلاتها.", "Your trip is above. You can change its shops.")
+                : tr(`عندك شحنات لـ ${num(tripShops.size)} محلات: اخترها لجولة واحدة مرتبة منطقةً بعد منطقة.`, `You have shipments for ${num(tripShops.size)} shops: pick them for one trip, area by area.`)}
+            </p>
+            <Button variant="action" onClick={() => setPicking(stops.length ? trip.filter((id) => tripShops.has(id)) : [])}>
+              {stops.length ? tr("عدّل محلات الجولة", "Change the trip's shops") : tr("اختر محلات الجولة", "Pick the trip's shops")}
+            </Button>
+          </div>
+        ) : (
+          <p className="mb-3 flex items-center gap-2 rounded-2xl bg-card-2 p-3 text-xs text-muted">
+            <Route className="size-4 shrink-0" />
+            {tr("عندما تكون عندك شحنات لمحلين أو أكثر، تستطيع اختيارها هنا لجولة توصيل واحدة.", "When you have shipments for two shops or more, you can pick them here for one delivery trip.")}
+          </p>
+        )
       )}
 
       {orders.state.status === "loading" ? (
@@ -150,13 +169,12 @@ export default function DeliveriesPage() {
               return (
                 <motion.article
                   key={o.id}
-                  layout
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.04 } }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   className={cn("rounded-2xl border bg-card p-4", d.locked || d.problem ? "border-danger/40" : picking?.includes(o.customer_id) ? "border-action ring-2 ring-action/30" : "border-line")}
                 >
-                  {picking && d.status === "out" && (
+                  {picking && (d.status === "out" || d.status === "ready") && (
                     <button
                       type="button"
                       onClick={() => toggle(o.customer_id)}

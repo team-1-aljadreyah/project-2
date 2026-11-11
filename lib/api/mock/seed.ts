@@ -4,8 +4,11 @@ import type { Db, DbItem, DbUser } from "./db";
 import { DB_VERSION } from "./db";
 import {
   addDays,
+  acceptOrder,
   addPayment,
   approveOrder,
+  dispatchDelivery,
+  prepareOrder,
   closeMonth,
   confirmOrder,
   createOrder,
@@ -422,6 +425,34 @@ export function makeSeed(now = new Date()): Db {
     db.invoices = db.invoices.filter((i) => i.id !== inv.id);
     o.status = "approved";
     o.invoice_id = undefined;
+  }
+
+  // Today's deliveries (so the delivery reps have a day to plan): orders approved and prepared this morning,
+  // some still at the warehouse ("ready"), some already out with the rep. حسين delivers his own shops;
+  // علي حسن (delivery only) takes the shipments of عباس's shops.
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000);
+  const todayRun: [number, number, { item_id: number; unit: "carton" | "piece"; qty: number }[], boolean][] = [
+    [4, 1, [{ item_id: 1, unit: "carton", qty: 2 }, { item_id: 3, unit: "carton", qty: 1 }], true],
+    [4, 3, [{ item_id: 2, unit: "carton", qty: 1 }], true],
+    [4, 4, [{ item_id: 4, unit: "carton", qty: 2 }], false],
+    [4, 13, [{ item_id: 3, unit: "carton", qty: 2 }], false],
+    [5, 6, [{ item_id: 1, unit: "carton", qty: 1 }], true],
+    [5, 7, [{ item_id: 2, unit: "carton", qty: 1 }, { item_id: 4, unit: "carton", qty: 1 }], false],
+    [5, 8, [{ item_id: 3, unit: "carton", qty: 1 }], false],
+  ];
+  for (const [repId, customerId, lines, out] of todayRun) {
+    safe(() => {
+      const rep = db.users.find((u) => u.id === repId)!;
+      const o = createOrder(db, rep, { client_ref: cref(), customer_id: customerId, warehouse_id: 1, lines }, hoursAgo(5));
+      if (o.status !== "pending") return;
+      acceptOrder(db, accountant, o.id, hoursAgo(4.5));
+      prepareOrder(db, keepers[0], o.id, {}, hoursAgo(4));
+      // عباس's shops are delivered by علي حسن (the delivery-only rep) in the demo.
+      const ali = db.users.find((u) => u.id === 11);
+      if (repId === 5 && ali && o.delivery) o.delivery.rep = { id: ali.id, name: ali.name };
+      const carrier = db.users.find((u) => u.id === o.delivery?.rep?.id);
+      if (out && carrier && o.delivery) dispatchDelivery(db, carrier, o.delivery.code, hoursAgo(3));
+    });
   }
 
   // The manager's rules for the reps and the prices:

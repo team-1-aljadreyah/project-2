@@ -52,6 +52,8 @@ export interface TripStop {
   customer: Customer;
   /** Still with him for this shop. */
   open: Order[];
+  /** Still at the warehouse: he scans their label there first. */
+  waiting: Order[];
   /** Already delivered (this trip's shops, today). */
   done: Order[];
 }
@@ -64,6 +66,7 @@ export function buildTrip(ids: number[], orders: Order[], customers: Map<number,
     .map((c) => ({
       customer: c,
       open: orders.filter((o) => o.customer_id === c.id && o.delivery?.status === "out"),
+      waiting: orders.filter((o) => o.customer_id === c.id && o.delivery?.status === "ready"),
       done: orders.filter((o) => o.customer_id === c.id && o.delivery?.status === "delivered" && (o.delivery.delivered_at ?? "").slice(0, 10) >= todayIso),
     }));
   const areas = [...new Set(stops.map((s) => s.customer.area))];
@@ -72,7 +75,7 @@ export function buildTrip(ids: number[], orders: Order[], customers: Map<number,
 
 export function TripPanel({ stops, onDeliver, onProblem, onEnd }: { stops: TripStop[]; onDeliver: (o: Order) => void; onProblem: (orders: Order[]) => void; onEnd: () => void }) {
   const { tr, num } = useFmt();
-  const left = stops.filter((s) => s.open.length);
+  const left = stops.filter((s) => s.open.length || s.waiting.length);
   const doneCount = stops.length - left.length;
   const next = left[0];
   return (
@@ -94,7 +97,7 @@ export function TripPanel({ stops, onDeliver, onProblem, onEnd }: { stops: TripS
       </header>
       <ol className="divide-y divide-line">
         {stops.map((s, i) => {
-          const done = !s.open.length;
+          const done = !s.open.length && !s.waiting.length;
           const isNext = s === next;
           const problem = s.open.find((o) => o.delivery?.problem);
           return (
@@ -106,11 +109,12 @@ export function TripPanel({ stops, onDeliver, onProblem, onEnd }: { stops: TripS
                 <p className={cn("truncate text-sm font-semibold", done && "text-muted line-through")}>{s.customer.name}</p>
                 <p className="flex items-center gap-1 text-xs text-muted">
                   <MapPin className="size-3" /> {s.customer.area}
-                  {!done && ` · ${tr(`${num(s.open.length)} شحنة`, `${num(s.open.length)} shipment(s)`)}`}
+                  {!done && s.open.length > 0 && ` · ${tr(`${num(s.open.length)} شحنة معك`, `${num(s.open.length)} with you`)}`}
+                  {!done && s.waiting.length > 0 && <span className="ms-1 text-warning">· {tr(`${num(s.waiting.length)} في المخزن: امسحها أولاً`, `${num(s.waiting.length)} at the warehouse: scan first`)}</span>}
                   {problem && <span className="ms-1 font-semibold text-danger">· {tr("فيها مشكلة", "has a problem")}</span>}
                 </p>
               </div>
-              {!done && (
+              {!done && s.open.length > 0 && (
                 <div className="flex shrink-0 items-center gap-1">
                   <a href={`tel:${s.customer.phone}`} aria-label={tr(`اتصل بـ ${s.customer.name}`, `Call ${s.customer.name}`)} className="flex size-9 items-center justify-center rounded-lg border border-line hover:bg-card-2">
                     <Phone className="size-4" />
