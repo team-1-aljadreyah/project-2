@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Boxes, Calculator, Headset, Eye, EyeOff, Info, LayoutDashboard, Loader2, Lock, Phone, Store, Megaphone, Truck, UserPlus, type LucideIcon } from "lucide-react";
 import { rise, stagger } from "@/components/auth";
 import { LoginArt } from "@/components/login-art";
-import { LogoMark } from "@/components/logo";
+import { BrandName, LogoMark } from "@/components/logo";
 import { canOpen } from "@/components/nav";
 import { roleName } from "@/components/status";
 import { LanguageSwitch, ThemeToggle } from "@/components/switches";
@@ -108,7 +108,7 @@ export default function LoginPage() {
         <Link href="/" className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-white/90 hover:bg-white/10">
           <Back className="size-4" aria-hidden />
           <LogoMark size={28} />
-          <span className="hidden sm:inline">{tr("النهرين", "Al-Nahrain")}</span>
+          <span className="hidden sm:inline"><BrandName /></span>
         </Link>
         <div className="flex gap-2">
           <LanguageSwitch onBrand />

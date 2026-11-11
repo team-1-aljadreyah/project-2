@@ -33,7 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { Eyebrow, Stars, WordReveal, rise } from "@/components/landing/shared";
-import { LogoMark } from "@/components/logo";
+import { BrandName, LogoMark } from "@/components/logo";
 import { FAQ } from "@/components/support/faq";
 import { LanguageSwitch } from "@/components/switches";
 import { homeOf, useSession } from "@/lib/auth";
@@ -64,7 +64,7 @@ export default function ShopsPage() {
         <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full border border-white/10 bg-[#0b0c0e]/70 px-3 py-2 shadow-lg backdrop-blur-xl sm:px-4">
           <Link href="/" className="flex items-center gap-2">
             <LogoMark size={34} />
-            <span className="text-base font-bold">{tr("النهرين", "Al-Nahrain")}</span>
+            <span className="text-base font-bold"><BrandName /></span>
           </Link>
           <div className="hidden items-center gap-6 text-sm text-muted md:flex">
             <a href="#why" className="transition hover:text-text">
@@ -118,7 +118,7 @@ export default function ShopsPage() {
       <footer className="border-t border-white/5">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-muted">
           <span className="flex items-center gap-2">
-            <LogoMark size={24} /> {tr("© 2026 شركة النهرين للمواد الغذائية بالجملة", "© 2026 Al-Nahrain Wholesale Foods")}
+            <LogoMark size={24} /> © 2026 <BrandName company />
           </span>
           <Link href="/" className="font-medium text-primary-ink hover:underline">
             {tr("الصفحة الرئيسية", "Home page")}

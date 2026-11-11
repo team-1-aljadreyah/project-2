@@ -102,7 +102,8 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
   const limit = customer?.debt_limit;
   const overLimit = limit !== undefined && customer && balance + total > limit;
 
-  const categories = useMemo(() => [...new Set(items.filter((i) => i.active).map((i) => i.category))], [items]);
+  // In the manager's order (lookups), only the categories that have something to sell.
+  const categories = useMemo(() => lookups.categories.filter((c) => items.some((i) => i.active && i.category === c)), [items, lookups.categories]);
   const shown = items.filter((i) => i.active && (cat === "all" || i.category === cat) && matches(q, i.name, i.name_en, i.barcode));
   const pg = usePages(shown, 10);
   const linesOver = draft.lines.filter((l) => {

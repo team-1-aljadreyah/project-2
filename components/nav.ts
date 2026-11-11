@@ -30,7 +30,8 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { repDoes, type RepKind, type Role } from "@/lib/api/types";
+import { ordered } from "@/lib/api/site-defaults";
+import { repDoes, type RepKind, type Role, type SiteCustom } from "@/lib/api/types";
 
 export interface NavItem {
   href: string;
@@ -56,10 +57,27 @@ export const NAV: NavItem[] = [
   { href: "/rep", ar: "الرئيسية", en: "Home", icon: Home, roles: ["rep"], group: "main", mobile: ["rep"], kind: "sales" },
   { href: "/shop", ar: "اطلب الآن", en: "Order now", icon: Store, roles: ["shop"], group: "main", mobile: ["shop"] },
   { href: "/orders/new", ar: "طلب جديد", en: "New order", icon: ShoppingCart, roles: ["rep", "manager"], group: "sales", mobile: ["rep"], kind: "sales" },
-  { href: "/orders", ar: "الطلبات", en: "Orders", icon: ClipboardList, roles: ["manager", "warehouse", "rep", "accountant", "shop", "staff"], group: "sales", mobile: ["manager", "warehouse", "accountant", "shop", "staff"] },
+  {
+    href: "/orders",
+    ar: "الطلبات",
+    en: "Orders",
+    icon: ClipboardList,
+    roles: ["manager", "warehouse", "rep", "accountant", "shop", "staff"],
+    group: "sales",
+    mobile: ["manager", "warehouse", "accountant", "shop", "staff"],
+  },
   { href: "/invoices", ar: "الفواتير", en: "Invoices", icon: ReceiptText, roles: ["manager", "accountant", "rep", "shop"], group: "sales" },
   { href: "/returns", ar: "المرتجعات", en: "Returns", icon: Undo2, roles: ["manager", "accountant", "rep", "warehouse"], group: "sales" },
-  { href: "/deliveries", ar: "التوصيل", en: "Deliveries", icon: PackageCheck, roles: ["rep", "manager", "warehouse", "accountant", "staff"], group: "sales", mobile: ["rep", "staff"], kind: "delivery" },
+  {
+    href: "/deliveries",
+    ar: "التوصيل",
+    en: "Deliveries",
+    icon: PackageCheck,
+    roles: ["rep", "manager", "warehouse", "accountant", "staff"],
+    group: "sales",
+    mobile: ["rep", "staff"],
+    kind: "delivery",
+  },
   { href: "/customers", ar: "الزبائن والديون", en: "Customers", icon: Users, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["accountant"], kind: "sales" },
   { href: "/statement", ar: "كشف حسابي", en: "My statement", icon: FileText, roles: ["shop"], group: "money", mobile: ["shop"] },
   { href: "/payments", ar: "التسديدات", en: "Payments", icon: Wallet, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["rep", "manager", "accountant"] },
@@ -83,6 +101,26 @@ export const GROUPS: Record<NavItem["group"], [string, string]> = {
   stock: ["المخزون", "Stock"],
   admin: ["الإدارة", "Admin"],
 };
+
+export type NavShown = NavItem & { hidden?: boolean };
+
+/**
+ * The menu after the manager's customization (customize mode).
+ * New names are for everyone. The order, the groups and the hidden pages are the manager's own menu
+ * (`own`), so he can't take a page away from another job by mistake.
+ */
+export function customNav(list: NavItem[], nav: SiteCustom["nav"], own: boolean): NavShown[] {
+  const named = list.map((n) => ({ ...n, ar: nav.labels[n.href]?.ar || n.ar, en: nav.labels[n.href]?.en || n.en }));
+  if (!own) return named;
+  const moved = named.map((n) => ({ ...n, group: (nav.groups[n.href] in GROUPS ? nav.groups[n.href] : n.group) as NavItem["group"], hidden: nav.hidden.includes(n.href) }));
+  return ordered(moved, nav.order, (n) => n.href);
+}
+
+/** A page's title follows the page's new name in the menu (when the title is the menu's name). */
+export function pageTitle(title: string, path: string, labels: SiteCustom["nav"]["labels"], lang: "ar" | "en") {
+  const n = NAV.find((x) => x.href === path && (x.ar === title || x.en === title));
+  return (n && labels[n.href]?.[lang]) || title;
+}
 
 // Pages that are not in the menu but need a role check (detail pages follow their list page).
 const EXTRA: { prefix: string; roles: Role[] }[] = [

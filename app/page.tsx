@@ -10,7 +10,7 @@ import { Bento, Roles } from "@/components/landing/features";
 import { Hero } from "@/components/landing/hero";
 import { CategoryStrip, Platform, Problems } from "@/components/landing/sections";
 import { Stars, WordReveal, rise } from "@/components/landing/shared";
-import { LogoMark } from "@/components/logo";
+import { BrandName, LogoMark } from "@/components/logo";
 import { LanguageSwitch } from "@/components/switches";
 import { homeOf, useSession } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
@@ -93,7 +93,7 @@ export default function LandingPage() {
       <footer className="border-t border-white/5">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-muted">
           <span className="flex items-center gap-2">
-            <LogoMark size={24} /> {tr("© 2026 شركة النهرين للمواد الغذائية بالجملة", "© 2026 Al-Nahrain Wholesale Foods")}
+            <LogoMark size={24} /> © 2026 <BrandName company />
           </span>
           <Link href={enter} className="font-medium text-primary-ink hover:underline">
             {enterLabel}
@@ -120,7 +120,7 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
       >
         <Link href="/" className="flex items-center gap-2">
           <LogoMark size={34} />
-          <span className="text-base font-bold">{tr("النهرين", "Al-Nahrain")}</span>
+          <span className="text-base font-bold"><BrandName /></span>
         </Link>
         <div className="hidden items-center gap-7 text-sm text-muted md:flex">
           <a href="#platform" className="transition hover:text-text">

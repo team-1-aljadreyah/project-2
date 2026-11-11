@@ -18,9 +18,11 @@ import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
+import { setCustomizing, useCustomizing, useLabel, useSite } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
-import { canOpen, GROUPS, NAV, navFor } from "./nav";
+import { CustomizeBar, CustomizeToggle, EditText, SortArea, SortItem, toggleIn, useSaveSite } from "./customize";
+import { canOpen, customNav, GROUPS, NAV, navFor } from "./nav";
 import { jobName } from "./status";
 import { LanguageSwitch, ThemeToggle } from "./switches";
 import { Button, Empty, IconButton, Skeleton, Switch, useToast } from "./ui";
@@ -91,12 +93,18 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
 
   const allowed = canOpen(user.role, path, user.rep_kinds);
 
+  // Customize mode is the manager's only: it goes off if another job logs in on this tab.
+  useEffect(() => {
+    if (user.role !== "manager") setCustomizing(false);
+  }, [user.role]);
+
   return (
     <div className="min-h-dvh md:flex">
       <Sidebar user={user} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar user={user} warehouses={lookups.data?.warehouses ?? []} />
         <OfflineBar />
+        {user.role === "manager" && <CustomizeBar />}
         <main className="mx-auto w-full max-w-7xl flex-1 px-3 pt-4 pb-28 sm:px-5 md:pb-10">
           {!allowed ? (
             <Empty
@@ -126,8 +134,15 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
   );
 }
 
-function useNav(user: User) {
-  return NAV.filter((n) => navFor(n, user));
+/** The pages of this user, with the manager's names and order. `all`: also the pages he hid (customize mode). */
+function useNav(user: User, all = false) {
+  const site = useSite();
+  const list = customNav(
+    NAV.filter((n) => navFor(n, user)),
+    site.nav,
+    user.role === "manager",
+  );
+  return all ? list : list.filter((n) => !n.hidden);
 }
 
 function isActive(path: string, href: string) {
@@ -136,41 +151,77 @@ function isActive(path: string, href: string) {
 }
 
 function Sidebar({ user }: { user: User }) {
-  const { tr } = useFmt();
+  const { tr, lang } = useFmt();
   const path = usePathname();
-  const nav = useNav(user);
+  // Customize mode: the rows are dragged, renamed and hidden instead of opened.
+  const editing = useCustomizing() && user.role === "manager";
+  const nav = useNav(user, editing);
+  const site = useSite();
+  const lab = useLabel();
+  const save = useSaveSite();
   const groups = Object.keys(GROUPS) as (keyof typeof GROUPS)[];
+  // The rows as they show, top to bottom: dragging works on this one list, across the groups.
+  const flat = groups.flatMap((g) => nav.filter((n) => n.group === g));
   return (
     <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-line bg-card md:flex">
       <div className="flex h-16 items-center gap-2 border-b border-line px-4">
         <Logo href="/" />
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-3">
-        {groups.map((g) => {
-          const list = nav.filter((n) => n.group === g);
-          if (!list.length) return null;
-          return (
-            <div key={g} className="mb-3">
-              {GROUPS[g][0] && <p className="px-3 pb-1 pt-2 text-xs font-medium text-faint">{tr(GROUPS[g][0], GROUPS[g][1])}</p>}
-              {list.map((n) => {
-                const active = isActive(path, n.href);
-                return (
-                  <Link
-                    key={n.href}
-                    href={n.href}
-                    className={cn(
-                      "flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition",
-                      active ? "bg-primary-soft text-primary-ink" : "text-muted hover:bg-card-2 hover:text-text",
-                    )}
-                  >
-                    <n.icon className="size-[18px] shrink-0" aria-hidden />
-                    {tr(n.ar, n.en)}
-                  </Link>
-                );
-              })}
-            </div>
-          );
-        })}
+        <SortArea
+          ids={flat.map((n) => n.href)}
+          onOrder={(ids, moved, onto) =>
+            // The dragged page also joins the group of the row it was dropped on.
+            save((s) => ({ ...s, nav: { ...s.nav, order: ids, groups: { ...s.nav.groups, [moved]: flat.find((n) => n.href === onto)?.group ?? "main" } } }))
+          }
+        >
+          {groups.map((g) => {
+            const list = nav.filter((n) => n.group === g);
+            if (!list.length) return null;
+            const groupName = lab(site.nav.group_labels[g], GROUPS[g][0], GROUPS[g][1]);
+            return (
+              <div key={g} className="mb-3">
+                {GROUPS[g][0] && (
+                  <p className="px-3 pb-1 pt-2 text-xs font-medium text-faint">
+                    <EditText value={groupName} onSave={(v) => save((s) => ({ ...s, nav: { ...s.nav, group_labels: { ...s.nav.group_labels, [g]: { ...s.nav.group_labels[g], [lang]: v } } } }))} />
+                  </p>
+                )}
+                {list.map((n) => {
+                  const active = isActive(path, n.href);
+                  if (editing)
+                    return (
+                      <SortItem
+                        key={n.href}
+                        id={n.href}
+                        inline
+                        hidden={n.hidden}
+                        onHide={() => save((s) => ({ ...s, nav: { ...s.nav, hidden: toggleIn(s.nav.hidden, n.href) } }))}
+                        className="h-10 text-sm font-medium text-text"
+                      >
+                        <span className="flex items-center gap-2">
+                          <n.icon className="size-[18px] shrink-0 text-muted" aria-hidden />
+                          <EditText value={tr(n.ar, n.en)} onSave={(v) => save((s) => ({ ...s, nav: { ...s.nav, labels: { ...s.nav.labels, [n.href]: { ...s.nav.labels[n.href], [lang]: v } } } }))} />
+                        </span>
+                      </SortItem>
+                    );
+                  return (
+                    <Link
+                      key={n.href}
+                      href={n.href}
+                      className={cn(
+                        "flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition",
+                        active ? "bg-primary-soft text-primary-ink" : "text-muted hover:bg-card-2 hover:text-text",
+                      )}
+                    >
+                      <n.icon className="size-[18px] shrink-0" aria-hidden />
+                      {tr(n.ar, n.en)}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </SortArea>
       </nav>
       <div className="border-t border-line p-3">
         <div className="rounded-xl bg-card-2 px-3 py-2 text-xs text-muted">
@@ -226,7 +277,14 @@ function BottomBar({ user }: { user: User }) {
             </div>
             <div className="grid grid-cols-3 gap-2">
               {rest.map((n) => (
-                <Link key={n.href} href={n.href} className={cn("flex flex-col items-center gap-2 rounded-xl border border-line p-3 text-center text-xs font-medium", isActive(path, n.href) ? "bg-primary-soft text-primary-ink" : "text-text")}>
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className={cn(
+                    "flex flex-col items-center gap-2 rounded-xl border border-line p-3 text-center text-xs font-medium",
+                    isActive(path, n.href) ? "bg-primary-soft text-primary-ink" : "text-text",
+                  )}
+                >
                   <n.icon className="size-5" aria-hidden />
                   {tr(n.ar, n.en)}
                 </Link>
@@ -262,6 +320,7 @@ function TopBar({ user, warehouses }: { user: User; warehouses: Lookups["warehou
         </div>
       )}
       <NetworkDot />
+      {user.role === "manager" && <CustomizeToggle />}
       <Bell2 user={user} />
       <LanguageSwitch />
       <ThemeToggle />
@@ -366,7 +425,10 @@ function OfflineBar() {
   return (
     <div className="no-print border-b border-line bg-warning-soft px-4 py-2 text-center text-sm text-warning">
       <WifiOff className="me-1 inline size-4 align-[-3px]" />
-      {tr("لا يوجد إنترنت. يمكنك متابعة عملك: تُحفظ الطلبات (مبدئية حتى المزامنة) والتسديدات على الجوال، وتُرسَل تلقائياً عند عودة الإنترنت.", "No internet. Keep working: orders and payments are saved on the phone and sent by themselves when the internet is back.")}
+      {tr(
+        "لا يوجد إنترنت. يمكنك متابعة عملك: تُحفظ الطلبات (مبدئية حتى المزامنة) والتسديدات على الجوال، وتُرسَل تلقائياً عند عودة الإنترنت.",
+        "No internet. Keep working: orders and payments are saved on the phone and sent by themselves when the internet is back.",
+      )}
       {queue.length > 0 && <span className="num ms-1 font-semibold">({tr(`${queue.length} بانتظار الإرسال`, `${queue.length} waiting`)})</span>}
     </div>
   );
@@ -396,7 +458,11 @@ function Bell2({ user }: { user: User }) {
   useRealtime(["notifications"], () => list.reload());
   const unread = list.data?.filter((n) => !n.read).length ?? 0;
   return (
-    <Link href="/notifications" aria-label={tr("الإشعارات", "Notifications")} className="relative inline-flex size-10 items-center justify-center rounded-xl text-muted hover:bg-card-2 hover:text-text">
+    <Link
+      href="/notifications"
+      aria-label={tr("الإشعارات", "Notifications")}
+      className="relative inline-flex size-10 items-center justify-center rounded-xl text-muted hover:bg-card-2 hover:text-text"
+    >
       <Bell className="size-5" />
       {unread > 0 && (
         <span className="num absolute end-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">

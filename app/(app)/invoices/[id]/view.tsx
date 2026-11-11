@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle, Printer, Undo2, Wallet } from "lucide-react";
 import { LogoMark } from "@/components/logo";
+import { useBrand } from "@/lib/site";
 import { CreditNoteButton } from "@/components/refund";
 import { useApp } from "@/components/shell";
 import { InvoiceStatusBadge } from "@/components/status";
@@ -16,6 +17,7 @@ import { useIdParam } from "@/lib/utils";
 export default function InvoiceView() {
   const id = useIdParam();
   const { tr, dateTime, money, name, qty, num } = useFmt();
+  const brand = useBrand();
   const { user, lookups, itemById } = useApp();
   const inv = useLoad(() => api.getInvoice(id), [id]);
   const i = inv.data;
@@ -52,7 +54,7 @@ export default function InvoiceView() {
 
   const share = () => {
     const lines = i.lines.map((l) => `- ${itemById.get(l.item_id)?.name}: ${l.qty} ${l.unit === "carton" ? "كارتون" : "قطعة"} = ${money(l.total)}`).join("\n");
-    const text = `شركة النهرين للمواد الغذائية\nفاتورة ${i.number}\n${c?.name ?? ""}\n${lines}\nالمجموع: ${money(i.total)}\nالباقي: ${money(Math.max(0, i.remaining))}`;
+    const text = `${brand.company}\nفاتورة ${i.number}\n${c?.name ?? ""}\n${lines}\nالمجموع: ${money(i.total)}\nالباقي: ${money(Math.max(0, i.remaining))}`;
     window.open(`https://wa.me/${c?.phone ? "964" + c.phone.slice(1) : ""}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   };
 
@@ -95,8 +97,14 @@ export default function InvoiceView() {
           <div className="flex items-center gap-3">
             <LogoMark size={44} />
             <div>
-              <p className="text-lg font-bold">{tr("شركة النهرين للمواد الغذائية", "Al-Nahrain Foods Co.")}</p>
-              <p className="text-xs text-muted">{tr("بالجملة - كربلاء", "Wholesale - Karbala")} · {name(wh)}</p>
+              <p className="text-lg font-bold">{brand.company}</p>
+              <p className="text-xs text-muted">{tr("بالجملة - كربلاء", "Wholesale - Karbala")} · {name(wh)}
+                {brand.phone && (
+                  <span className="num" dir="ltr">
+                    {" · "}
+                    {brand.phone}
+                  </span>
+                )}</p>
             </div>
           </div>
           <div className="text-end text-sm">
@@ -201,7 +209,7 @@ export default function InvoiceView() {
             </div>
           )}
         </div>
-        <p className="mt-8 text-center text-xs text-faint">{tr("شكراً لتعاملكم مع شركة النهرين", "Thank you for dealing with Al-Nahrain")}</p>
+        <p className="mt-8 text-center text-xs text-faint">{tr("شكراً لتعاملكم مع", "Thank you for dealing with")} {brand.company}</p>
       </Card>
 
       {seesMoney && (myPays.length > 0 || myReturns.length > 0) && (

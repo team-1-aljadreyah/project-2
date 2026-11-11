@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandName } from "@/components/logo";
 // A stand-in for the Qi Card gateway's own payment page, only in the demo (fake data), like Project 1.
 // With the real backend the customer goes to Qi's page instead (form_url from the backend) and this page is
 // never used. The card is filled in and locked: nobody should type a real card into a demo.
@@ -56,7 +57,7 @@ function Gateway() {
     <div className="space-y-5">
       <div className="rounded-xl bg-neutral-100 p-4 text-center">
         <p className="text-xs text-neutral-500">{tr("الدفع إلى", "Paying")}</p>
-        <p className="font-semibold">{tr("شركة النهرين للمواد الغذائية", "Al-Nahrain Food Co.")}</p>
+        <p className="font-semibold"><BrandName company /></p>
         <p className="text-xs text-neutral-500">{info.shop}</p>
         <p className="num mt-2 text-3xl font-bold">{money(info.amount)}</p>
       </div>

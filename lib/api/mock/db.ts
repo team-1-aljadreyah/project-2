@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
+import type { SiteCustom, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -60,6 +60,8 @@ export interface Db {
   audit: AuditEntry[];
   notifications: AppNotification[];
   settings: Settings;
+  /** The manager's customization of the site. None = the defaults. */
+  custom?: SiteCustom;
   closed_months: Record<string, CommissionRow[]>;
   /** Batches that already got a near-expiry / expired notification (so it is sent once). */
   notified_batches: number[];

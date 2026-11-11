@@ -29,6 +29,8 @@ import type {
   SalesRow,
   Session,
   Settings,
+  SiteCustom,
+  ItemQuick,
   SlowItem,
   Statement,
   Stocktake,
@@ -94,6 +96,12 @@ export const httpApi = {
   listUsers: () => get<User[]>("/users"),
   saveUser: (id: number | null, input: UserInput) => save<User>("/users", id, input),
   saveSettings: (s: Settings) => patch<Settings>("/settings", s),
+  // The site's customization. Reading it needs no login (the login page shows the name and logo).
+  site: () => get<SiteCustom | null>("/site"),
+  saveSite: (s: SiteCustom) => patch<SiteCustom>("/settings/site", s),
+  renameWarehouse: (id: number, name: string, name_en: string) => patch<Warehouse>(`/warehouses/${id}`, { name, name_en }),
+  renameCategory: (from: string, to: string) => post<void>("/categories/rename", { from, to }),
+  quickItem: (id: number, change: ItemQuick) => patch<Item>(`/items/${id}/quick`, change),
   saveTier: (id: number | null, name: string, name_en: string) => save<PriceTier>("/price-tiers", id, { name, name_en }),
 
   listItems: () => get<Item[]>("/items"),

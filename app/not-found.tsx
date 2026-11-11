@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import { Home, LogIn, PackageX } from "lucide-react";
-import { LogoMark } from "@/components/logo";
+import { BrandName, LogoMark } from "@/components/logo";
 import { useSession, homeOf } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
 
@@ -16,7 +16,7 @@ export default function NotFound() {
       <div className="brand-grid absolute inset-0" aria-hidden />
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="relative max-w-md">
         <div className="mx-auto mb-6 flex w-fit items-center gap-2 text-white/80">
-          <LogoMark size={32} /> {tr("النهرين", "Al-Nahrain")}
+          <LogoMark size={32} /> <BrandName />
         </div>
         <motion.div initial={{ rotate: -8, scale: 0.8 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 200, damping: 12 }} className="mx-auto flex size-24 items-center justify-center rounded-3xl bg-white/10">
           <PackageX className="size-12 text-[#f5b48a]" strokeWidth={1.5} />
