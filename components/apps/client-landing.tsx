@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { useFmt } from "@/lib/i18n";
+import { PublicCatalog } from "./public-catalog";
 import { cn } from "@/lib/utils";
 import { AppFooter, AppHeader, BigButton, Blobs, CountUp, GradientText, InstallButton, InstallCard, Marquee, PhoneDemo, Questions, Rivers, SectionHead, StickyActions, IDENTITY, useAppEntry } from "./kit";
 
@@ -50,6 +51,7 @@ export function ClientLanding() {
       <AppHeader
         app="client"
         links={[
+          { href: "#products", label: tr("منتجاتنا", "Products") },
           { href: "#why", label: tr("لماذا", "Why") },
           { href: "#save", label: tr("وفّر وقتك", "Save time") },
           { href: "#safe", label: tr("أمان طلبك", "Safety") },
@@ -151,6 +153,8 @@ export function ClientLanding() {
           </div>
         </section>
 
+        {/* Our products with their pictures, for anyone (no sign-in, no prices). */}
+        <PublicCatalog color={C.main} signedIn={!!session} home={home} />
         <BeforeAfter />
         <Features />
         <SaveTime />

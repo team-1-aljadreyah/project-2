@@ -842,6 +842,26 @@ export const mockApi: Api = {
     await wait(40);
     return structuredClone(db0().custom ?? null);
   },
+  // The public catalog: anyone (no session). Only what a visitor may see: never prices, quantities or costs.
+  catalog: async () => {
+    await wait(150);
+    const db = db0();
+    const now = new Date();
+    return db.items
+      .filter((it) => it.active && !it.deleted)
+      .map((it) => ({
+        id: it.id,
+        name: it.name,
+        name_en: it.name_en,
+        category: it.category,
+        ...(it.image ? { image: it.image } : {}),
+        pieces_per_carton: it.pieces_per_carton,
+        ...(it.pack_name ? { pack_name: it.pack_name } : {}),
+        ...(it.piece_name ? { piece_name: it.piece_name } : {}),
+        ...(it.sells ? { sells: it.sells } : {}),
+        in_stock: sellableQty(db, it.id, undefined, now) > 0,
+      }));
+  },
   saveSite: (s) =>
     write((db, a, now) => {
       need(a, ["manager"]);
