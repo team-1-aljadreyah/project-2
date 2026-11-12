@@ -7,7 +7,8 @@
 // The page opens in 3D and lies down flat, like the design's video. Only the warehouse keeper can open it.
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Box, LayoutGrid, Minus, PackagePlus, Plus, Square, Warehouse as WarehouseIcon } from "lucide-react";
+import Link from "next/link";
+import { Box, ClipboardCheck, LayoutGrid, Minus, PackagePlus, Plus, Square, Truck, Warehouse as WarehouseIcon } from "lucide-react";
 import { buildMap } from "@/components/map/data";
 import { HallPanel, type Move } from "@/components/hall/panel";
 import { HallPlan } from "@/components/hall/plan";
@@ -39,6 +40,8 @@ export default function HallPage() {
   const receipts = useLoad(() => api.listReceipts(), []);
   const transfers = useLoad(() => api.listTransfers(), []);
   const customers = useLoad(() => api.listCustomers(), []);
+  // Supply orders the accountant sent for this warehouse: the goods on their way here.
+  const supply = useLoad(() => api.listSupplyOrders(), []);
 
   const [picked, setPicked] = useState<number | null>(null);
   // Like the design: the hall shows in 3D for a moment, then lies down into the flat plan.
@@ -153,6 +156,48 @@ export default function HallPage() {
           />
         </div>
       )}
+
+      {(() => {
+        const coming = (supply.data ?? []).filter((o) => o.warehouse_id === whId && (o.status === "sent" || o.status === "partial"));
+        if (!coming.length) return null;
+        return (
+          <section className="mb-4 rounded-2xl border border-primary/25 bg-card p-3">
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <Truck className="size-4 text-primary-ink" />
+              <p className="text-sm font-bold">{tr("بضاعة قادمة: طلبات توريد من المحاسب", "Goods on the way: supply orders from the accountant")}</p>
+              <span className="num rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-on-primary">{coming.length}</span>
+              <Link href="/supply" className="ms-auto text-xs font-semibold text-primary-ink hover:underline">
+                {tr("كل الطلبات", "All orders")}
+              </Link>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {coming.map((o) => {
+                const late = o.expected_date && o.expected_date < t;
+                return (
+                  <Link
+                    key={o.id}
+                    href={`/receipts/new?supply=${o.id}`}
+                    className="box-row group flex min-w-64 shrink-0 flex-col gap-1 rounded-xl border border-line bg-card-2/50 p-3 transition hover:border-primary"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="num font-semibold">{o.number}</span>
+                      {o.status === "partial" && <span className="rounded-md bg-warning-soft px-1.5 py-0.5 text-[11px] font-bold text-warning">{tr("وصل جزء منه", "Part arrived")}</span>}
+                    </span>
+                    <span className="truncate text-sm">{o.supplier}</span>
+                    <span className={cn("text-xs", late ? "text-danger" : "text-muted")}>
+                      {num(o.lines.length)} {tr("مواد", "items")}
+                      {o.expected_date ? ` · ${tr("يصل", "expected")} ${date(o.expected_date)}` : ""}
+                    </span>
+                    <span className="mt-1 flex items-center gap-1.5 text-xs font-bold text-primary-ink">
+                      <ClipboardCheck className="size-4" /> {tr("افحص واستلم", "Check and receive")}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
         {/* Missions panel */}

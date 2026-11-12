@@ -4,6 +4,7 @@
 // That warehouse's keeper is told, downloads the order as an Excel or CSV file (to check the delivery with
 // the supplier's driver), and receives the goods against it when they come: the receiving form opens filled in.
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Ban, FileDown, FileSpreadsheet, PackagePlus, Plus, Trash2, Truck } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { useMyWarehouses, useWarehouseFilter, inWarehouse } from "@/components/warehouse-filter";
@@ -38,6 +39,7 @@ import { useFmt } from "@/lib/i18n";
 import { useBrand } from "@/lib/site";
 import { useLoad } from "@/lib/use-load";
 import { cn, downloadCsv, today } from "@/lib/utils";
+import { missingValue, supplyGaps } from "@/lib/api/supply";
 import { downloadXlsx, type Cell } from "@/lib/xlsx";
 
 export default function SupplyPage() {
@@ -48,7 +50,9 @@ export default function SupplyPage() {
   const [creating, setCreating] = useState(false);
   const [cancelling, setCancelling] = useState<SupplyOrder | null>(null);
   // The order whose details are open (by id, so the box shows the fresh order after a change).
-  const [openId, setOpenId] = useState<number | null>(null);
+  // A notification links here with ?open=<id> ("part of SUP-… arrived"): it opens that order at once.
+  const linked = Number(useSearchParams().get("open")) || null;
+  const [openId, setOpenId] = useState<number | null>(linked);
   const [status, setStatus] = useState<"open" | "done" | "all">("open");
   const canOrder = user.role === "accountant" || user.role === "manager";
   const all = (list.data ?? []).filter((o) => inWarehouse(wh, o.warehouse_id));
@@ -72,7 +76,7 @@ export default function SupplyPage() {
     { key: "l", head: tr("المواد", "Items"), cell: (o) => <span className="num">{o.lines.length}</span>, align: "center" },
     { key: "e", head: tr("يصل", "Expected"), cell: (o) => (o.expected_date ? <span className="num">{date(o.expected_date)}</span> : "-") },
     { key: "t", head: tr("المبلغ", "Total"), cell: (o) => <Money value={o.total} />, align: "end" },
-    { key: "st", head: tr("الحالة", "Status"), cell: (o) => <SupplyBadge status={o.status} /> },
+    { key: "st", head: tr("الحالة", "Status"), cell: (o) => <SupplyBadge status={o.status} short={!!o.closed_short} /> },
     { key: "a", head: "", cell: (o) => <RowActions order={o} warehouse={lookups.warehouses.find((w) => w.id === o.warehouse_id)} onCancel={() => setCancelling(o)} />, align: "end" },
   ];
 
@@ -130,7 +134,7 @@ export default function SupplyPage() {
                       {o.expected_date ? ` · ${tr("يصل", "expected")} ${date(o.expected_date)}` : ""}
                     </p>
                   </div>
-                  <SupplyBadge status={o.status} />
+                  <SupplyBadge status={o.status} short={!!o.closed_short} />
                 </div>
                 <RowActions order={o} warehouse={lookups.warehouses.find((w) => w.id === o.warehouse_id)} onCancel={() => setCancelling(o)} />
               </div>
@@ -146,8 +150,9 @@ export default function SupplyPage() {
   );
 }
 
-function SupplyBadge({ status }: { status: SupplyStatus }) {
+function SupplyBadge({ status, short }: { status: SupplyStatus; short?: boolean }) {
   const { tr } = useFmt();
+  if (short) return <Badge tone="warning">{tr("أُغلق بنقص", "Closed short")}</Badge>;
   if (status === "sent") return <Badge tone="primary">{tr("بانتظار الوصول", "Waiting")}</Badge>;
   if (status === "partial") return <Badge tone="warning">{tr("وصل جزء منه", "Part arrived")}</Badge>;
   if (status === "received") return <Badge tone="success">{tr("وصل كاملاً", "Arrived")}</Badge>;
@@ -251,9 +256,14 @@ function RowActions({ order, warehouse, onCancel }: { order: SupplyOrder; wareho
 
 /** The order's items (and how much of each arrived), the supplier, and the receipts that brought the goods in. */
 function SupplyDetails({ order, warehouse, onClose, onCancel }: { order: SupplyOrder; warehouse?: Warehouse; onClose: () => void; onCancel: () => void }) {
-  const { tr, date, name, num } = useFmt();
+  const { tr, date, name, num, money } = useFmt();
   const { itemById } = useApp();
   const may = useMayOpen();
+  const gaps = supplyGaps(order);
+  const started = order.receipt_ids.length > 0;
+  const short = gaps.filter((g) => g.diff < 0);
+  const over = gaps.filter((g) => g.diff > 0);
+  const unitOf = (u: Unit) => (u === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc"));
   return (
     <Dialog
       open
@@ -261,7 +271,7 @@ function SupplyDetails({ order, warehouse, onClose, onCancel }: { order: SupplyO
       onClose={onClose}
       title={
         <span className="flex flex-wrap items-center gap-2">
-          {tr("طلب توريد", "Supply order")} <span className="num">{order.number}</span> <SupplyBadge status={order.status} />
+          {tr("طلب توريد", "Supply order")} <span className="num">{order.number}</span> <SupplyBadge status={order.status} short={!!order.closed_short} />
         </span>
       }
       footer={<RowActions order={order} warehouse={warehouse} onCancel={onCancel} />}
@@ -292,9 +302,29 @@ function SupplyDetails({ order, warehouse, onClose, onCancel }: { order: SupplyO
           </Notice>
         </div>
       )}
+      {started && (
+        <div className="mt-3">
+          {short.length === 0 && over.length === 0 ? (
+            <Notice tone="success" title={tr("وصل مطابقاً للطلب", "Arrived as ordered")}>
+              {tr("كل مادة وصلت بالكمية المطلوبة.", "Every item arrived in the quantity ordered.")}
+            </Notice>
+          ) : (
+            <Notice tone="warning" title={tr("الفرق بين المطلوب والواصل", "Ordered vs arrived")}>
+              {[
+                short.length ? tr(`ناقص ${short.length} من المواد، قيمته ${money(missingValue(order))}`, `${short.length} items short, worth ${money(missingValue(order))}`) : "",
+                over.length ? tr(`زائد ${over.length} من المواد`, `${over.length} items over`) : "",
+                order.closed_short ? tr(`أغلقه ${order.closed_short.by.name} في ${date(order.closed_short.at)}: الباقي لن يصل`, `Closed by ${order.closed_short.by.name} on ${date(order.closed_short.at)}: the rest won't come`) : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </Notice>
+          )}
+        </div>
+      )}
       <ul className="mt-3 divide-y divide-line overflow-hidden rounded-xl border border-line text-sm">
-        {order.lines.map((l) => {
+        {order.lines.map((l, i) => {
           const it = itemById.get(l.item_id);
+          const g = gaps[i];
           return (
             <li key={`${l.item_id}-${l.unit}`} className="box-row flex items-center justify-between gap-3 px-3 py-2.5">
               <span className="min-w-0">
@@ -310,6 +340,11 @@ function SupplyDetails({ order, warehouse, onClose, onCancel }: { order: SupplyO
                 <span className={cn("text-xs", l.received_qty >= l.qty ? "text-success" : l.received_qty ? "text-warning" : "text-muted")}>
                   {tr(`وصل ${num(l.received_qty)} من ${num(l.qty)}`, `${num(l.received_qty)} of ${num(l.qty)} arrived`)}
                 </span>
+                {started && g.diff !== 0 && (
+                  <span className={cn("ms-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold", g.diff < 0 ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning")}>
+                    {g.diff < 0 ? tr(`ناقص ${num(-g.diff)} ${unitOf(l.unit)}`, `${num(-g.diff)} ${unitOf(l.unit)} short`) : tr(`زائد ${num(g.diff)} ${unitOf(l.unit)}`, `${num(g.diff)} ${unitOf(l.unit)} over`)}
+                  </span>
+                )}
               </span>
             </li>
           );
