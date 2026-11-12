@@ -6,10 +6,9 @@
 // eyes to hide, and dashed outlines around every text that can be edited in place.
 import { useSyncExternalStore } from "react";
 import { api } from "./api";
-import { onDbChange } from "./api/mock/db";
 import { DEFAULT_SITE, fullSite } from "./api/site-defaults";
 import type { Label, SiteCustom } from "./api/types";
-import { USE_MOCK } from "./config";
+import { onDataChange } from "./live";
 import { useFmt } from "./i18n";
 import { setTexts } from "./texts";
 
@@ -69,7 +68,7 @@ function subscribe(fn: () => void) {
       if (raw) take(fullSite(JSON.parse(raw)));
     } catch {}
     load();
-    if (USE_MOCK) onDbChange(load);
+    onDataChange(load);
   }
   return () => {
     subs.delete(fn);
