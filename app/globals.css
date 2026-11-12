@@ -105,6 +105,12 @@ body {
   color: var(--text);
 }
 
+/* The scrollbar's place is kept even on a short page: when a list grows long enough to scroll, the page
+   doesn't jump sideways (computers with a classic scrollbar). */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
