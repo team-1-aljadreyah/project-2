@@ -38,6 +38,9 @@ function setStatus(s: RtStatus) {
   status = s;
   statusListeners.forEach((l) => l());
 }
+/** The connection state now (outside React). */
+export const realtimeStatus = () => status;
+
 export function useRealtimeStatus(): RtStatus {
   return useSyncExternalStore(
     (l) => {
