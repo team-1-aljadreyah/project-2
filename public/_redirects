@@ -3,6 +3,10 @@
 # real id from the address bar. /<list>/<id>/* covers the small data files Next loads when moving between pages.
 # The first rule that matches wins, so the real pages (like /orders/new/) come first.
 
+# The old shop owners' page: their landing page is now the shops' app.
+/shops  /client  301
+/shops/  /client  301
+
 # Real pages
 /orders/new  /orders/new/  200
 /orders/new/  /orders/new/  200
