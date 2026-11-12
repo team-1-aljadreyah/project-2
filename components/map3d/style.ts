@@ -2,9 +2,13 @@
 // buildings standing up in 3D, light grey streets, soft light from one side, no clutter of labels,
 // and routes drawn as thin glowing green lines. A dark version (graphite clay) follows night mode.
 // The data is OpenStreetMap, from OpenFreeMap's free vector tiles (no API key).
+// On top: the names a driver reads, in Arabic where OpenStreetMap has it: the areas, the streets along their
+// lines, and a few places people give directions by (mosques, hospitals, schools, fuel, markets).
 import type { StyleSpecification } from "maplibre-gl";
 
 export const TILES = "https://tiles.openfreemap.org/planet";
+/** The letters for the names (Noto Sans, with Arabic), from OpenFreeMap too. */
+export const GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
 
 export type MapTheme = "light" | "dark";
 
@@ -18,6 +22,10 @@ const C = {
     minor: "#f6f7f9",
     building: "#ffffff",
     rail: "#d7dbe0",
+    text: "#4d5560",
+    textStrong: "#1d2127",
+    halo: "#ffffff",
+    poi: "#7a6a5a",
   },
   dark: {
     bg: "#14171b",
@@ -28,8 +36,15 @@ const C = {
     minor: "#1f242b",
     building: "#2b3038",
     rail: "#22262d",
+    text: "#aab2bd",
+    textStrong: "#e6e9ee",
+    halo: "#14171b",
+    poi: "#c9b8a6",
   },
 };
+
+/** The name to show: Arabic first, then the local name, then the English. */
+const NAME = ["coalesce", ["get", "name:ar"], ["get", "name"], ["get", "name:en"]] as unknown as string;
 
 /** The route glow (as in the design) and the brand orange for pins. */
 export const ROUTE = { glow: "#5cf06f", core: "#35d64e", done: "#9aa3ad" };
@@ -56,6 +71,7 @@ export function mapStyle(theme: MapTheme): StyleSpecification {
   return {
     version: 8,
     sources: { omt: { type: "vector", url: TILES } },
+    glyphs: GLYPHS,
     // Soft light from the upper side, so the sides of the buildings are a little darker than the roofs.
     light: {
       anchor: "viewport",
@@ -151,6 +167,66 @@ export function mapStyle(theme: MapTheme): StyleSpecification {
           "fill-extrusion-opacity": 0.96,
           "fill-extrusion-vertical-gradient": true,
         },
+      },
+      // ----- names (above the buildings, so a tall one never hides a street's name) -----
+      {
+        id: "street-names",
+        type: "symbol",
+        source: "omt",
+        "source-layer": "transportation_name",
+        minzoom: 13.5,
+        filter: ["in", ["get", "class"], ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary", "minor"]]],
+        layout: {
+          "symbol-placement": "line",
+          "text-field": NAME,
+          "text-font": ["Noto Sans Regular"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10.5, 17, 13] as unknown as number,
+          "text-max-angle": 30,
+          "symbol-spacing": 280,
+        },
+        paint: { "text-color": c.text, "text-halo-color": c.halo, "text-halo-width": 1.6 },
+      },
+      {
+        id: "places-of-note",
+        type: "symbol",
+        source: "omt",
+        "source-layer": "poi",
+        minzoom: 15.5,
+        filter: ["in", ["get", "class"], ["literal", ["place_of_worship", "hospital", "school", "college", "fuel", "shop", "grocery", "marketplace", "bank", "police"]]],
+        layout: {
+          "text-field": NAME,
+          "text-font": ["Noto Sans Regular"],
+          "text-size": 11,
+          "text-max-width": 8,
+          "text-optional": true,
+        },
+        paint: { "text-color": c.poi, "text-halo-color": c.halo, "text-halo-width": 1.4 },
+      },
+      {
+        id: "area-names",
+        type: "symbol",
+        source: "omt",
+        "source-layer": "place",
+        filter: ["in", ["get", "class"], ["literal", ["suburb", "quarter", "neighbourhood", "village"]]],
+        minzoom: 11.5,
+        layout: {
+          "text-field": NAME,
+          "text-font": ["Noto Sans Bold"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 12, 11, 16, 14] as unknown as number,
+          "text-max-width": 9,
+          "text-letter-spacing": 0.02,
+        },
+        paint: { "text-color": c.textStrong, "text-halo-color": c.halo, "text-halo-width": 2, "text-opacity": 0.85 },
+      },
+      {
+        id: "city-names",
+        type: "symbol",
+        source: "omt",
+        "source-layer": "place",
+        filter: ["in", ["get", "class"], ["literal", ["city", "town"]]],
+        maxzoom: 13,
+        layout: { "text-field": NAME, "text-font": ["Noto Sans Bold"], "text-size": 15 },
+        paint: { "text-color": c.textStrong, "text-halo-color": c.halo, "text-halo-width": 2 },
       },
     ],
   };

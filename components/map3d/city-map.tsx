@@ -4,8 +4,11 @@
 // - markers: shops, warehouses, the delivery rep (live), "me", or a pin to place.
 // - route: a glowing line through points (the part already driven turns grey).
 // - editable + onPick: tap the map to place the pin, or drag it.
+// - tools: buttons on the map: where am I, follow a moving point (the rep driving, or the rep coming to the
+//   shop), the next stop, show everything, and full screen.
 // MapLibre needs the browser (WebGL), so it is loaded only there, after the page is shown (its styles too).
 import { useEffect, useRef, useState } from "react";
+import { Crosshair, Expand, Flag, LocateFixed, Maximize2, Minimize2 } from "lucide-react";
 import type { GeoJSONSource, Map as MlMap, Marker } from "maplibre-gl";
 import { useTheme } from "@/lib/theme";
 import { useFmt } from "@/lib/i18n";
@@ -101,6 +104,10 @@ export function CityMap({
   editable,
   onPick,
   orbit,
+  tools,
+  follow,
+  followLabel,
+  next,
   className,
   children,
 }: {
@@ -120,6 +127,13 @@ export function CityMap({
   onPick?: (p: LatLng) => void;
   /** Turn slowly around, like the design's video (for a map you look at, not one you use). */
   orbit?: boolean;
+  /** The buttons on the map: where am I, show all, full screen (and follow / next stop when given). */
+  tools?: boolean;
+  /** A moving point the "follow" button keeps in the middle (the rep himself, or the rep coming to the shop). */
+  follow?: LatLng | null;
+  followLabel?: string;
+  /** Where the "next stop" button goes. */
+  next?: (LatLng & { label?: string }) | null;
   className?: string;
   children?: React.ReactNode;
 }) {
@@ -133,6 +147,15 @@ export function CityMap({
   const { tr } = useFmt();
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  // The tools: full screen, following the moving point, and "me" from the locate button.
+  const [full, setFull] = useState(false);
+  const [following, setFollowing] = useState(false);
+  const followingRef = useRef(false);
+  useEffect(() => {
+    followingRef.current = following;
+  }, [following]);
+  const [me, setMe] = useState<LatLng | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   // false until the person first touches the page (see onFirstInteraction above).
   const [go, setGo] = useState(false);
   useEffect(() => onFirstInteraction(() => setGo(true)), []);
@@ -150,6 +173,8 @@ export function CityMap({
       .then(([ml]) => {
         if (dead || !box.current || map.current) return;
         lib.current = ml;
+        // Arabic names: joined letters, right to left (the plugin is ours, loaded once, only when needed).
+        if (ml.getRTLTextPluginStatus() === "unavailable") ml.setRTLTextPlugin("/vendor/mapbox-gl-rtl-text.min.js", true).catch(() => {});
         const start = center ?? markers[0] ?? KARBALA;
         const m = new ml.Map({
           container: box.current,
@@ -175,6 +200,8 @@ export function CityMap({
           if (!edit.current) return;
           pick.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
         });
+        // Moving the map by hand stops following.
+        m.on("dragstart", () => setFollowing(false));
         map.current = m;
       })
       .catch(() => setFailed(true));
@@ -201,10 +228,11 @@ export function CityMap({
   }, [theme]);
 
   // The markers: drawn again only when what they show changes (pages may pass a new array every render).
-  const markersKey = markers.map((m) => `${m.id}|${m.kind}|${m.lat.toFixed(6)}|${m.lng.toFixed(6)}|${m.label ?? ""}|${m.index ?? ""}|${m.active ? 1 : 0}|${m.done ? 1 : 0}`).join(";");
-  const markersRef = useRef(markers);
+  const all = me && !markers.some((x) => x.kind === "me") ? [...markers, { id: "me-located", kind: "me" as const, ...me }] : markers;
+  const markersKey = all.map((m) => `${m.id}|${m.kind}|${m.lat.toFixed(6)}|${m.lng.toFixed(6)}|${m.label ?? ""}|${m.index ?? ""}|${m.active ? 1 : 0}|${m.done ? 1 : 0}`).join(";");
+  const markersRef = useRef(all);
   useEffect(() => {
-    markersRef.current = markers;
+    markersRef.current = all;
   });
   useEffect(() => {
     const m = map.current;
@@ -242,10 +270,10 @@ export function CityMap({
 
   // The camera shows everything (once the markers are known, and when their set changes).
   const placesKey = markers.map((m) => `${m.id}:${m.lat.toFixed(4)},${m.lng.toFixed(4)}`).join("|");
-  useEffect(() => {
+  const fitAll = () => {
     const m = map.current;
     const ml = lib.current;
-    if (!m || !ml || !ready || !fit) return;
+    if (!m || !ml) return;
     const pts = [...markers.map((x) => [x.lng, x.lat] as [number, number]), ...(route ?? []).map((p) => [p.lng, p.lat] as [number, number])];
     if (!pts.length) return;
     if (pts.length === 1) {
@@ -265,9 +293,56 @@ export function CityMap({
       maxZoom: 16.5,
       duration: 900,
     });
-    // Only when the places change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  };
+  const fitRef = useRef(fitAll);
+  useEffect(() => {
+    fitRef.current = fitAll;
+  });
+  useEffect(() => {
+    if (!map.current || !ready || !fit || followingRef.current) return;
+    fitRef.current();
   }, [placesKey, ready, fit]);
+
+  // Following: the moving point stays in the middle as it moves.
+  const followKey = follow ? `${follow.lat.toFixed(5)},${follow.lng.toFixed(5)}` : "";
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready || !following || !follow) return;
+    m.easeTo({ center: [follow.lng, follow.lat], zoom: Math.max(m.getZoom(), 16), duration: 900 });
+    // The point is read through its key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followKey, following, ready]);
+
+  // Full screen: the map takes the whole screen (Esc or the button brings it back); it redraws at its new size.
+  useEffect(() => {
+    const t = setTimeout(() => map.current?.resize(), 60);
+    if (!full) return () => clearTimeout(t);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setFull(false);
+    window.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [full]);
+
+  function locate() {
+    if (!navigator.geolocation) return setNote(tr("هذا الجهاز لا يعطي الموقع", "This device can't give its location"));
+    setNote(tr("جارٍ تحديد موقعك…", "Finding you…"));
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const here = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setMe(here);
+        setNote(null);
+        setFollowing(false);
+        map.current?.flyTo({ center: [here.lng, here.lat], zoom: 16.5, duration: 1000 });
+      },
+      () => setNote(tr("اسمح للموقع بمعرفة مكانك من إعدادات المتصفح", "Allow location for this site in the browser settings")),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 },
+    );
+  }
 
   // A slow turn around, like the design's video.
   useEffect(() => {
@@ -290,8 +365,48 @@ export function CityMap({
   }, [orbit, ready]);
 
   return (
-    <div className={cn("map3d relative isolate overflow-hidden rounded-2xl border border-line bg-card-2", className)}>
+    <div className={cn("map3d relative isolate overflow-hidden rounded-2xl border border-line bg-card-2", className, full && "!fixed !inset-0 !z-[70] !h-[100dvh] !w-screen !rounded-none !border-0")}>
       <div ref={box} className="size-full" />
+      {tools && go && ready && (
+        <div className="absolute end-3 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1.5">
+          {follow && (
+            <ToolButton label={following ? tr("أوقف المتابعة", "Stop following") : (followLabel ?? tr("تابع", "Follow"))} on={following} onClick={() => setFollowing((f) => !f)}>
+              <Crosshair className="size-5" />
+            </ToolButton>
+          )}
+          {next && (
+            <ToolButton
+              label={next.label ? tr(`المحطة التالية: ${next.label}`, `Next stop: ${next.label}`) : tr("المحطة التالية", "Next stop")}
+              onClick={() => {
+                setFollowing(false);
+                map.current?.flyTo({ center: [next.lng, next.lat], zoom: 17, duration: 1000 });
+              }}
+            >
+              <Flag className="size-5" />
+            </ToolButton>
+          )}
+          <ToolButton label={tr("أين أنا؟", "Where am I?")} on={!!me} onClick={locate}>
+            <LocateFixed className="size-5" />
+          </ToolButton>
+          <ToolButton
+            label={tr("أظهر الكل", "Show everything")}
+            onClick={() => {
+              setFollowing(false);
+              fitAll();
+            }}
+          >
+            <Expand className="size-5" />
+          </ToolButton>
+          <ToolButton label={full ? tr("صغّر الخريطة", "Exit full screen") : tr("ملء الشاشة", "Full screen")} on={full} onClick={() => setFull((f) => !f)}>
+            {full ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
+          </ToolButton>
+        </div>
+      )}
+      {note && (
+        <p role="status" className="absolute inset-x-3 top-14 z-20 mx-auto w-fit max-w-[90%] rounded-full bg-black/75 px-3 py-1.5 text-center text-xs font-semibold text-white backdrop-blur">
+          {note}
+        </p>
+      )}
       {/* Until the map starts: a light picture of a street grid, and a tap starts it too. */}
       {!go && (
         <button type="button" onClick={() => setGo(true)} className="map3d-wait absolute inset-0 flex items-end justify-center p-3 text-xs font-semibold text-muted">
@@ -301,6 +416,22 @@ export function CityMap({
       {failed && <p className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted">{tr("تعذّر عرض الخريطة على هذا الجهاز", "The map can't show on this device")}</p>}
       {children}
     </div>
+  );
+}
+
+/** A round button on the map (its name spoken and shown on hover). */
+function ToolButton({ label, on, onClick, children }: { label: string; on?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn("flex size-10 items-center justify-center rounded-full border shadow-lg backdrop-blur transition active:scale-95", on ? "border-action bg-action text-on-action" : "border-line bg-card/95 text-text hover:bg-card")}
+    >
+      {children}
+    </button>
   );
 }
 

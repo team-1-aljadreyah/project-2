@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     // Wrangler's local files (npx wrangler pages dev)
     ".wrangler/**",
+    // Third-party files served as they are (the map's Arabic text plugin).
+    "public/vendor/**",
     "build/**",
     "next-env.d.ts",
   ]),

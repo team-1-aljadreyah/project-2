@@ -147,7 +147,7 @@ export function RouteMap({ stops, visited, onPick }: { stops: Stop[]; visited: n
   const done = places.length ? places.filter((x) => visited.includes(x.s.customer.id)).length / places.length : 0;
   if (!places.length) return <p className="py-10 text-center text-sm text-muted">{tr("لا توجد محلات بموقع على الخريطة اليوم", "No shops with a map location today")}</p>;
   return (
-    <CityMap markers={markers} route={route} routeDone={done} className="h-80">
+    <CityMap markers={markers} route={route} routeDone={done} className="h-80" tools next={nextIdx >= 0 ? { ...places[nextIdx].p, label: places[nextIdx].s.customer.name } : null}>
       <span className="pointer-events-none absolute start-3 top-3 z-10 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
         {tr(`${num(places.length)} محلات اليوم`, `${num(places.length)} shops today`)}
         {road && tr(` · ${num(Math.round(road.km * 10) / 10)} كم · ${num(road.min)} دقيقة`, ` · ${num(Math.round(road.km * 10) / 10)} km · ${num(road.min)} min`)}

@@ -426,6 +426,8 @@ export interface Delivery {
   loaded_by?: Person;
   out_at?: string;
   out_by?: Person;
+  /** The phone of the rep who took it out (the shop owner calls him from the tracker while it's on the way). */
+  out_phone?: string;
   delivered_at?: string;
   delivered_by?: Person;
   /** A photo of the packages at the shop exists (loaded on its own, it's big). */
