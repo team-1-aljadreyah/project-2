@@ -7,7 +7,7 @@
 // Orders go through the same api.createOrder as everywhere else, and keep working without internet.
 import Link from "next/link";
 import { useAppRouter } from "@/lib/app-path";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   AlertTriangle,
   Candy,
@@ -32,6 +32,7 @@ import {
   Trash2,
   Truck,
   Wheat,
+  X,
 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { Dialog, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
@@ -72,23 +73,24 @@ function CatIcon({ category, ...props }: { category: string; className?: string;
 }
 
 /** The colored tile: the accent mixed into the card color, so it works in day and night mode. */
-function Art({ category, index, image, size = "md" }: { category: string; index: number; image?: string; size?: "md" | "lg" }) {
+function Art({ category, index, image, size = "md" }: { category: string; index: number; image?: string; size?: "sm" | "md" | "lg" | "xl" }) {
+  const box = size === "xl" ? "aspect-[4/3] max-h-72 w-full" : size === "lg" ? "h-48" : size === "sm" ? "aspect-square" : "aspect-[4/3]";
   const accent = ACCENTS[index % ACCENTS.length];
   // The real photo, when the manager or the warehouse keeper added one.
   if (image)
     return (
-      <div className={cn("overflow-hidden rounded-2xl bg-card-2", size === "lg" ? "h-48" : "aspect-[4/3]")}>
+      <div className={cn("overflow-hidden rounded-2xl bg-card-2", box)}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={image} alt="" loading="lazy" className="size-full object-cover" />
       </div>
     );
   return (
     <div
-      className={cn("relative flex items-center justify-center overflow-hidden rounded-2xl", size === "lg" ? "h-48" : "aspect-[4/3]")}
+      className={cn("relative flex items-center justify-center overflow-hidden rounded-2xl", box)}
       style={{ background: `radial-gradient(circle at 30% 25%, color-mix(in oklab, ${accent} 30%, var(--card)), color-mix(in oklab, ${accent} 12%, var(--card)) 70%)` }}
     >
       <span className="absolute -bottom-6 -end-6 size-24 rounded-full opacity-25" style={{ background: accent }} aria-hidden />
-      <CatIcon category={category} className={size === "lg" ? "size-20" : "size-12"} style={{ color: accent }} strokeWidth={1.5} />
+      <CatIcon category={category} className={size === "lg" || size === "xl" ? "size-20" : size === "sm" ? "size-9" : "size-12"} style={{ color: accent }} strokeWidth={1.5} />
     </div>
   );
 }
@@ -490,8 +492,17 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
 
       {open && (
         <ItemSheet
+          key={open.id}
           item={open}
           index={catIndex(open.category)}
+          // Same kind: the same category, what is in stock first, the shop's favourites before the rest.
+          similar={active
+            .filter((i) => i.category === open.category && i.id !== open.id)
+            .sort((a, b) => Number(available(b) > 0) - Number(available(a) > 0) || Number(favs.has(b.id)) - Number(favs.has(a.id)))
+            .slice(0, 10)}
+          priceOf={(it) => price(it, firstUnit(it))}
+          inBag={(id) => !!lineOf(id)}
+          onOpen={setOpen}
           line={lineOf(open.id)}
           available={available(open)}
           price={(u) => price(open, u)}
@@ -611,7 +622,9 @@ function Row({ k, v, strong, tone }: { k: string; v: string; strong?: boolean; t
   );
 }
 
-/** The product sheet: like the design's detail screen, with carton / piece in place of S / M / L. */
+/** The product sheet: like the design's detail screen, with carton / piece in place of S / M / L. A big
+ *  picture (a tap shows it on the whole screen), the item's details, and items of the same kind under it
+ *  (a tap opens one here). */
 function ItemSheet({
   item,
   index,
@@ -620,18 +633,44 @@ function ItemSheet({
   price,
   onClose,
   onSave,
+  similar,
+  priceOf: priceOfItem,
+  inBag,
+  onOpen,
 }: {
   item: Item;
   index: number;
   line?: Line;
   available: number;
+  similar: Item[];
+  priceOf: (it: Item) => number;
+  inBag: (id: number) => boolean;
+  onOpen: (it: Item) => void;
   /** How much more the order can take (the limit minus the other lines). */
   price: (u: Unit) => number;
   onClose: () => void;
   onSave: (line: Omit<Line, "item_id"> | null) => void;
 }) {
-  const { tr, money, name, qty: fmtQty, unit: unitOf } = useFmt();
+  const { tr, money, name, qty: fmtQty, unit: unitOf, date } = useFmt();
   const [unit, setUnit] = useState<Unit>(line?.unit ?? firstUnit(item));
+  const [zoom, setZoom] = useState(false);
+  const details: [string, ReactNode][] = [
+    [tr("الصنف", "Category"), item.category],
+    [tr("التعبئة", "Packing"), soldUnits(item).includes("carton") || item.pieces_per_carton > 1 ? `${unitOf(item, "carton")} = ${item.pieces_per_carton} ${unitOf(item, "piece")}` : unitOf(item, "piece")],
+    [tr("يُباع بـ", "Sold by"), soldUnits(item).map((u) => unitOf(item, u)).join(tr(" و", " and "))],
+    ...(item.weight_kg ? ([[tr("الوزن", "Weight"), `${item.weight_kg} ${tr("كغم", "kg")} / ${unitOf(item, "piece")}`]] as [string, ReactNode][]) : []),
+    ...(item.nearest_expiry ? ([[tr("صالح حتى", "Good until"), date(item.nearest_expiry)]] as [string, ReactNode][]) : []),
+    ...(item.barcode
+      ? ([
+          [
+            tr("الباركود", "Barcode"),
+            <span key="b" className="num" dir="ltr">
+              {item.barcode}
+            </span>,
+          ],
+        ] as [string, ReactNode][])
+      : []),
+  ];
   const [n, setN] = useState(line?.qty ?? 1);
   // What is in stock, and never more than what is left of the order's limit.
   const max = unit === "carton" ? Math.floor(available / item.pieces_per_carton) : available;
@@ -658,7 +697,17 @@ function ItemSheet({
         </div>
       }
     >
-      <Art category={item.category} index={index} image={item.image} size="lg" />
+      {/* The picture, big; a tap shows it on the whole screen (a real photo). */}
+      <button type="button" onClick={() => item.image && setZoom(true)} className={cn("block w-full", item.image ? "cursor-zoom-in" : "cursor-default")} aria-label={item.image ? tr("كبّر الصورة", "Enlarge the picture") : name(item)}>
+        <Art category={item.category} index={index} image={item.image} size="xl" />
+      </button>
+      {zoom && item.image && (
+        <button type="button" onClick={() => setZoom(false)} className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 p-4" aria-label={tr("إغلاق الصورة", "Close the picture")}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={item.image} alt={name(item)} className="max-h-full max-w-full rounded-2xl object-contain" />
+          <X className="absolute end-4 top-4 size-8 text-white" />
+        </button>
+      )}
       <div className="mt-4 flex items-start justify-between gap-3">
         <div>
           <p className="text-lg font-bold">{name(item)}</p>
@@ -698,6 +747,38 @@ function ItemSheet({
         <button type="button" onClick={() => onSave(null)} className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-danger">
           <Trash2 className="size-3.5" /> {tr("احذف من السلة", "Remove from bag")}
         </button>
+      )}
+
+      {/* The details */}
+      <h3 className="mt-5 text-sm font-bold">{tr("تفاصيل المادة", "Details")}</h3>
+      <dl className="mt-2 divide-y divide-line rounded-2xl border border-line">
+        {details.map(([k, v]) => (
+          <div key={k} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+            <dt className="text-muted">{k}</dt>
+            <dd className="text-end font-medium">{v}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {/* Of the same kind: a row to swipe; a tap opens it in this window */}
+      {similar.length > 0 && (
+        <>
+          <h3 className="mt-5 text-sm font-bold">{tr(`من نفس النوع · ${item.category}`, `Of the same kind · ${item.category}`)}</h3>
+          <ul className="-mx-1 mt-2 flex snap-x gap-2.5 overflow-x-auto px-1 pb-2 [scrollbar-width:thin]">
+            {similar.map((it) => (
+              <li key={it.id} className="w-32 shrink-0 snap-start">
+                <button type="button" onClick={() => onOpen(it)} className="block w-full rounded-2xl border border-line bg-card p-1.5 text-start transition hover:border-action active:scale-[0.98]">
+                  <Art category={it.category} index={index} image={it.image} size="sm" />
+                  <span className="mt-1.5 line-clamp-2 block min-h-8 px-0.5 text-xs font-semibold leading-4">{name(it)}</span>
+                  <span className="mt-1 flex items-center justify-between px-0.5">
+                    <span className="num text-xs font-bold">{money(priceOfItem(it))}</span>
+                    {inBag(it.id) && <ShoppingBag className="size-3.5 text-action" aria-label={tr("في السلة", "In the bag")} />}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </Dialog>
   );
