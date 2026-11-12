@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import type { AppDef, CustomField, CustomObject, CustomType, CustomValue, Profile, ProfileAction, Role, User } from "@/lib/api/types";
 import { PROFILE_ACTIONS } from "@/lib/api/types";
 import { FieldInput } from "@/components/custom-fields";
+import { HealthCards, useHealth } from "@/components/health";
 import { homeOf } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
 import { saveSite, useSite } from "@/lib/site";
@@ -72,6 +73,7 @@ export function SetupHome({ go }: { go: (s: string) => void }) {
   const { user } = useApp();
   const site = useSite();
   const users = useLoad(() => api.listUsers(), []);
+  const health = useHealth();
   const list = users.data ?? [];
   const inProfiles = list.filter((u) => u.profile_id && site.profiles.some((p) => p.id === u.profile_id)).length;
   const emptyProfiles = site.profiles.filter((p) => !list.some((u) => u.profile_id === p.id));
@@ -86,8 +88,24 @@ export function SetupHome({ go }: { go: (s: string) => void }) {
     <div className="space-y-5">
       <div className="py-4 text-center">
         <h2 className="text-3xl font-bold">{tr(`أهلاً، ${user.name.split(" ")[0]}`, `Welcome, ${user.name.split(" ")[0]}`)}</h2>
-        <p className="mt-2 text-muted">{tr("من هنا تضيف ملفات صلاحيات وتطبيقات بنفسك، بلا مبرمج، وتصل التغييرات إلى الجميع فوراً.", "Add permission profiles and apps yourself, no developer needed; changes reach everyone at once.")}</p>
+        <p className="mt-2 text-muted">{tr("من هنا تضيف ملفات صلاحيات وتطبيقات وحقولاً وقواعد بنفسك، بلا مبرمج، وتصل التغييرات إلى الجميع فوراً.", "Add profiles, apps, fields and rules yourself, no developer needed; changes reach everyone at once.")}</p>
       </div>
+      {health.data && (
+        <>
+          <div>
+            <h3 className="text-lg font-bold">{tr("صحة الموقع واستعماله", "Site health and usage")}</h3>
+            {(() => {
+              const bad = health.data.checks.filter((c) => !c.ok);
+              return bad.length ? (
+                <p className="mt-2 rounded-xl border-s-4 border-primary bg-card px-4 py-2.5 text-sm">
+                  <b>{tr("تنبيه:", "Heads up:")}</b> {tr(`${bad.length} مؤشرات تحتاج انتباهاً`, `${bad.length} measures need attention`)} ({bad.map((c) => tr(c.title, c.title_en)).join(tr("، ", ", "))}).
+                </p>
+              ) : null;
+            })()}
+          </div>
+          <HealthCards h={health.data} />
+        </>
+      )}
       <div className="grid gap-3 md:grid-cols-3">
         <HomeCard title={tr("ملفات الصلاحيات", "Permission profiles")} value={site.profiles.length} hint={tr(`${inProfiles} شخص داخل ملفات`, `${inProfiles} people in profiles`)} onClick={() => go("profiles")} />
         <HomeCard title={tr("التطبيقات", "Apps")} value={site.apps.filter((a) => a.active).length} hint={tr(`من ${site.apps.length} تطبيق`, `of ${site.apps.length} apps`)} onClick={() => go("apps")} />

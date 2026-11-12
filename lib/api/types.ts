@@ -1253,3 +1253,40 @@ export const EXPENSE_CATEGORIES: { ar: string; en: string }[] = [
 
 /** The default limit: an expense above it waits for the manager (IQD). */
 export const EXPENSE_APPROVAL_ABOVE = 1_000_000;
+
+// ---------- Health and security (advanced settings, the manager) ----------
+
+export type LoginFail = "wrong" | "stopped" | "hours";
+
+/** One check of the security score: passed or not, how much it weighs, and where to fix it. */
+export interface HealthCheck {
+  key: string;
+  ok: boolean;
+  weight: number;
+  title: string;
+  title_en: string;
+  detail: string;
+  detail_en: string;
+  fix?: string;
+}
+
+export interface Health {
+  /** The last 24 hours. */
+  logins: { ok: number; failed: number; reasons: Record<LoginFail, number>; recent: { phone: string; name?: string; reason: LoginFail; at: string }[] };
+  /** 0–100, from the checks below. */
+  score: number;
+  checks: HealthCheck[];
+  users: {
+    active: number;
+    stopped: number;
+    managers: number;
+    in_profiles: number;
+    by_role: Record<Role, number>;
+    /** Never logged in. */
+    never: { id: number; name: string; role: Role }[];
+    /** Last login more than 30 days ago. */
+    idle: { id: number; name: string; role: Role; last: string }[];
+    /** A password that is easy to guess (123456, the phone number, under 8 characters). Names only. */
+    weak: { id: number; name: string; role: Role }[];
+  };
+}
