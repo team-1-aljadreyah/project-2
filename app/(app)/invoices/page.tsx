@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRemembered } from "@/lib/remember";
+
+import { useMemo } from "react";
 import Link from "next/link";
 import { Download, Printer, ReceiptText } from "lucide-react";
 import { useApp } from "@/components/shell";
@@ -18,8 +20,8 @@ export default function InvoicesPage() {
   const { user, lookups } = useApp();
   const invoices = useLoad(() => api.listInvoices(), []);
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
-  const [status, setStatus] = useState<InvoiceStatus | "all" | "unpaid">("all");
-  const [q, setQ] = useState("");
+  const [status, setStatus] = useRemembered<InvoiceStatus | "all" | "unpaid">("invoices:status", "all");
+  const [q, setQ] = useRemembered("invoices:q", "");
   // A Map finds a name in one step, instead of searching the whole customer list for every row.
   const names = useMemo(() => new Map((customers.data ?? []).map((c) => [c.id, c.name])), [customers.data]);
   const cName = (id: number) => names.get(id) ?? `#${id}`;

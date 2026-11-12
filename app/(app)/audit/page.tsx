@@ -1,5 +1,7 @@
 "use client";
 
+import { useRemembered } from "@/lib/remember";
+
 import Link from "next/link";
 import { useState } from "react";
 import { History } from "lucide-react";
@@ -51,10 +53,10 @@ const ENTITIES: AuditEntity[] = ["order", "invoice", "payment", "return", "item"
 export default function AuditPage() {
   const { tr, dateTime, lang } = useFmt();
   const log = useLoad(() => api.listAudit(), []);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRemembered("audit:q", "");
   const [action, setAction] = useState<AuditAction | "">("");
   const [entity, setEntity] = useState<AuditEntity | "">("");
-  const [showLogins, setShowLogins] = useState(false);
+  const [showLogins, setShowLogins] = useRemembered("audit:showLogins", false);
   const rows = (log.data ?? [])
     .filter((e) => (showLogins || e.action !== "login") && (!action || e.action === action) && (!entity || e.entity === entity) && matches(q, e.summary, e.summary_en, e.user.name))
     .slice(0, 300);

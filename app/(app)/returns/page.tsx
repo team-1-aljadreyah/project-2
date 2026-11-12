@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRemembered } from "@/lib/remember";
+
 import { Plus, Undo2 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
@@ -17,7 +18,7 @@ export default function ReturnsPage() {
   const list = useLoad(() => api.listReturns(), []);
   const wh = useWarehouseFilter();
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRemembered("returns:q", "");
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
   const rows = (list.data ?? []).filter((r) => inWarehouse(wh, r.warehouse_id) && matches(q, r.number, cName(r.customer_id), r.note));
   const canCreate = ["manager", "accountant", "rep"].includes(user.role);

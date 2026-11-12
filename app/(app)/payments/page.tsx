@@ -1,7 +1,9 @@
 "use client";
 
+import { useRemembered } from "@/lib/remember";
+
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Plus, Wallet } from "lucide-react";
 import { MethodChip, MethodIcon, OnlineStatusChip, methodLabel, methodTone } from "@/components/pay-method";
 import { useApp } from "@/components/shell";
@@ -21,10 +23,10 @@ export default function PaymentsPage() {
   const payments = useLoad(() => api.listPayments(), []);
   const customers = useLoad(() => api.listCustomers(), []);
   const online = useLoad(() => (staff ? api.listOnlinePayments() : Promise.resolve([] as OnlinePayment[])), [staff]);
-  const [tab, setTab] = useState<"payments" | "online">("payments");
-  const [range, setRange] = useState<"today" | "week" | "all">("all");
-  const [kind, setKind] = useState<"all" | "local" | "online">("all");
-  const [q, setQ] = useState("");
+  const [tab, setTab] = useRemembered<"payments" | "online">("payments:tab", "payments");
+  const [range, setRange] = useRemembered<"today" | "week" | "all">("payments:range", "all");
+  const [kind, setKind] = useRemembered<"all" | "local" | "online">("payments:kind", "all");
+  const [q, setQ] = useRemembered("payments:q", "");
   const names = useMemo(() => new Map((customers.data ?? []).map((c) => [c.id, c.name])), [customers.data]);
   const cName = (id: number) => names.get(id) ?? `#${id}`;
   const from = range === "today" ? today() : range === "week" ? today(-6) : "";

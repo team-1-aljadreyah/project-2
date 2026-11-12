@@ -1,4 +1,6 @@
 "use client";
+
+import { useRemembered } from "@/lib/remember";
 import { useCustomColumns } from "@/components/custom-fields";
 
 import { useState } from "react";
@@ -20,7 +22,7 @@ export default function CustomersPage() {
   const list = useLoad(() => api.listCustomers(), []);
   const [f, setF] = useState<F>("all");
   const [rep, setRep] = useState<number | "">("");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRemembered("customers:q", "");
   const [add, setAdd] = useState(false);
   const all = list.data ?? [];
   const pct = (c: Customer) => (c.debt_limit ? (c.balance ?? 0) / c.debt_limit : 0);
@@ -61,7 +63,7 @@ export default function CustomersPage() {
         </div>
       ),
     },
-    { key: "l", head: tr("آخر طلب", "Last order"), cell: (c) => <span className="text-muted">{c.last_order_at ? ago(c.last_order_at) : "-"}</span> },
+    { key: "l", head: tr("آخر طلب", "Last order"), cell: (c) => <span className="text-muted">{c.last_order_at ? ago(c.last_order_at) : "-"}</span>, sort: (c) => c.last_order_at ?? "" },
     ...extra,
   ];
 

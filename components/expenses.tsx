@@ -1,5 +1,7 @@
 "use client";
 
+import { useUnsaved } from "@/lib/unsaved";
+
 // Pieces of the expenses (صرفيات) pages: the status badge, the category names, and the "new expense" form.
 import { useState } from "react";
 import { useApp } from "@/components/shell";
@@ -38,6 +40,7 @@ export function NewExpenseDialog({ categories, onClose, onDone }: { categories: 
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<NewExpense>) => setF((x) => ({ ...x, ...p }));
+  useUnsaved(!busy && (amount !== "" || !!f.paid_to.trim()));
   const limit = lookups.settings.expense_approval_above ?? EXPENSE_APPROVAL_ABOVE;
   const waits = user.role !== "manager" && typeof amount === "number" && amount > limit;
   // Fuel and repairs are for a vehicle: the vehicle box comes first for them.

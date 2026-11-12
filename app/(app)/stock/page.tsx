@@ -1,5 +1,7 @@
 "use client";
 
+import { useRemembered } from "@/lib/remember";
+
 import { useState } from "react";
 import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, PackagePlus, PackageX } from "lucide-react";
 import { useApp } from "@/components/shell";
@@ -17,14 +19,14 @@ type Tab = "stock" | "expiry" | "damaged";
 export default function StockPage() {
   const { tr, name, qty, dateTime } = useFmt();
   const { user, lookups, itemById } = useApp();
-  const [tab, setTab] = useState<Tab>("stock");
+  const [tab, setTab] = useRemembered<Tab>("stock:tab", "stock");
   // Keeper / staff: their own warehouse. Manager / accountant: the warehouse filter of the top bar.
   const globalWh = useWarehouseFilter();
   const mine = useMyWarehouses();
   const [ownWh, setOwnWh] = useState<number | "">(user.role === "warehouse" || user.role === "staff" ? (user.warehouse_id ?? "") : "");
   const wh: number | "" = hasWarehouseFilter(user) ? (globalWh ?? "") : ownWh;
   const setWh = (v: number | "") => (hasWarehouseFilter(user) ? setWarehouseFilter(v || null) : setOwnWh(v));
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRemembered("stock:q", "");
   const [onlyLow, setOnlyLow] = useState(false);
   const shelf = useLoad(() => api.shelfStock(), []);
   const expiry = useLoad(() => api.nearExpiry(lookups.settings.near_expiry_days), [lookups.settings.near_expiry_days]);

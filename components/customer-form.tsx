@@ -1,4 +1,6 @@
 "use client";
+
+import { useUnsaved } from "@/lib/unsaved";
 import { CustomInputs, missingRequired, saveCustom, useFields } from "@/components/custom-fields";
 
 // Add / edit a customer (manager only): shop details, price tier, rep and debt limit.
@@ -31,6 +33,9 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
+  // Changed and not saved: leaving the page asks first.
+  const [start] = useState(() => JSON.stringify(f));
+  useUnsaved(open && !busy && JSON.stringify(f) !== start);
   // The manager's own fields (advanced settings), saved right after the customer.
   const [cv, setCv] = useState<Record<string, string | number | boolean | null>>(() => ({ ...customer?.custom }));
   const { editable } = useFields("customer");

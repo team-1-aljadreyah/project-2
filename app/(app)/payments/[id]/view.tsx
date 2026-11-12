@@ -1,5 +1,8 @@
 "use client";
 
+import { ShareWhatsApp } from "@/components/share";
+import { useBrand } from "@/lib/site";
+
 import { useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { MethodChip } from "@/components/pay-method";
@@ -13,7 +16,8 @@ import { useIdParam } from "@/lib/utils";
 
 export default function PaymentView() {
   const id = useIdParam();
-  const { tr, dateTime } = useFmt();
+  const { tr, dateTime, money } = useFmt();
+  const brand = useBrand();
   const { user } = useApp();
   const toast = useToast();
   const pay = useLoad(() => api.getPayment(id), [id]);
@@ -38,11 +42,29 @@ export default function PaymentView() {
           </span>
         }
         actions={
-          canReverse && (
-            <Button variant="danger" onClick={() => setOpen(true)}>
-              <RotateCcw className="size-4" /> {tr("عكس التسديد", "Reverse payment")}
-            </Button>
-          )
+          <>
+            {/* The receipt for the shop, in one tap. */}
+            {user.role !== "shop" && !p.reversed && (
+              <ShareWhatsApp
+                phone={customer.data?.phone}
+                text={() =>
+                  [
+                    brand.company,
+                    tr(`وصل استلام ${p.number}`, `Receipt ${p.number}`),
+                    `${customer.data?.name ?? ""}`,
+                    `${tr("المبلغ", "Amount")}: ${money(p.amount)}`,
+                    `${tr("التاريخ", "Date")}: ${dateTime(p.date)}`,
+                    tr("شكراً لكم", "Thank you"),
+                  ].join("\n")
+                }
+              />
+            )}
+            {canReverse && (
+              <Button variant="danger" onClick={() => setOpen(true)}>
+                <RotateCcw className="size-4" /> {tr("عكس التسديد", "Reverse payment")}
+              </Button>
+            )}
+          </>
         }
       />
       <div className="grid max-w-4xl gap-4 lg:grid-cols-2">

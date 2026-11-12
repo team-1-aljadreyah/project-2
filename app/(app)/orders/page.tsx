@@ -1,7 +1,8 @@
 "use client";
+
+import { useRemembered } from "@/lib/remember";
 import { useCustomColumns } from "@/components/custom-fields";
 
-import { useState } from "react";
 import { ClipboardList, Clock, Plus, RotateCw, Trash2, WifiOff } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
@@ -24,8 +25,8 @@ export default function OrdersPage() {
   useRealtime(["orders"], () => orders.reload());
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
   const queue = useQueue();
-  const [filter, setFilter] = useState<Filter>(user.role === "warehouse" ? "approved" : user.role === "accountant" ? "pending" : "open");
-  const [q, setQ] = useState("");
+  const [filter, setFilter] = useRemembered<Filter>("orders:filter", user.role === "warehouse" ? "approved" : user.role === "accountant" ? "pending" : "open");
+  const [q, setQ] = useRemembered("orders:q", "");
 
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
   const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
@@ -53,7 +54,7 @@ export default function OrdersPage() {
         </span>
       ),
     },
-    { key: "d", head: tr("الوقت", "Time"), cell: (o) => <span className="text-muted">{dateTime(o.created_at)}</span> },
+    { key: "d", head: tr("الوقت", "Time"), cell: (o) => <span className="text-muted">{dateTime(o.created_at)}</span>, sort: (o) => o.created_at },
     ...extra,
   ];
 

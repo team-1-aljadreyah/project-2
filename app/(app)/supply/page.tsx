@@ -1,5 +1,9 @@
 "use client";
 
+import { useUnsaved } from "@/lib/unsaved";
+
+import { useRemembered } from "@/lib/remember";
+
 // Supply orders: the accountant (or the manager) orders goods from a supplier for one warehouse.
 // That warehouse's keeper is told, downloads the order as an Excel or CSV file (to check the delivery with
 // the supplier's driver), and receives the goods against it when they come: the receiving form opens filled in.
@@ -53,7 +57,7 @@ export default function SupplyPage() {
   // A notification links here with ?open=<id> ("part of SUP-… arrived"): it opens that order at once.
   const linked = Number(useSearchParams().get("open")) || null;
   const [openId, setOpenId] = useState<number | null>(linked);
-  const [status, setStatus] = useState<"open" | "done" | "all">("open");
+  const [status, setStatus] = useRemembered<"open" | "done" | "all">("supply:status", "open");
   const canOrder = user.role === "accountant" || user.role === "manager";
   const all = (list.data ?? []).filter((o) => inWarehouse(wh, o.warehouse_id));
   const open = (o: SupplyOrder) => o.status === "sent" || o.status === "partial";
@@ -393,6 +397,7 @@ function NewSupply({ onClose, onDone }: { onClose: () => void; onDone: () => voi
   const [lines, setLines] = useState<Line[]>([blank()]);
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  useUnsaved(!busy && (!!supplier.trim() || lines.some((l) => l.item_id)));
   const set = (key: number, p: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...p } : l)));
   const total = lines.reduce((s, l) => s + (typeof l.qty === "number" && typeof l.price === "number" ? l.qty * l.price : 0), 0);
   // The last purchase price of an item (per carton / piece), as a starting point.

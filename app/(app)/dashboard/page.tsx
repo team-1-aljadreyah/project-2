@@ -301,7 +301,7 @@ export default function DashboardPage() {
       )}
 
       {x ? (
-        area(stats, "grid grid-cols-2 gap-3 lg:grid-cols-4")
+        area(stats, "grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0")
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {Array.from({ length: 8 }, (_, i) => (
@@ -310,7 +310,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mt-4">{area(cards, "grid gap-4 xl:grid-cols-2")}</div>
+      {/* One column on phones (minmax 0: a chart shrinks to the screen instead of pushing it wider). */}
+      <div className="mt-4">{area(cards, "grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-2 [&>*]:min-w-0")}</div>
     </>
   );
 }
