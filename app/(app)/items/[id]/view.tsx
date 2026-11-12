@@ -1,4 +1,5 @@
 "use client";
+import { CustomFieldsCard } from "@/components/custom-fields";
 
 import { useState } from "react";
 import { Pencil } from "lucide-react";
@@ -17,7 +18,7 @@ import { daysUntil, useIdParam } from "@/lib/utils";
 export default function ItemView() {
   const id = useIdParam();
   const { tr, name, qty, date } = useFmt();
-  const { user, lookups, itemById } = useApp();
+  const { user, lookups, itemById, reloadItems } = useApp();
   const it = itemById.get(id);
   const batches = useLoad(() => api.itemBatches(id), [id]);
   const [edit, setEdit] = useState(false);
@@ -104,6 +105,9 @@ export default function ItemView() {
           <KV k={tr("الباركود", "Barcode")} v={<span className="num">{it.barcode ?? "-"}</span>} />
           <KV k={tr("الحالة", "Status")} v={it.active ? <Badge tone="success">{tr("فعّالة", "Active")}</Badge> : <Badge>{tr("موقوفة", "Inactive")}</Badge>} />
         </Card>
+      </div>
+      <div className="mb-4">
+        <CustomFieldsCard object="item" id={it.id} values={it.custom} onSaved={reloadItems} />
       </div>
       <Card>
         <CardHeader title={tr("الدفعات (الأقدم صلاحية أولاً)", "Batches (oldest expiry first)")} subtitle={tr("هذا هو الترتيب الذي تخرج به البضاعة عند البيع. المنتهية لا تُباع.", "Goods leave in this order when sold. Expired batches are never sold.")} />

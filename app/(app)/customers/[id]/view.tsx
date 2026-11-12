@@ -1,4 +1,5 @@
 "use client";
+import { CustomFieldsCard } from "@/components/custom-fields";
 
 import { MapPinned, Pencil, Phone, ShoppingCart, Wallet } from "lucide-react";
 import { useState } from "react";
@@ -129,6 +130,9 @@ export default function CustomerView() {
             </div>
           )}
         </Card>
+        <div className="lg:col-span-2">
+          <CustomFieldsCard object="customer" id={x.id} values={x.custom} onSaved={c.reload} />
+        </div>
         <Card className="p-4">
           <KV k={tr("الهاتف", "Phone")} href={`tel:${x.phone}`} v={<span dir="ltr">{x.phone}</span>} />
           <KV k={tr("العنوان", "Address")} v={x.address} />

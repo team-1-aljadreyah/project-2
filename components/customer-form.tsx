@@ -1,4 +1,5 @@
 "use client";
+import { CustomInputs, missingRequired, saveCustom, useFields } from "@/components/custom-fields";
 
 // Add / edit a customer (manager only): shop details, price tier, rep and debt limit.
 import { useState } from "react";
@@ -30,12 +31,21 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
+  // The manager's own fields (advanced settings), saved right after the customer.
+  const [cv, setCv] = useState<Record<string, string | number | boolean | null>>(() => ({ ...customer?.custom }));
+  const { editable } = useFields("customer");
 
   async function save() {
+    const missing = missingRequired(editable, cv);
+    if (missing.length) {
+      setErr(Object.fromEntries(missing.map((m) => [`custom.${m.id}`, tr("مطلوب", "Required")])));
+      return;
+    }
     setBusy(true);
     setErr({});
     try {
       const c = await api.saveCustomer(customer?.id ?? null, { ...f, debt_limit: f.debt_limit === "" ? -1 : f.debt_limit });
+      await saveCustom("customer", c.id, customer?.custom, cv);
       toast("success", tr("تم حفظ الزبون", "Customer saved"));
       onSaved?.(c);
       onClose();
@@ -112,6 +122,9 @@ export function CustomerForm({ open, onClose, customer, onSaved }: { open: boole
         <div className="sm:col-span-2">
           <Switch checked={f.active} onChange={(v) => set({ active: v })} label={tr("الحساب فعّال (يستطيع الطلب)", "Active (can order)")} />
         </div>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <CustomInputs object="customer" values={cv} onChange={setCv} errors={err} />
       </div>
     </Dialog>
   );

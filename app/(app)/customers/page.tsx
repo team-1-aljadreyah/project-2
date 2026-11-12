@@ -1,4 +1,5 @@
 "use client";
+import { useCustomColumns } from "@/components/custom-fields";
 
 import { useState } from "react";
 import { AlertTriangle, Plus, Users } from "lucide-react";
@@ -32,6 +33,7 @@ export default function CustomersPage() {
   const total = all.reduce((s, c) => s + Math.max(0, c.balance ?? 0), 0);
   const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
 
+  const extra = useCustomColumns<Customer>("customer");
   const columns: Column<Customer>[] = [
     {
       key: "n",
@@ -60,6 +62,7 @@ export default function CustomersPage() {
       ),
     },
     { key: "l", head: tr("آخر طلب", "Last order"), cell: (c) => <span className="text-muted">{c.last_order_at ? ago(c.last_order_at) : "-"}</span> },
+    ...extra,
   ];
 
   return (

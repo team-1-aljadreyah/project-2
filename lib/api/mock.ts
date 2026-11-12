@@ -30,6 +30,9 @@ import type {
   StatementRow,
   User,
   SiteCustom,
+  CustomField,
+  CustomObject,
+  CustomValue,
 } from "./types";
 import { worksIn } from "./types";
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
@@ -211,8 +214,10 @@ function itemView(db: Db, it: DbItem, actor: DbUser, now: Date): Item {
     const sp = (db.special_prices ?? []).find((x) => x.customer_id === c?.id && x.item_id === it.id);
     prices = sp && c ? [{ tier_id: c.tier_id, carton_price: sp.carton_price, piece_price: sp.piece_price }] : it.prices.filter((p) => p.tier_id === c?.tier_id);
   }
+  const custom = customOf(db, "item", it.id, actor);
   return {
     ...it,
+    ...(custom ? { custom } : {}),
     prices,
     stock: { total: by_warehouse.reduce((s, w) => s + w.qty, 0), by_warehouse },
     nearest_expiry: nearest,
@@ -232,7 +237,48 @@ function customerView(db: Db, c: DbCustomer, actor: DbUser): Customer {
     .sort()
     .pop();
   const { debt_limit, ...rest } = c;
-  return { ...rest, last_order_at: last, ...(seesDebt(actor) ? { debt_limit, balance: customerBalance(db, c.id) } : {}) };
+  const custom = customOf(db, "customer", c.id, actor);
+  return { ...rest, ...(custom ? { custom } : {}), last_order_at: last, ...(seesDebt(actor) ? { debt_limit, balance: customerBalance(db, c.id) } : {}) };
+}
+
+// ---------- the manager's own fields (advanced settings → object manager) ----------
+
+const fieldsOf = (object: CustomObject) => fullSite(db0().custom).fields.filter((f) => f.active && f.object === object);
+const mayView = (f: CustomField, actor: DbUser) => actor.role === "manager" || !f.view_roles.length || f.view_roles.includes(actor.role);
+const mayEdit = (f: CustomField, actor: DbUser) => actor.role === "manager" || (mayView(f, actor) && f.edit_roles.includes(actor.role));
+
+/** The values of a record's own fields this person may see (undefined = none). */
+function customOf(db: Db, object: CustomObject, id: number, actor: DbUser) {
+  const all = db.custom_values?.[`${object}:${id}`];
+  if (!all) return undefined;
+  const out: Record<string, CustomValue> = {};
+  for (const f of fieldsOf(object)) if (f.id in all && mayView(f, actor)) out[f.id] = all[f.id];
+  return Object.keys(out).length ? out : undefined;
+}
+
+const emptyValue = (v: unknown) => v === undefined || v === null || v === "";
+
+/** One value, checked against its field's type. */
+function cleanValue(f: CustomField, v: unknown): CustomValue | undefined {
+  if (emptyValue(v)) return undefined;
+  const bad = () => fail(422, "VALIDATION", `قيمة «${f.label}» غير صحيحة`, `${f.label_en || f.label}: not a valid value`, { [`custom.${f.id}`]: msg("قيمة غير صحيحة", "Not valid") });
+  switch (f.type) {
+    case "number": {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : bad();
+    }
+    case "date":
+      return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : bad();
+    case "yesno":
+      return typeof v === "boolean" ? v : bad();
+    case "list":
+      return typeof v === "string" && (f.options ?? []).includes(v) ? v : bad();
+    default: {
+      const t = String(v).trim();
+      if (t.length > 500) fail(422, "VALIDATION", `«${f.label}» طويل جداً`, "Too long", { [`custom.${f.id}`]: msg("حتى 500 حرف", "Up to 500 characters") });
+      return t || undefined;
+    }
+  }
 }
 
 function canSeeCustomer(actor: DbUser, c: { id: number; rep_id: number }) {
@@ -373,6 +419,12 @@ function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | 
   return [...rows.values()].sort((a, b) => b.sales - a.sales);
 }
 
+/** An order as the pages get it, with the values of the manager's fields this person may see. */
+function withCustom(db: Db, o: Order, a: DbUser): Order {
+  const custom = customOf(db, "order", o.id, a);
+  return custom ? { ...o, custom } : o;
+}
+
 /** The profile chosen in the users form: one of the same job, or none (also when the job changed). */
 function setProfileFrom(db: Db, u: DbUser, id: string | null | undefined) {
   if (id === undefined && (!u.profile_id || fullSite(db.custom).profiles.find((p) => p.id === u.profile_id)?.role === u.role)) return;
@@ -401,6 +453,16 @@ function checkAdvanced(s: SiteCustom) {
     if (x.pages.some((h) => typeof h !== "string" || !h.startsWith("/"))) fail(422, "VALIDATION", "صفحات غير صحيحة", "Wrong pages");
   }
   for (const p of s.profiles) if (p.default_app && !apps.has(p.default_app)) delete p.default_app;
+  const fields = new Set<string>();
+  for (const f of s.fields) {
+    if (!f.id || fields.has(f.id)) fail(422, "VALIDATION", "حقل مكرر", "Duplicate field");
+    fields.add(f.id);
+    if (!f.label?.trim()) fail(422, "VALIDATION", "اسم الحقل مطلوب", "The field needs a name");
+    if (!["customer", "item", "order"].includes(f.object)) fail(422, "VALIDATION", "اختر مكان الحقل", "Choose where the field goes");
+    if (!["text", "number", "date", "list", "yesno"].includes(f.type)) fail(422, "VALIDATION", "نوع الحقل غير صحيح", "Wrong field type");
+    if (f.type === "list" && !(f.options ?? []).filter((o) => o.trim()).length) fail(422, "VALIDATION", `أضف خيارات «${f.label}»`, `Add the choices of ${f.label}`);
+    if (s.fields.some((x) => x !== f && x.object === f.object && x.label.trim() === f.label.trim())) fail(422, "VALIDATION", `يوجد حقل باسم «${f.label}»`, "A field with this name exists");
+  }
 }
 
 /** A user as the pages get it: no password, nothing worked out per request. */
@@ -629,6 +691,12 @@ export const mockApi: Api = {
       };
       diff(old.profiles, next.profiles, "ملف صلاحيات", "profile");
       diff(old.apps, next.apps, "تطبيق", "app");
+      diff(
+        old.fields.map((f) => ({ ...f, name: f.label })),
+        next.fields.map((f) => ({ ...f, name: f.label })),
+        "حقل",
+        "field",
+      );
       return next;
     }),
   createWarehouse: (input) =>
@@ -1187,14 +1255,53 @@ export const mockApi: Api = {
     read((db, a) =>
       db.orders
         .filter((o) => canSeeOrder(a, o))
-        .map((o) => orderView(o, a))
+        .map((o) => withCustom(db, orderView(o, a), a))
         .reverse(),
     ),
   getOrder: (id) =>
     read((db, a) => {
       const o = db.orders.find((x) => x.id === id);
       if (!o || !canSeeOrder(a, o)) notFound();
-      return orderView(o, a);
+      return withCustom(db, orderView(o, a), a);
+    }),
+  saveCustomValues: (object, id, values) =>
+    write((db, a, now) => {
+      // The record must exist and be one this person sees.
+      const name =
+        object === "customer"
+          ? (() => {
+              const c = db.customers.find((x) => x.id === id);
+              if (!c || !(canSeeCustomer(a, c) || deliversTo(db, a, c.id))) notFound();
+              return c.name;
+            })()
+          : object === "item"
+            ? (db.items.find((x) => x.id === id) ?? notFound()).name
+            : (() => {
+                const o = db.orders.find((x) => x.id === id);
+                if (!o || !canSeeOrder(a, o)) notFound();
+                return o.number;
+              })();
+      db.custom_values ??= {};
+      const key = `${object}:${id}`;
+      const old = db.custom_values[key] ?? {};
+      const next = { ...old };
+      const changed: string[] = [];
+      for (const f of fieldsOf(object)) {
+        if (!(f.id in values)) continue;
+        const v = cleanValue(f, values[f.id]);
+        if (v === old[f.id]) continue;
+        if (!mayEdit(f, a)) fail(403, "FORBIDDEN", `لا تملك تعديل «${f.label}»`, `You can't change ${f.label_en || f.label}`);
+        if (v === undefined) delete next[f.id];
+        else next[f.id] = v;
+        changed.push(f.label);
+      }
+      const errors: Record<string, string> = {};
+      for (const f of fieldsOf(object)) if (f.required && mayEdit(f, a) && emptyValue(next[f.id])) errors[`custom.${f.id}`] = msg(`«${f.label}» مطلوب`, `${f.label_en || f.label} is required`);
+      if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
+      if (Object.keys(next).length) db.custom_values[key] = next;
+      else delete db.custom_values[key];
+      if (changed.length) audit(db, a, "update", object, id, `${name}: تعديل ${changed.join("، ")}`, `${name}: changed ${changed.length} fields`, now);
+      return customOf(db, object, id, a) ?? {};
     }),
 
   // Support chat

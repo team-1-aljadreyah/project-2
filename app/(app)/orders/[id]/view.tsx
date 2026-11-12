@@ -1,4 +1,5 @@
 "use client";
+import { CustomFieldsCard } from "@/components/custom-fields";
 
 import { useAppRouter } from "@/lib/app-path";
 import { useEffect, useState } from "react";
@@ -164,6 +165,7 @@ export default function OrderView() {
             </Notice>
           )}
           {!!o.shipments?.length && <ShipmentsCard order={o} />}
+          <CustomFieldsCard object="order" id={o.id} values={o.custom} onSaved={order.reload} />
           {o.delivery && <DeliveryPanel order={o} role={user.role} shop={c?.name ?? ""} rep={o.delivery.rep?.name ?? rep?.name ?? ""} area={c?.area} />}
           {o.delivery && user.role !== "shop" && user.role !== "rep" && (
             <VehicleBox order={o} canPlan={user.role === "manager" || ((user.role === "warehouse" || user.role === "staff") && worksIn(user, o.warehouse_id, lookups.warehouses))} onDone={order.reload} />
