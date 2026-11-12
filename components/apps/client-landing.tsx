@@ -34,10 +34,10 @@ import {
 } from "lucide-react";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { AppFooter, AppHeader, BigButton, Blobs, CountUp, GradientText, InstallCard, Marquee, PhoneDemo, Questions, SectionHead, StickyActions, useAppEntry } from "./kit";
+import { AppFooter, AppHeader, BigButton, Blobs, CountUp, GradientText, InstallCard, Marquee, PhoneDemo, Questions, Rivers, SectionHead, StickyActions, IDENTITY, useAppEntry } from "./kit";
 
-// The page's colors: orange (the brand), pink, amber, green, violet, sky.
-const C = { orange: "#ff7a3d", pink: "#ff4f8b", amber: "#ffc23d", green: "#34d399", violet: "#a78bfa", sky: "#38bdf8" };
+// The page's two colors (the identity of the shop owners' app, see IDENTITY in ./kit).
+const C = IDENTITY.client;
 
 export function ClientLanding() {
   const { tr, lang } = useFmt();
@@ -61,17 +61,17 @@ export function ClientLanding() {
       <main>
         {/* ---------- 1) Hero ---------- */}
         <section className="relative overflow-hidden px-4 pb-14 pt-28 sm:pt-32">
-          <Blobs colors={[C.orange, C.pink, C.amber, C.violet]} />
+          <Blobs colors={[C.main, C.soft, C.main]} className="opacity-70" />
           <div className="brand-grid absolute inset-0 opacity-30" aria-hidden />
           <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="text-center lg:text-start">
               <motion.span initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur">
-                <Sparkles className="size-3.5 text-amber-300" /> {tr("لأصحاب المحلات والماركتات في كربلاء", "For shop and market owners in Karbala")}
+                <Sparkles className="size-3.5" style={{ color: C.soft }} /> {tr("لأصحاب المحلات والماركتات في كربلاء", "For shop and market owners in Karbala")}
               </motion.span>
               <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08, duration: 0.7 }} className="mt-5 text-4xl font-bold leading-[1.15] sm:text-6xl">
                 {tr("بضاعة محلك كلها", "All your shop's goods")}
                 <br />
-                <GradientText from={C.amber} via={C.orange} to={C.pink}>
+                <GradientText from={C.soft} via={C.main} to={C.main}>
                   {tr("بضغطة من جوالك", "in one tap on your phone")}
                 </GradientText>
               </motion.h1>
@@ -82,7 +82,7 @@ export function ClientLanding() {
                 )}
               </motion.p>
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="mt-8 hidden flex-wrap justify-center gap-3 sm:flex lg:justify-start">
-                <BigButton href={main.href} color={C.orange}>
+                <BigButton href={main.href} color={C.main}>
                   {!session && <UserPlus className="size-5" />} {main.label} {session && <Forward className="size-5" />}
                 </BigButton>
                 {!session && (
@@ -93,9 +93,9 @@ export function ClientLanding() {
               </motion.div>
               <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} className="mt-7 flex flex-wrap justify-center gap-2 text-sm lg:justify-start">
                 {[
-                  { t: tr("التسجيل مجاني", "Free to join"), c: C.green },
-                  { t: tr("بلا رسوم اشتراك", "No fees"), c: C.amber },
-                  { t: tr("أسعار حسب نوع محلك", "Prices for your shop"), c: C.sky },
+                  { t: tr("التسجيل مجاني", "Free to join"), c: C.soft },
+                  { t: tr("بلا رسوم اشتراك", "No fees"), c: C.soft },
+                  { t: tr("أسعار حسب نوع محلك", "Prices for your shop"), c: C.soft },
                 ].map((x) => (
                   <li key={x.t} className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5">
                     <Check className="size-4" style={{ color: x.c }} /> {x.t}
@@ -103,20 +103,22 @@ export function ClientLanding() {
                 ))}
               </motion.ul>
             </div>
-            <PhoneDemo glow={`linear-gradient(135deg, ${C.orange}, ${C.pink})`} screens={useScreens()} />
+            <PhoneDemo glow={`linear-gradient(135deg, ${C.main}, ${C.soft})`} screens={useScreens()} />
           </div>
         </section>
 
+        {/* The identity's two rivers, under the hero */}
+        <Rivers app="client" className="-mt-4" />
         <Marquee
           items={[
-            { icon: Tag, t: tr("أسعار الجملة", "Wholesale prices"), c: C.orange },
-            { icon: MapPinned, t: tr("تتبّع مباشر", "Live tracking"), c: C.sky },
-            { icon: CreditCard, t: tr("دفع بكي كارد", "Pay with Qi Card"), c: C.amber },
-            { icon: FileText, t: tr("كشف حساب واضح", "A clear statement"), c: C.green },
-            { icon: PhoneOff, t: tr("بلا اتصالات", "No phone calls"), c: C.pink },
-            { icon: Printer, t: tr("فواتير تُطبع", "Printable invoices"), c: C.violet },
-            { icon: KeyRound, t: tr("استلام برمزك", "Hand-over with your PIN"), c: C.orange },
-            { icon: Headset, t: tr("دعم مباشر", "Live support"), c: C.sky },
+            { icon: Tag, t: tr("أسعار الجملة", "Wholesale prices"), c: C.main },
+            { icon: MapPinned, t: tr("تتبّع مباشر", "Live tracking"), c: C.soft },
+            { icon: CreditCard, t: tr("دفع بكي كارد", "Pay with Qi Card"), c: C.soft },
+            { icon: FileText, t: tr("كشف حساب واضح", "A clear statement"), c: C.soft },
+            { icon: PhoneOff, t: tr("بلا اتصالات", "No phone calls"), c: C.main },
+            { icon: Printer, t: tr("فواتير تُطبع", "Printable invoices"), c: C.main },
+            { icon: KeyRound, t: tr("استلام برمزك", "Hand-over with your PIN"), c: C.main },
+            { icon: Headset, t: tr("دعم مباشر", "Live support"), c: C.soft },
           ]}
         />
 
@@ -124,10 +126,10 @@ export function ClientLanding() {
         <section className="px-4 py-10">
           <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 lg:grid-cols-4">
             {[
-              { n: 24, s: "/7", t: tr("تطلب متى شئت، حتى بعد إغلاق المحل", "Order any time, even after closing"), c: C.orange },
-              { n: 0, s: tr(" د.ع", " IQD"), t: tr("رسوم اشتراك أو تسجيل", "Fees to join or use it"), c: C.green },
-              { n: 2, s: tr(" دقيقة", " min"), t: tr("يكفيان لتسجيل محلك", "Are enough to register"), c: C.amber },
-              { n: 100, s: "%", t: tr("من فواتيرك مكتوبة وواضحة", "Of your invoices clear and written"), c: C.sky },
+              { n: 24, s: "/7", t: tr("تطلب متى شئت، حتى بعد إغلاق المحل", "Order any time, even after closing"), c: C.main },
+              { n: 0, s: tr(" د.ع", " IQD"), t: tr("رسوم اشتراك أو تسجيل", "Fees to join or use it"), c: C.soft },
+              { n: 2, s: tr(" دقيقة", " min"), t: tr("يكفيان لتسجيل محلك", "Are enough to register"), c: C.soft },
+              { n: 100, s: "%", t: tr("من فواتيرك مكتوبة وواضحة", "Of your invoices clear and written"), c: C.soft },
             ].map((x, i) => (
               <motion.div
                 key={x.t}
@@ -155,9 +157,9 @@ export function ClientLanding() {
         <Start mainHref={main.href} mainLabel={main.label} />
 
         <section id="faq" className="scroll-mt-24 px-4 py-16">
-          <SectionHead eyebrow={tr("أسئلة أصحاب المحلات", "Shop owners ask")} title={tr("قبل أن تبدأ", "Before you start")} color={C.violet} />
+          <SectionHead eyebrow={tr("أسئلة أصحاب المحلات", "Shop owners ask")} title={tr("قبل أن تبدأ", "Before you start")} color={C.main} />
           <Questions
-            color={C.violet}
+            color={C.main}
             items={[
               { q: tr("هل التسجيل مجاني فعلاً؟", "Is it really free?"), a: tr("نعم. لا رسوم تسجيل ولا اشتراك شهري، وتدفع فقط ثمن البضاعة التي تطلبها.", "Yes. No sign-up fee and no monthly fee: you pay only for the goods you order.") },
               { q: tr("كيف تُحدد أسعاري؟", "How are my prices set?"), a: tr("تراجع الشركة محلك وتضعه في نوع السعر المناسب (جملة، جملة كبيرة…)، وقد تكون لك أسعار خاصة ببعض المواد. ترى سعرك أنت فقط.", "The company checks your shop and gives it the right price tier, sometimes with special prices on some items. You see only your own price.") },
@@ -169,26 +171,27 @@ export function ClientLanding() {
         </section>
 
         <section className="px-4 pb-10">
-          <InstallCard app="client" color={C.orange} />
+          <InstallCard app="client" color={C.main} />
         </section>
 
         {/* ---------- Last call ---------- */}
+        <Rivers app="client" className="mb-6" />
         <section className="px-4 pb-16 pt-4">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="relative mx-auto max-w-5xl overflow-hidden rounded-[36px] p-8 text-center sm:p-14"
-            style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.pink} 60%, ${C.violet})` }}
+            style={{ background: `linear-gradient(135deg, ${C.main}, #a8481a)` }}
           >
-            <Blobs colors={["#ffffff", C.amber]} className="opacity-40" />
+            <Blobs colors={[C.soft]} className="opacity-40" />
             <div className="relative">
               <h2 className="text-3xl font-bold leading-tight sm:text-5xl">{tr("محلك يستحق مورّداً يعمل على جوالك", "Your shop deserves a supplier on your phone")}</h2>
               <p className="mx-auto mt-4 max-w-xl text-white/90">
                 {tr("سجّل في دقيقتين. تراجع الشركة محلك وتحدد أسعارك وسقف دينك، ثم تطلب متى شئت.", "Sign up in two minutes. The company checks your shop and sets your prices and limit; then order whenever you like.")}
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <BigButton href={main.href} color="#ffffff">
+                <BigButton href={main.href} color={C.soft}>
                   {!session && <UserPlus className="size-5" />} {main.label}
                 </BigButton>
               </div>
@@ -200,7 +203,7 @@ export function ClientLanding() {
       <AppFooter other={{ href: "/driver", label: tr("تطبيق المندوبين", "The reps' app") }} />
 
       <StickyActions>
-        <BigButton href={main.href} color={C.orange} className="flex-1">
+        <BigButton href={main.href} color={C.main} className="flex-1">
           {!session && <UserPlus className="size-5" />} {main.label}
         </BigButton>
         {!session && (
@@ -218,10 +221,10 @@ export function ClientLanding() {
 function useScreens() {
   const { tr } = useFmt();
   const products = [
-    { n: tr("رز بسمتي 5 كغم", "Basmati rice 5 kg"), p: "42,750", c: C.orange },
-    { n: tr("سكر 2 كغم", "Sugar 2 kg"), p: "20,250", c: C.amber },
-    { n: tr("زيت دوار الشمس", "Sunflower oil"), p: "26,000", c: C.green },
-    { n: tr("معجون طماطم", "Tomato paste"), p: "24,000", c: C.pink },
+    { n: tr("رز بسمتي 5 كغم", "Basmati rice 5 kg"), p: "42,750", c: C.main },
+    { n: tr("سكر 2 كغم", "Sugar 2 kg"), p: "20,250", c: C.soft },
+    { n: tr("زيت دوار الشمس", "Sunflower oil"), p: "26,000", c: C.soft },
+    { n: tr("معجون طماطم", "Tomato paste"), p: "24,000", c: C.main },
   ];
   return [
     {
@@ -229,7 +232,7 @@ function useScreens() {
       label: tr("المتجر: أسعارك والمتاح لك", "The store: your prices and your credit"),
       body: (
         <div className="space-y-3">
-          <div className="rounded-2xl p-3" style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.pink})` }}>
+          <div className="rounded-2xl p-3" style={{ background: `linear-gradient(135deg, ${C.main}, #b8521c)` }}>
             <p className="text-[10px] opacity-85">{tr("المتاح لك للطلب", "Available to order")}</p>
             <p className="num text-xl font-bold">3,750,000 {tr("د.ع", "IQD")}</p>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/25">
@@ -267,11 +270,11 @@ function useScreens() {
           <div className="relative h-56 overflow-hidden rounded-2xl bg-[#1d2128]">
             <svg viewBox="0 0 260 220" className="absolute inset-0 size-full" aria-hidden>
               <path d="M0 60 H260 M0 150 H260 M70 0 V220 M190 0 V220" stroke="#2c323b" strokeWidth="14" />
-              <path d="M40 190 L70 190 L70 60 L190 60 L190 30" fill="none" stroke={C.green} strokeWidth="4" strokeLinecap="round" strokeDasharray="6 6" />
+              <path d="M40 190 L70 190 L70 60 L190 60 L190 30" fill="none" stroke={C.soft} strokeWidth="4" strokeLinecap="round" strokeDasharray="6 6" />
             </svg>
             <motion.span
               className="absolute flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[#0b0c0e] shadow-lg"
-              style={{ background: C.orange }}
+              style={{ background: C.main }}
               initial={{ left: "15%", top: "86%" }}
               animate={{ left: ["15%", "27%", "27%", "73%", "73%"], top: ["86%", "86%", "27%", "27%", "14%"] }}
               transition={{ duration: 3, ease: "easeInOut" }}
@@ -283,7 +286,7 @@ function useScreens() {
             </span>
           </div>
           <div className="flex items-center gap-3 rounded-2xl bg-white/[0.06] p-3">
-            <Clock className="size-5" style={{ color: C.green }} />
+            <Clock className="size-5" style={{ color: C.soft }} />
             <span className="flex-1 text-xs">{tr("يصل بعد 12 دقيقة تقريباً", "About 12 minutes away")}</span>
             <span className="text-[11px] text-white/60">{tr("مع حسين", "with Hussein")}</span>
           </div>
@@ -295,7 +298,7 @@ function useScreens() {
       label: tr("تستلم برمزك أنت، بعد أن تتأكد", "You hand over with your own PIN"),
       body: (
         <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-          <span className="flex size-14 items-center justify-center rounded-2xl" style={{ background: `${C.amber}33`, color: C.amber }}>
+          <span className="flex size-14 items-center justify-center rounded-2xl" style={{ background: `${C.soft}33`, color: C.soft }}>
             <KeyRound className="size-7" />
           </span>
           <p className="text-sm font-bold">{tr("رمز الاستلام", "Delivery PIN")}</p>
@@ -307,7 +310,7 @@ function useScreens() {
             ))}
           </div>
           <p className="max-w-[200px] text-xs text-white/60">{tr("أعطه للمندوب فقط بعد أن تتأكد أن البضاعة سليمة وكاملة", "Give it only once the goods are complete and fine")}</p>
-          <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.2 }} className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold text-[#0b0c0e]" style={{ background: C.green }}>
+          <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.2 }} className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold text-[#0b0c0e]" style={{ background: C.soft }}>
             <Check className="size-4" /> {tr("تم الاستلام · صدرت الفاتورة", "Delivered · invoice made")}
           </motion.div>
         </div>
@@ -324,10 +327,10 @@ function useScreens() {
             <p className="num text-2xl font-bold">1,250,000</p>
           </div>
           {[
-            { t: tr("فاتورة", "Invoice"), n: "INV-0241", v: "+425,000", c: C.orange, i: ReceiptText },
-            { t: tr("تسديد كي كارد", "Qi Card payment"), n: "PAY-0182", v: "-300,000", c: C.green, i: Wallet },
-            { t: tr("مرتجع", "Return"), n: "RET-0008", v: "-38,000", c: C.amber, i: BadgePercent },
-            { t: tr("فاتورة", "Invoice"), n: "INV-0236", v: "+219,500", c: C.orange, i: ReceiptText },
+            { t: tr("فاتورة", "Invoice"), n: "INV-0241", v: "+425,000", c: C.main, i: ReceiptText },
+            { t: tr("تسديد كي كارد", "Qi Card payment"), n: "PAY-0182", v: "-300,000", c: C.soft, i: Wallet },
+            { t: tr("مرتجع", "Return"), n: "RET-0008", v: "-38,000", c: C.soft, i: BadgePercent },
+            { t: tr("فاتورة", "Invoice"), n: "INV-0236", v: "+219,500", c: C.main, i: ReceiptText },
           ].map((r, i) => (
             <motion.div key={r.n} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + i * 0.1 }} className="flex items-center gap-2.5 rounded-xl bg-white/[0.04] p-2.5">
               <span className="flex size-8 items-center justify-center rounded-lg" style={{ background: `${r.c}26`, color: r.c }}>
@@ -371,12 +374,12 @@ function BeforeAfter() {
         title={
           <>
             {tr("قارن يومك ", "Compare your day ")}
-            <GradientText from={C.pink} via={C.orange} to={C.amber}>
+            <GradientText from={C.main} via={C.main} to={C.soft}>
               {tr("قبل وبعد", "before and after")}
             </GradientText>
           </>
         }
-        color={C.pink}
+        color={C.main}
       />
       <div className="mx-auto mt-8 flex w-fit rounded-full border border-white/10 bg-white/[0.05] p-1" role="tablist">
         {[
@@ -384,7 +387,7 @@ function BeforeAfter() {
           { v: true, t: tr("مع النهرين", "With Al-Nahrain") },
         ].map((x) => (
           <button key={String(x.v)} type="button" role="tab" aria-selected={after === x.v} onClick={() => setAfter(x.v)} className="relative h-10 rounded-full px-5 text-sm font-bold">
-            {after === x.v && <motion.span layoutId="ba-pill" className="absolute inset-0 rounded-full" style={{ background: x.v ? C.green : "#ef4444" }} transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
+            {after === x.v && <motion.span layoutId="ba-pill" className="absolute inset-0 rounded-full" style={{ background: x.v ? C.soft : "#8a8f98" }} transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
             <span className={cn("relative", after === x.v && "text-[#0b0c0e]")}>{x.t}</span>
           </button>
         ))}
@@ -400,9 +403,9 @@ function BeforeAfter() {
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ delay: i * 0.06, type: "spring", stiffness: 260, damping: 24 }}
               className="flex items-center gap-3 rounded-2xl border p-4"
-              style={{ borderColor: after ? `${C.green}44` : "#ef444444", background: after ? `${C.green}10` : "#ef444410" }}
+              style={{ borderColor: after ? `${C.soft}44` : "#8a8f9844", background: after ? `${C.soft}10` : "#8a8f9810" }}
             >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl" style={{ background: after ? `${C.green}26` : "#ef444426", color: after ? C.green : "#f87171" }}>
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl" style={{ background: after ? `${C.soft}26` : "#8a8f9826", color: after ? C.soft : "#b4b8bf" }}>
                 <x.i className="size-5" />
               </span>
               <span className="text-sm font-medium">{x.t}</span>
@@ -419,12 +422,12 @@ function BeforeAfter() {
 function Features() {
   const { tr } = useFmt();
   const cards = [
-    { i: Tag, t: tr("أسعارك أنت", "Your own prices"), b: tr("سعر نوع محلك والعروض الخاصة بك فقط.", "Your tier's price and your own offers only."), c: C.orange, wide: true },
-    { i: MapPinned, t: tr("تتبّع مباشر", "Live tracking"), b: tr("موقع المندوب ووقت الوصول.", "The rep's place and arrival time."), c: C.sky },
-    { i: Wallet, t: tr("ادفع من جوالك", "Pay from your phone"), b: tr("بكي كارد، ويُخصم من أقدم فاتورة.", "Qi Card, oldest invoice first."), c: C.amber },
-    { i: FileText, t: tr("كشف حساب", "Statement"), b: tr("كل فاتورة وتسديد ومرتجع، وتطبع فواتيرك.", "Every invoice, payment and return; print your invoices."), c: C.green },
-    { i: BellRing, t: tr("تنبيه بكل جديد", "Alerts"), b: tr("عند اعتماد طلبك وخروجه ووصوله، بصوت.", "When it is approved, leaves and arrives, with a sound."), c: C.pink },
-    { i: Headset, t: tr("دعم مباشر", "Live support"), b: tr("محادثة مع فريق النهرين من داخل التطبيق.", "Chat with the Al-Nahrain team inside the app."), c: C.violet, wide: true },
+    { i: Tag, t: tr("أسعارك أنت", "Your own prices"), b: tr("سعر نوع محلك والعروض الخاصة بك فقط.", "Your tier's price and your own offers only."), c: C.main, wide: true },
+    { i: MapPinned, t: tr("تتبّع مباشر", "Live tracking"), b: tr("موقع المندوب ووقت الوصول.", "The rep's place and arrival time."), c: C.soft },
+    { i: Wallet, t: tr("ادفع من جوالك", "Pay from your phone"), b: tr("بكي كارد، ويُخصم من أقدم فاتورة.", "Qi Card, oldest invoice first."), c: C.soft },
+    { i: FileText, t: tr("كشف حساب", "Statement"), b: tr("كل فاتورة وتسديد ومرتجع، وتطبع فواتيرك.", "Every invoice, payment and return; print your invoices."), c: C.soft },
+    { i: BellRing, t: tr("تنبيه بكل جديد", "Alerts"), b: tr("عند اعتماد طلبك وخروجه ووصوله، بصوت.", "When it is approved, leaves and arrives, with a sound."), c: C.main },
+    { i: Headset, t: tr("دعم مباشر", "Live support"), b: tr("محادثة مع فريق النهرين من داخل التطبيق.", "Chat with the Al-Nahrain team inside the app."), c: C.main, wide: true },
   ];
   return (
     <section className="px-4 py-16">
@@ -433,12 +436,12 @@ function Features() {
         title={
           <>
             {tr("كل ما يحتاجه محلك، ", "Everything your shop needs, ")}
-            <GradientText from={C.sky} via={C.violet} to={C.pink}>
+            <GradientText from={C.soft} via={C.main} to={C.main}>
               {tr("في مكان واحد", "in one place")}
             </GradientText>
           </>
         }
-        color={C.sky}
+        color={C.soft}
       />
       <div className="mx-auto mt-10 grid max-w-5xl grid-cols-2 gap-3 lg:grid-cols-4">
         {cards.map((x, i) => (
@@ -475,21 +478,21 @@ function SaveTime() {
   const calls = Math.round(orders * 4.3 * 3);
   return (
     <section id="save" className="scroll-mt-24 px-4 py-16">
-      <SectionHead eyebrow={tr("احسبها بنفسك", "Work it out")} title={tr("كم ساعة تعود إليك كل شهر؟", "How many hours do you get back each month?")} color={C.amber} />
-      <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mx-auto mt-10 max-w-2xl rounded-[28px] border border-white/10 p-6 sm:p-8" style={{ background: `linear-gradient(160deg, ${C.amber}22, #0f1115 70%)` }}>
+      <SectionHead eyebrow={tr("احسبها بنفسك", "Work it out")} title={tr("كم ساعة تعود إليك كل شهر؟", "How many hours do you get back each month?")} color={C.soft} />
+      <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mx-auto mt-10 max-w-2xl rounded-[28px] border border-white/10 p-6 sm:p-8" style={{ background: `linear-gradient(160deg, ${C.soft}22, #0f1115 70%)` }}>
         <label className="block text-sm font-semibold text-white/80" htmlFor="orders">
           {tr("كم مرة تطلب بضاعة في الأسبوع؟", "How many orders a week?")} <span className="num text-xl font-bold text-white">{num(orders)}</span>
         </label>
-        <input id="orders" type="range" min={1} max={14} value={orders} onChange={(e) => setOrders(Number(e.target.value))} className="mt-4 w-full accent-[#ffc23d]" />
+        <input id="orders" type="range" min={1} max={14} value={orders} onChange={(e) => setOrders(Number(e.target.value))} className="mt-4 w-full accent-[#e1692b]" />
         <div className="mt-6 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-black/30 p-4">
-            <motion.p key={hours} initial={{ scale: 1.3, opacity: 0.5 }} animate={{ scale: 1, opacity: 1 }} className="num text-4xl font-bold" style={{ color: C.amber }}>
+            <motion.p key={hours} initial={{ scale: 1.3, opacity: 0.5 }} animate={{ scale: 1, opacity: 1 }} className="num text-4xl font-bold" style={{ color: C.soft }}>
               {num(hours)}
             </motion.p>
             <p className="mt-1 text-sm text-white/70">{tr("ساعة توفّرها شهرياً", "hours saved a month")}</p>
           </div>
           <div className="rounded-2xl bg-black/30 p-4">
-            <motion.p key={calls} initial={{ scale: 1.3, opacity: 0.5 }} animate={{ scale: 1, opacity: 1 }} className="num text-4xl font-bold" style={{ color: C.green }}>
+            <motion.p key={calls} initial={{ scale: 1.3, opacity: 0.5 }} animate={{ scale: 1, opacity: 1 }} className="num text-4xl font-bold" style={{ color: C.soft }}>
               {num(calls)}
             </motion.p>
             <p className="mt-1 text-sm text-white/70">{tr("اتصالاً لا تحتاجه", "calls you don't need")}</p>
@@ -506,10 +509,10 @@ function SaveTime() {
 function Safe() {
   const { tr } = useFmt();
   const steps = [
-    { i: Truck, t: tr("تصلك الشحنة بملصق QR", "The shipment comes with a QR label"), b: tr("مسجّلة باسم محلك ومن المخزن إلى بابك.", "Registered to your shop, from the warehouse to your door."), c: C.sky },
-    { i: Camera, t: tr("يصوّر المندوب البضاعة عندك", "The rep photographs the goods"), b: tr("صورة محفوظة مع الطلب يراها الجميع.", "A photo kept with the order, for everyone to see."), c: C.violet },
-    { i: KeyRound, t: tr("تعطيه رمزك بعد أن تتأكد", "You give your PIN once you've checked"), b: tr("بلا رمزك لا يُسجَّل التسليم ولا تُصدر فاتورة.", "Without your PIN nothing is delivered or invoiced."), c: C.amber },
-    { i: ReceiptText, t: tr("تُصدر الفاتورة على ما استلمته فقط", "The invoice is for what you got"), b: tr("الناقص لا يُحسب عليك أبداً.", "What's missing is never charged."), c: C.green },
+    { i: Truck, t: tr("تصلك الشحنة بملصق QR", "The shipment comes with a QR label"), b: tr("مسجّلة باسم محلك ومن المخزن إلى بابك.", "Registered to your shop, from the warehouse to your door."), c: C.soft },
+    { i: Camera, t: tr("يصوّر المندوب البضاعة عندك", "The rep photographs the goods"), b: tr("صورة محفوظة مع الطلب يراها الجميع.", "A photo kept with the order, for everyone to see."), c: C.main },
+    { i: KeyRound, t: tr("تعطيه رمزك بعد أن تتأكد", "You give your PIN once you've checked"), b: tr("بلا رمزك لا يُسجَّل التسليم ولا تُصدر فاتورة.", "Without your PIN nothing is delivered or invoiced."), c: C.soft },
+    { i: ReceiptText, t: tr("تُصدر الفاتورة على ما استلمته فقط", "The invoice is for what you got"), b: tr("الناقص لا يُحسب عليك أبداً.", "What's missing is never charged."), c: C.soft },
   ];
   return (
     <section id="safe" className="scroll-mt-24 px-4 py-16">
@@ -517,12 +520,12 @@ function Safe() {
         eyebrow={tr("أمان طلبك", "Your order is safe")}
         title={tr("لا تدفع إلا عمّا وصلك فعلاً", "You pay only for what really arrived")}
         sub={tr("أربع خطوات تحمي بضاعتك ومالك في كل شحنة.", "Four steps protect your goods and your money on every shipment.")}
-        color={C.green}
+        color={C.soft}
       />
       <ol className="relative mx-auto mt-10 max-w-2xl space-y-4">
         <motion.span
           className="absolute bottom-6 start-[22px] top-6 w-0.5 origin-top rounded-full"
-          style={{ background: `linear-gradient(${C.sky}, ${C.violet}, ${C.amber}, ${C.green})` }}
+          style={{ background: `linear-gradient(${C.soft}, ${C.main}, ${C.soft}, ${C.soft})` }}
           initial={{ scaleY: 0 }}
           whileInView={{ scaleY: 1 }}
           viewport={{ once: true, margin: "-80px" }}
@@ -550,13 +553,13 @@ function Safe() {
 function Start({ mainHref, mainLabel }: { mainHref: string; mainLabel: string }) {
   const { tr } = useFmt();
   const steps = [
-    { t: tr("سجّل محلك", "Register your shop"), b: tr("اسم المحل ورقم هاتفك وموقعه على الخريطة.", "Its name, your phone number and its place on the map."), c: C.orange },
-    { t: tr("تراجع الشركة محلك", "The company checks it"), b: tr("وتحدد أسعارك وسقف دينك، ويصلك تنبيه.", "It sets your prices and limit, and you get an alert."), c: C.pink },
-    { t: tr("اطلب وتابع", "Order and follow"), b: tr("من جوالك، حتى تصل البضاعة إلى بابك.", "From your phone, until the goods reach your door."), c: C.green },
+    { t: tr("سجّل محلك", "Register your shop"), b: tr("اسم المحل ورقم هاتفك وموقعه على الخريطة.", "Its name, your phone number and its place on the map."), c: C.main },
+    { t: tr("تراجع الشركة محلك", "The company checks it"), b: tr("وتحدد أسعارك وسقف دينك، ويصلك تنبيه.", "It sets your prices and limit, and you get an alert."), c: C.main },
+    { t: tr("اطلب وتابع", "Order and follow"), b: tr("من جوالك، حتى تصل البضاعة إلى بابك.", "From your phone, until the goods reach your door."), c: C.soft },
   ];
   return (
     <section className="px-4 py-16">
-      <SectionHead eyebrow={tr("ثلاث خطوات", "Three steps")} title={tr("تبدأ اليوم", "Start today")} color={C.orange} />
+      <SectionHead eyebrow={tr("ثلاث خطوات", "Three steps")} title={tr("تبدأ اليوم", "Start today")} color={C.main} />
       <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-3">
         {steps.map((s, i) => (
           <motion.div key={s.t} initial={{ opacity: 0, y: 30, scale: 0.95 }} whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.12, type: "spring" }} className="relative rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center">
@@ -569,7 +572,7 @@ function Start({ mainHref, mainLabel }: { mainHref: string; mainLabel: string })
         ))}
       </div>
       <div className="mt-8 hidden justify-center lg:flex">
-        <BigButton href={mainHref} color={C.orange}>
+        <BigButton href={mainHref} color={C.main}>
           {mainLabel}
         </BigButton>
       </div>

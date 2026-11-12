@@ -156,9 +156,9 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
             target="_blank"
             rel="noopener"
             aria-label={tr("للمندوبين", "For reps")}
-            className="flex h-10 items-center gap-1.5 rounded-full border border-teal-400/40 bg-teal-400/10 px-3 text-sm font-semibold text-text transition hover:bg-teal-400/20 active:scale-[0.98]"
+            className="flex h-10 items-center gap-1.5 rounded-full border border-[#1fb5a5]/40 bg-[#1fb5a5]/10 px-3 text-sm font-semibold text-text transition hover:bg-[#1fb5a5]/20 active:scale-[0.98]"
           >
-            <Truck className="size-4 shrink-0 text-teal-300" /> <span className="hidden sm:inline">{tr("للمندوبين", "For reps")}</span>
+            <Truck className="size-4 shrink-0 text-[#1fb5a5]" /> <span className="hidden sm:inline">{tr("للمندوبين", "For reps")}</span>
           </a>
           <LanguageSwitch onBrand />
           <Link href={enter} className="flex h-10 items-center whitespace-nowrap rounded-full bg-white px-3 text-sm font-bold text-[#0b0c0e] transition hover:bg-white/90 sm:px-4">

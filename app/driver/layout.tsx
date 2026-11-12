@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "النهرين للمندوب", statusBarStyle: "black-translucent" },
 };
 
-export const viewport: Viewport = { themeColor: "#1d2127" };
+export const viewport: Viewport = { themeColor: "#1fb5a5" };
 
 export default function DriverAppLayout({ children }: { children: React.ReactNode }) {
   return children;
