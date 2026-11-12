@@ -527,6 +527,40 @@ export const mockApi: Api = {
       audit(db, a, "create", "settings", w.id, `إضافة مخزن جديد: ${w.name} (${w.capacity.toLocaleString("en")} كارتون)`, `New warehouse: ${w.name_en}`, now);
       return w;
     }),
+  deleteWarehouse: (id) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const w = db.warehouses.find((x) => x.id === id) ?? notFound();
+      if (db.warehouses.length <= 1) fail(409, "BAD_STATE", "لا يمكن حذف المخزن الوحيد", "The only warehouse can't be deleted");
+      // Deleted only when nothing needs it: no goods, no open work, nobody working in it, and no past records
+      // (an invoice or a receipt must always be able to say where its goods came from).
+      const why: string[] = [];
+      const goods = db.batches.filter((b) => b.warehouse_id === id && b.qty_left > 0).length;
+      if (goods) why.push(`فيه بضاعة (${goods} دفعة)`);
+      const usesIt = (o: Order) => o.warehouse_id === id || o.lines.some((l) => l.warehouse_id === id) || !!o.prep_parts?.some((p) => p.warehouse_id === id);
+      const open = db.orders.filter((o) => usesIt(o) && o.status !== "confirmed" && o.status !== "cancelled").length;
+      if (open) why.push(`عليه ${open} طلب مفتوح`);
+      const moving = db.transfers.filter((t) => (t.from_warehouse_id === id || t.to_warehouse_id === id) && t.status === "sent").length;
+      if (moving) why.push(`${moving} تحويل في الطريق`);
+      const supply = (db.supply_orders ?? []).filter((x) => x.warehouse_id === id && (x.status === "sent" || x.status === "partial")).length;
+      if (supply) why.push(`${supply} طلب توريد ينتظر`);
+      const counting = db.stocktakes.filter((x) => x.warehouse_id === id && x.status === "open").length;
+      if (counting) why.push("جرد مفتوح");
+      const staff = db.users.filter((u) => u.active && u.warehouse_id === id).map((u) => u.name);
+      if (staff.length) why.push(`يعمل فيه ${staff.join("، ")} (انقلهم إلى مخزن آخر من صفحة المستخدمين)`);
+      const past =
+        db.invoices.some((i) => i.warehouse_id === id) ||
+        db.orders.some(usesIt) ||
+        db.receipts.some((r) => r.warehouse_id === id) ||
+        db.transfers.some((t) => t.from_warehouse_id === id || t.to_warehouse_id === id) ||
+        db.batches.some((b) => b.warehouse_id === id);
+      if (!why.length && past) why.push("له فواتير وحركات سابقة تبقى في السجلات، فلا يُحذف حفاظاً على الحسابات");
+      if (why.length) fail(409, "BAD_STATE", `لا يمكن حذف ${w.name}: ${why.join("؛ ")}.`, `${w.name_en} can't be deleted: it still has goods, open work, staff or past records.`);
+      db.warehouses = db.warehouses.filter((x) => x.id !== id);
+      db.stocktakes = db.stocktakes.filter((x) => x.warehouse_id !== id);
+      if (db.supply_orders) db.supply_orders = db.supply_orders.filter((x) => x.warehouse_id !== id);
+      audit(db, a, "cancel", "settings", id, `حذف المخزن ${w.name}`, `Deleted warehouse ${w.name_en}`, now);
+    }),
   saveWarehouse: (id, input) =>
     write((db, a, now) => {
       need(a, ["manager"]);

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutGrid, MapPin as MapPinIcon, Paintbrush, Pencil, Plus, Save, UserCheck } from "lucide-react";
+import { LayoutGrid, MapPin as MapPinIcon, Paintbrush, Pencil, Plus, Save, Trash2, UserCheck } from "lucide-react";
 import { BrandDialog, EditText, SortArea, SortItem } from "@/components/customize";
 import { LogoMark } from "@/components/logo";
-import { CoverDialog, LayoutEditor, WarehouseForm, coverActive } from "@/components/warehouse-layout";
+import { CoverDialog, DeleteWarehouse, LayoutEditor, WarehouseForm, coverActive } from "@/components/warehouse-layout";
 import { VehiclesCard } from "@/components/vehicles";
 import { useApp } from "@/components/shell";
 import { Button, Card, CardHeader, Field, Input, NumberInput, errorText, useToast, PageHeader } from "@/components/ui";
@@ -23,6 +23,7 @@ export default function SettingsPage() {
   const [whForm, setWhForm] = useState<Warehouse | "new" | null>(null);
   const [arranging, setArranging] = useState<Warehouse | null>(null);
   const [covering, setCovering] = useState<Warehouse | null>(null);
+  const [deleting, setDeleting] = useState<Warehouse | null>(null);
   const fail = (e: unknown) => toast("danger", errorText(e, tr));
   const [s, setS] = useState<Settings>(lookups.settings);
   const [busy, setBusy] = useState(false);
@@ -96,6 +97,11 @@ export default function SettingsPage() {
                 <Button size="sm" variant="ghost" onClick={() => setWhForm(w)} aria-label={tr(`تعديل ${w.name}`, `Edit ${w.name_en}`)}>
                   <Pencil className="size-4" />
                 </Button>
+                {lookups.warehouses.length > 1 && (
+                  <Button size="sm" variant="ghost" className="text-danger" onClick={() => setDeleting(w)} aria-label={tr(`حذف ${w.name}`, `Delete ${w.name_en}`)} title={tr("حذف المخزن", "Delete the warehouse")}>
+                    <Trash2 className="size-4" />
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -202,6 +208,7 @@ export default function SettingsPage() {
       {whForm && <WarehouseForm warehouse={whForm === "new" ? undefined : whForm} onClose={() => setWhForm(null)} onSaved={(w) => whForm === "new" && setArranging(w)} />}
       {arranging && <LayoutEditor warehouse={arranging} onClose={() => setArranging(null)} />}
       {covering && <CoverDialog warehouse={covering} onClose={() => setCovering(null)} />}
+      {deleting && <DeleteWarehouse warehouse={deleting} onClose={() => setDeleting(null)} />}
     </>
   );
 }
