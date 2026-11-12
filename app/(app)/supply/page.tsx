@@ -7,9 +7,9 @@ import { useRemembered } from "@/lib/remember";
 // Supply orders: the accountant (or the manager) orders goods from a supplier for one warehouse.
 // That warehouse's keeper is told, downloads the order as an Excel or CSV file (to check the delivery with
 // the supplier's driver), and receives the goods against it when they come: the receiving form opens filled in.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Ban, FileDown, FileSpreadsheet, PackagePlus, Plus, Trash2, Truck } from "lucide-react";
+import { Ban, FileDown, FileSpreadsheet, PackagePlus, Plus, Trash2, Truck, Wand2 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { useMyWarehouses, useWarehouseFilter, inWarehouse } from "@/components/warehouse-filter";
 import {
@@ -55,7 +55,13 @@ export default function SupplyPage() {
   const [cancelling, setCancelling] = useState<SupplyOrder | null>(null);
   // The order whose details are open (by id, so the box shows the fresh order after a change).
   // A notification links here with ?open=<id> ("part of SUP-… arrived"): it opens that order at once.
-  const linked = Number(useSearchParams().get("open")) || null;
+  const params = useSearchParams();
+  const linked = Number(params.get("open")) || null;
+  // ?low=1 (the stock page's «اطلب الناقص»): the new supply order opens filled with what is running low.
+  const fromLow = params.get("low") === "1";
+  // Opened that way, the form shows at once, filled; once closed, it's the ordinary form again.
+  const [lowOpen, setLowOpen] = useState(true);
+  const lowForm = fromLow && lowOpen;
   const [openId, setOpenId] = useState<number | null>(linked);
   const [status, setStatus] = useRemembered<"open" | "done" | "all">("supply:status", "open");
   const canOrder = user.role === "accountant" || user.role === "manager";
@@ -147,7 +153,16 @@ export default function SupplyPage() {
           />
         )}
       </Card>
-      {creating && <NewSupply onClose={() => setCreating(false)} onDone={list.reload} />}
+      {(creating || lowForm) && (
+        <NewSupply
+          onClose={() => {
+            setCreating(false);
+            setLowOpen(false);
+          }}
+          onDone={list.reload}
+          fillLow={lowForm}
+        />
+      )}
       {opened && <SupplyDetails order={opened} warehouse={lookups.warehouses.find((w) => w.id === opened.warehouse_id)} onClose={() => setOpenId(null)} onCancel={() => setCancelling(opened)} />}
       {cancelling && <CancelSupply order={cancelling} onClose={() => setCancelling(null)} onDone={list.reload} />}
     </>
@@ -384,7 +399,7 @@ interface Line {
 let k = 0;
 const blank = (): Line => ({ key: ++k, item_id: "", unit: "carton", qty: "", price: "" });
 
-function NewSupply({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+function NewSupply({ onClose, onDone, fillLow }: { onClose: () => void; onDone: () => void; fillLow?: boolean }) {
   const { tr, name, money } = useFmt();
   const { lookups, items, itemById } = useApp();
   const toast = useToast();
@@ -406,6 +421,49 @@ function NewSupply({ onClose, onDone }: { onClose: () => void; onDone: () => voi
     if (!it?.avg_cost) return "";
     return unit === "carton" ? it.avg_cost * it.pieces_per_carton : it.avg_cost;
   };
+
+  // «املأ بالمواد الناقصة»: every item running low in this warehouse, with enough cartons to reach twice its
+  // minimum, the last purchase price, and the supplier that last brought most of them. The accountant checks
+  // and changes anything before sending. (Low = under the minimum; in one of several warehouses: under half.)
+  const receipts = useLoad(() => api.listReceipts().catch(() => []), []);
+  function fillWithLow(wh = warehouse) {
+    const share = lookups.warehouses.length > 1 ? 0.5 : 1;
+    const low = items
+      .filter((it) => it.active)
+      .map((it) => ({ it, have: it.stock.by_warehouse.find((w) => w.warehouse_id === wh)?.qty ?? 0, min: Math.round(it.min_stock * share) }))
+      .filter((x) => x.min > 0 && x.have < x.min);
+    if (!low.length) {
+      toast("success", tr("لا مواد ناقصة في هذا المخزن", "Nothing is running low in this warehouse"));
+      return;
+    }
+    setLines(
+      low.map(({ it, have, min }) => ({
+        key: ++k,
+        item_id: it.id,
+        unit: "carton" as Unit,
+        qty: Math.max(1, Math.ceil((min * 2 - have) / it.pieces_per_carton)),
+        price: lastCost(it.id, "carton"),
+      })),
+    );
+    // The supplier that brought most of these items the last time.
+    const votes = new Map<string, number>();
+    for (const { it } of low) {
+      const last = (receipts.data ?? []).find((r) => r.supplier && r.lines.some((l) => l.item_id === it.id));
+      if (last) votes.set(last.supplier, (votes.get(last.supplier) ?? 0) + 1);
+    }
+    const best = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (best && !supplier.trim()) setSupplier(best);
+    toast("success", tr(`أُضيفت ${low.length} مواد ناقصة: راجع الكميات والأسعار ثم أرسل`, `${low.length} low items added: check the amounts and prices, then send`));
+  }
+  // Opened from «اطلب الناقص» (the stock page): filled once, as soon as the receipts (for the supplier) are in.
+  const filled = useRef(false);
+  useEffect(() => {
+    if (!fillLow || filled.current || !receipts.data) return;
+    filled.current = true;
+    fillWithLow();
+    // Once, when the receipts arrive (fillWithLow reads the latest form state itself).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillLow, receipts.data]);
 
   async function save() {
     setBusy(true);
@@ -466,6 +524,11 @@ function NewSupply({ onClose, onDone }: { onClose: () => void; onDone: () => voi
         <Field label={tr("المورّد", "Supplier")} error={err.supplier}>
           <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder={tr("اسم الشركة الموردة", "Supplier company")} />
         </Field>
+        <div className="sm:col-span-2">
+          <Button onClick={() => fillWithLow()} className="w-full sm:w-auto">
+            <Wand2 className="size-4" /> {tr("املأ بالمواد الناقصة في هذا المخزن", "Fill with what's running low here")}
+          </Button>
+        </div>
         <Field label={tr("هاتف المورّد", "Supplier phone")} hint={tr("اختياري", "Optional")}>
           <Input dir="ltr" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </Field>

@@ -3,7 +3,7 @@
 import { useRemembered } from "@/lib/remember";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, PackagePlus, PackageX } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, PackagePlus, PackageX, Wand2 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { hasWarehouseFilter, setWarehouseFilter, useMyWarehouses, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
@@ -98,8 +98,14 @@ export default function StockPage() {
         title={tr("المخزون", "Stock")}
         subtitle={user.role === "warehouse" || user.role === "staff" ? name(lookups.warehouses.find((w) => w.id === user.warehouse_id)) : lookups.warehouses.map((w) => name(w)).join(tr("، ", ", "))}
         actions={
-          user.role !== "accountant" &&
-          user.role !== "staff" && (
+          <>
+            {/* What is running low, ordered in one tap: a supply order filled with it, to check and send. */}
+            {(user.role === "accountant" || user.role === "manager") && lowCount > 0 && (
+              <Button href="/supply?low=1">
+                <Wand2 className="size-4" /> {tr(`اطلب الناقص (${lowCount})`, `Order what's low (${lowCount})`)}
+              </Button>
+            )}
+            {user.role !== "accountant" && user.role !== "staff" && (
             <>
               <Button href="/stocktakes">
                 <ClipboardCheck className="size-4" /> {tr("جرد", "Count")}
@@ -111,7 +117,8 @@ export default function StockPage() {
                 <PackagePlus className="size-4" /> {tr("استلام بضاعة", "Receive goods")}
               </Button>
             </>
-          )
+            )}
+          </>
         }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
