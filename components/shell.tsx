@@ -13,6 +13,7 @@ import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/aut
 import { NotificationAlerts } from "@/components/notification-alerts";
 import { ChatWidget } from "@/components/support/chat-widget";
 import { ShopSwitcher } from "@/components/shop-switcher";
+import { Avatar, MyAccountDialog } from "@/components/my-account";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
@@ -357,6 +358,7 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
   const { tr } = useFmt();
   const { prefix } = useAppPath();
   const [menu, setMenu] = useState(false);
+  const [account, setAccount] = useState(false);
   return (
     <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-1.5 border-b border-line bg-card/95 px-2 backdrop-blur sm:h-16 sm:px-4">
       {/* On a narrow phone the shop owner's bar is full (his shop switcher shows where he is): no logo there.
@@ -386,20 +388,30 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
       <ThemeToggle />
       <div className="relative">
         <button type="button" onClick={() => setMenu((m) => !m)} aria-expanded={menu} className="ms-1 flex h-10 items-center gap-2 rounded-xl px-1.5 hover:bg-card-2 sm:px-2">
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-on-primary">{user.name.slice(0, 1)}</span>
+          <Avatar user={user} size={32} />
           <span className="hidden text-start text-xs leading-tight lg:block">
             <span className="block font-medium text-text">{user.name}</span>
             <span className="block text-muted">{jobName(user, tr)}</span>
           </span>
           <Menu className="size-4 text-muted lg:hidden" aria-hidden />
         </button>
-        {menu && <AccountMenu user={user} onClose={() => setMenu(false)} />}
+        {menu && (
+          <AccountMenu
+            user={user}
+            onClose={() => setMenu(false)}
+            onAccount={() => {
+              setMenu(false);
+              setAccount(true);
+            }}
+          />
+        )}
       </div>
+      {account && <MyAccountDialog user={user} onClose={() => setAccount(false)} />}
     </header>
   );
 }
 
-function AccountMenu({ user, onClose }: { user: User; onClose: () => void }) {
+function AccountMenu({ user, onClose, onAccount }: { user: User; onClose: () => void; onAccount: () => void }) {
   const { tr } = useFmt();
   const router = useRouter();
   const toast = useToast();
@@ -413,13 +425,18 @@ function AccountMenu({ user, onClose }: { user: User; onClose: () => void }) {
   }, [onClose]);
   return (
     <div ref={ref} className="absolute end-0 top-12 z-50 w-72 rounded-2xl border border-line bg-card p-2 shadow-xl">
-      <div className="px-3 py-2">
-        <p className="font-semibold">{user.name}</p>
-        <p className="text-xs text-muted" dir="ltr">
-          {user.phone}
-        </p>
-        <p className="mt-1 text-xs text-muted">{jobName(user, tr)}</p>
-      </div>
+      {/* The whole card opens "my account": the picture, and for the shop owner the password and his shops. */}
+      <button type="button" onClick={onAccount} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start hover:bg-card-2">
+        <Avatar user={user} size={44} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-semibold">{user.name}</span>
+          <span className="block text-xs text-muted" dir="ltr">
+            {user.phone}
+          </span>
+          <span className="mt-0.5 block text-xs text-muted">{jobName(user, tr)}</span>
+        </span>
+        <span className="shrink-0 rounded-lg bg-primary-soft px-2 py-1 text-xs font-semibold text-primary-ink">{tr("حسابي", "My account")}</span>
+      </button>
       <div className="mx-1 my-1 rounded-xl bg-card-2 px-3 py-2">
         <Switch
           checked={sound}

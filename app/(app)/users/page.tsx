@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus } from "lucide-react";
+import { ImageOff, Pencil, Plus, Trash2 } from "lucide-react";
+import { Avatar } from "@/components/my-account";
 import { useApp } from "@/components/shell";
+import { getSession } from "@/lib/auth";
 import { jobName, roleName } from "@/components/status";
 import { cn } from "@/lib/utils";
-import { Badge, Button, Card, DataTable, Dialog, ErrorBox, errorText, Field, Input, LoadingRows, PageHeader, RefLink, Select, Switch, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Card, DataTable, Dialog, ErrorBox, errorText, Field, Input, LoadingRows, Notice, PageHeader, RefLink, Select, Switch, useToast, type Column } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { Role, User, UserInput } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -20,7 +22,16 @@ export default function UsersPage() {
   const customers = useLoad(() => api.listCustomers(), []);
   const [edit, setEdit] = useState<User | "new" | null>(null);
   const columns: Column<User>[] = [
-    { key: "n", head: tr("الاسم", "Name"), cell: (u) => <span className="font-medium">{u.name}</span> },
+    {
+      key: "n",
+      head: tr("الاسم", "Name"),
+      cell: (u) => (
+        <span className="flex items-center gap-2.5">
+          <Avatar user={u} size={30} />
+          <span className="font-medium">{u.name}</span>
+        </span>
+      ),
+    },
     {
       key: "p",
       head: tr("الهاتف", "Phone"),
@@ -79,7 +90,8 @@ export default function UsersPage() {
             rowAction={(u) => () => setEdit(u)}
             mobile={(u) => (
               <button type="button" className="flex w-full items-center justify-between gap-2 text-start" onClick={() => setEdit(u)}>
-                <span>
+                <Avatar user={u} size={36} />
+                <span className="min-w-0 flex-1">
                   <span className="block font-medium">{u.name}</span>
                   <span className="text-xs text-muted" dir="ltr">
                     {u.phone}
@@ -114,6 +126,20 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<UserInput>) => setF((x) => ({ ...x, ...p }));
+  const [photo, setPhoto] = useState(user?.photo);
+  const [deleting, setDeleting] = useState(false);
+  const isMe = !!user && getSession()?.user.id === user.id;
+  async function removePhoto() {
+    if (!user) return;
+    try {
+      await api.removeUserPhoto(user.id);
+      setPhoto(undefined);
+      toast("success", tr(`حُذفت صورة ${user.name}`, `${user.name}'s picture removed`));
+      onSaved();
+    } catch (e) {
+      toast("danger", errorText(e, tr));
+    }
+  }
   return (
     <Dialog
       open
@@ -146,6 +172,19 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
         </>
       }
     >
+      {user && (
+        <div className="mb-4 flex items-center gap-3 rounded-2xl bg-card-2 p-3">
+          <Avatar user={{ name: user.name, photo }} size={52} />
+          <p className="min-w-0 flex-1 text-xs text-muted">
+            {photo ? tr("كل شخص يغيّر صورته من «حسابي»؛ حذفها من المدير فقط.", "Each person changes their picture from “My account”; only the manager removes one.") : tr("لا صورة له بعد: يضيفها من «حسابي».", "No picture yet: they add it from “My account”.")}
+          </p>
+          {photo && (
+            <Button size="sm" variant="ghost" className="text-danger" onClick={removePhoto}>
+              <ImageOff className="size-4" /> {tr("حذف الصورة", "Remove the picture")}
+            </Button>
+          )}
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={tr("الاسم", "Name")} error={err.name}>
           <Input value={f.name} onChange={(e) => set({ name: e.target.value })} />
@@ -240,6 +279,77 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
           <Switch checked={f.active} onChange={(v) => set({ active: v })} label={tr("الحساب فعّال", "Account active")} />
         </div>
       </div>
+      {user && !isMe && (
+        <div className="mt-4 border-t border-line pt-4">
+          {!deleting ? (
+            <Button size="sm" variant="ghost" className="text-danger" onClick={() => setDeleting(true)}>
+              <Trash2 className="size-4" /> {tr("حذف الحساب", "Delete the account")}
+            </Button>
+          ) : (
+            <DeleteUser
+              user={user}
+              onCancel={() => setDeleting(false)}
+              onDone={() => {
+                onSaved();
+                onClose();
+              }}
+            />
+          )}
+        </div>
+      )}
     </Dialog>
+  );
+}
+
+/**
+ * "Delete this account?": type the person's name to confirm. The login goes for good (its phone is free again);
+ * their name stays on everything they did. The server refuses while a rep still has shops, orders or shipments.
+ */
+function DeleteUser({ user, onCancel, onDone }: { user: User; onCancel: () => void; onDone: () => void }) {
+  const { tr } = useFmt();
+  const toast = useToast();
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [why, setWhy] = useState<string | null>(null);
+  const sure = typed.trim() === user.name.trim();
+  return (
+    <div className="space-y-3 rounded-xl bg-danger-soft/60 p-3">
+      <Notice tone="danger" title={tr("لا يمكن التراجع عن الحذف", "This can't be undone")}>
+        {tr("لن يستطيع الدخول بعد الآن، ويبقى اسمه على كل ما عمله. إن أردت إيقافه مؤقتاً فأطفئ «الحساب فعّال» بدلاً من الحذف.", "They can't log in any more; their name stays on everything they did. To stop them for a while, switch “Account active” off instead.")}
+      </Notice>
+      <Field label={tr(`للتأكيد اكتب الاسم: ${user.name}`, `To confirm, type the name: ${user.name}`)}>
+        <Input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoFocus />
+      </Field>
+      {why && (
+        <Notice tone="warning" title={tr("لم يُحذف", "Not deleted")}>
+          {why}
+        </Notice>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="danger"
+          size="sm"
+          loading={busy}
+          disabled={!sure}
+          onClick={async () => {
+            setBusy(true);
+            setWhy(null);
+            try {
+              await api.deleteUser(user.id);
+              toast("success", tr(`حُذف حساب ${user.name}`, `${user.name}'s account deleted`));
+              onDone();
+            } catch (e) {
+              setWhy(errorText(e, tr));
+              setBusy(false);
+            }
+          }}
+        >
+          <Trash2 className="size-4" /> {tr("حذف نهائياً", "Delete for good")}
+        </Button>
+        <Button size="sm" onClick={onCancel}>
+          {tr("تراجع", "Cancel")}
+        </Button>
+      </div>
+    </div>
   );
 }
