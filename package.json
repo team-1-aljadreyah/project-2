@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build:pages": "cross-env STATIC_EXPORT=true next build",
+    "build:pages": "cross-env STATIC_EXPORT=true next build && node scripts/flatten-segments.mjs out",
     "realtime": "node realtime/server.mjs",
     "start": "next start",
     "lint": "eslint"

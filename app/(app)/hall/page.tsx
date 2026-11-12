@@ -158,6 +158,8 @@ export default function HallPage() {
       )}
 
       {(() => {
+        // Still loading: keep the strip's place, so the hall below doesn't jump down when it arrives.
+        if (supply.state.status === "loading") return <div aria-hidden className="mb-4 h-[9.5rem] animate-pulse rounded-2xl bg-card-2" />;
         const coming = (supply.data ?? []).filter((o) => o.warehouse_id === whId && (o.status === "sent" || o.status === "partial"));
         if (!coming.length) return null;
         return (

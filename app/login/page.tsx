@@ -9,9 +9,7 @@ import { deniedOf } from "@/lib/access";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, Boxes, Calculator, Headset, Eye, EyeOff, Info, LayoutDashboard, Loader2, Lock, Phone, Store, Megaphone, Truck, UserPlus, type LucideIcon } from "lucide-react";
-import { rise, stagger } from "@/components/auth";
 import { LoginArt } from "@/components/login-art";
 import { BrandName, LogoMark } from "@/components/logo";
 import { canOpen } from "@/components/nav";
@@ -110,7 +108,7 @@ export default function LoginPage() {
 
       {/* Top bar */}
       <div className="relative flex items-center justify-between gap-2 p-4 sm:p-6">
-        <Link href="/" className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-white/90 hover:bg-white/10">
+        <Link href="/" aria-label={tr("رجوع إلى الصفحة الرئيسية", "Back to the home page")} className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-medium text-white/90 hover:bg-white/10">
           <Back className="size-4" aria-hidden />
           <LogoMark size={28} />
           <span className="hidden sm:inline"><BrandName /></span>
@@ -122,11 +120,9 @@ export default function LoginPage() {
       </div>
 
       <main className="relative flex flex-1 items-center justify-center px-3 pb-8 sm:px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 24, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="grid w-full max-w-5xl overflow-hidden rounded-[32px] bg-card text-text shadow-[0_40px_120px_-30px_rgb(0_0_0/0.6)] lg:grid-cols-[1.1fr_1fr]"
+        {/* The entrances are plain CSS (globals.css: anim-card-in, rise-item): no animation library here. */}
+        <div
+          className="anim-card-in grid w-full max-w-5xl overflow-hidden rounded-[32px] bg-card text-text shadow-[0_40px_120px_-30px_rgb(0_0_0/0.6)] lg:grid-cols-[1.1fr_1fr]"
         >
           {/* The illustration side */}
           <div className="relative flex items-center justify-center bg-gradient-to-br from-[#e1692b]/10 via-card-2 to-card-2 px-6 pb-0 pt-4 lg:p-10">
@@ -140,14 +136,14 @@ export default function LoginPage() {
 
           {/* The form side */}
           <div className="flex flex-col justify-center p-6 pt-4 sm:p-10">
-            <motion.div variants={stagger} initial="hidden" animate="show">
-              <motion.h1 variants={rise} className="text-3xl font-bold leading-tight sm:text-4xl">
+            <div>
+              <h1 className="rise-item text-3xl font-bold leading-tight sm:text-4xl" style={{ animationDelay: "0.05s" }}>
                 {tr("أهلاً،", "Hello,")}
                 <span className="block">{tr("مرحباً بعودتك", "Welcome back")}</span>
-              </motion.h1>
-              <motion.p variants={rise} className="mt-2 text-sm text-muted">
+              </h1>
+              <p className="rise-item mt-2 text-sm text-muted" style={{ animationDelay: "0.11s" }}>
                 {tr("سجّل الدخول برقم هاتفك وكلمة المرور", "Log in with your phone number and password")}
-              </motion.p>
+              </p>
 
               <form
                 className="mt-8 space-y-6"
@@ -161,12 +157,12 @@ export default function LoginPage() {
                   login(phone, password, "form");
                 }}
               >
-                <motion.div variants={rise}>
+                <div className="rise-item" style={{ animationDelay: "0.17s" }}>
                   <LineField id="phone" label={tr("رقم الهاتف", "Phone number")} icon={Phone}>
                     <input id="phone" type="tel" inputMode="tel" autoComplete="username" dir="ltr" placeholder="07XX XXX XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} className={lineInput} />
                   </LineField>
-                </motion.div>
-                <motion.div variants={rise}>
+                </div>
+                <div className="rise-item" style={{ animationDelay: "0.23s" }}>
                   <LineField
                     id="password"
                     label={tr("كلمة المرور", "Password")}
@@ -179,48 +175,45 @@ export default function LoginPage() {
                   >
                     <input id="password" type={show ? "text" : "password"} autoComplete="current-password" dir="ltr" value={password} onChange={(e) => setPassword(e.target.value)} className={lineInput} />
                   </LineField>
-                </motion.div>
+                </div>
 
-                <motion.div variants={rise} className="flex justify-end text-xs">
+                <div className="rise-item flex justify-end text-xs" style={{ animationDelay: "0.29s" }}>
                   <button type="button" onClick={() => setForgot((f) => !f)} aria-expanded={forgot} className="font-semibold text-muted hover:text-text">
                     {tr("نسيت كلمة المرور؟", "Forgot your password?")}
                   </button>
-                </motion.div>
-                <AnimatePresence initial={false}>
-                  {forgot && (
-                    <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="-mt-3 flex items-start gap-2 overflow-hidden rounded-xl bg-card-2 p-3 text-xs text-muted">
+                </div>
+                {forgot && (
+                  <p className="anim-drop-in -mt-3 flex items-start gap-2 overflow-hidden rounded-xl bg-card-2 p-3 text-xs text-muted">
                       <Info className="mt-0.5 size-3.5 shrink-0" />
-                      {tr("كلمات المرور يضبطها مدير الشركة. اتصل به ليعطيك كلمة مرور جديدة.", "Passwords are set by the company manager. Call him for a new one.")}
-                    </motion.p>
-                  )}
-                </AnimatePresence>
-
-                {error && (
-                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="rounded-xl bg-danger-soft px-3 py-2.5 text-sm font-medium text-danger">
-                    {error}
-                  </motion.p>
+                    {tr("كلمات المرور يضبطها مدير الشركة. اتصل به ليعطيك كلمة مرور جديدة.", "Passwords are set by the company manager. Call him for a new one.")}
+                  </p>
                 )}
 
-                <motion.button
-                  variants={rise}
+                {error && (
+                  <p role="alert" className="anim-drop-in rounded-xl bg-danger-soft px-3 py-2.5 text-sm font-medium text-danger">
+                    {error}
+                  </p>
+                )}
+
+                <button
                   type="submit"
-                  whileTap={{ scale: 0.98 }}
                   disabled={!!busy}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action shadow-[0_12px_30px_-10px_rgb(225_105_43/0.7)] transition hover:bg-action-hover disabled:opacity-70"
+                  style={{ animationDelay: "0.35s" }}
+                  className="rise-item flex h-12 w-full active:scale-[0.98] items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action shadow-[0_12px_30px_-10px_rgb(225_105_43/0.7)] transition hover:bg-action-hover disabled:opacity-70"
                 >
                   {busy === "form" ? <Loader2 className="size-5 animate-spin" /> : null}
                   {tr("دخول", "Log in")}
                   {busy !== "form" && <Forward className="size-5" />}
-                </motion.button>
+                </button>
               </form>
 
-              <motion.p variants={rise} className="mt-5 text-center text-sm text-muted">
+              <p className="rise-item mt-5 text-center text-sm text-muted" style={{ animationDelay: "0.41s" }}>
                 {tr("صاحب محل وليس لديك حساب؟", "A shop owner without an account?")}{" "}
                 <Link href="/register" className="inline-flex items-center gap-1 font-bold text-action hover:underline">
                   <UserPlus className="size-4" /> {tr("سجّل محلك", "Register your shop")}
                 </Link>
-              </motion.p>
-            </motion.div>
+              </p>
+            </div>
 
             {USE_MOCK && (
               <div className="mt-8 border-t border-line pt-5">
@@ -254,7 +247,7 @@ export default function LoginPage() {
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
       </main>
     </div>
   );

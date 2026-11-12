@@ -120,7 +120,7 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
           scrolled ? "border border-white/10 bg-[#0b0c0e]/70 shadow-lg backdrop-blur-xl" : "border border-transparent",
         )}
       >
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2" aria-label={tr("النهرين: الصفحة الرئيسية", "Al-Nahrain: home")}>
           <LogoMark size={34} />
           {/* On a narrow phone the bar is full (two app buttons, language, log in): the logo alone says who we are. */}
           <span className="hidden text-base font-bold min-[420px]:inline"><BrandName /></span>

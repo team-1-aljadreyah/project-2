@@ -615,7 +615,9 @@ export function DataTable<T>({
   return (
     <>
       <SortArea ids={cols.map((c) => c.key)} grid onOrder={(ids) => saveLay({ order: ids })}>
-        <div className={cn("overflow-x-auto", mobile && "hidden md:block")}>
+        {/* relative: hidden helper texts inside the table (sr-only) stay inside its scroll box; otherwise, right
+            to left, they push the whole page wider than the screen. */}
+        <div className={cn("relative overflow-x-auto", mobile && "hidden md:block")}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line bg-card-2 text-xs text-muted">

@@ -109,20 +109,6 @@ export default function OrdersPage() {
         </Card>
       )}
 
-      {count("needs_approval") > 0 && user.role === "manager" && filter !== "needs_approval" && (
-        <div className="mb-4">
-          <Notice
-            tone="warning"
-            title={tr(`${count("needs_approval")} طلب يتجاوز سقف الدين ينتظر موافقتك`, `${count("needs_approval")} order(s) over the debt limit wait for you`)}
-            action={
-              <Button size="sm" onClick={() => setFilter("needs_approval")}>
-                {tr("عرض", "Show")}
-              </Button>
-            }
-          />
-        </div>
-      )}
-
       <Card>
         <div className="flex flex-col gap-3 border-b border-line p-3 lg:flex-row lg:items-center lg:justify-between">
           <Segmented
@@ -139,6 +125,20 @@ export default function OrdersPage() {
           />
           <SearchBox value={q} onChange={setQ} placeholder={tr("رقم الطلب، الزبون أو المندوب", "Order no., customer or rep")} className="lg:w-72" />
         </div>
+        {/* Inside the card, under the filters: it comes with the table, so nothing on the page jumps. */}
+        {count("needs_approval") > 0 && user.role === "manager" && filter !== "needs_approval" && (
+          <div className="border-b border-line p-3">
+            <Notice
+              tone="warning"
+              title={tr(`${count("needs_approval")} طلب يتجاوز سقف الدين ينتظر موافقتك`, `${count("needs_approval")} order(s) over the debt limit wait for you`)}
+              action={
+                <Button size="sm" onClick={() => setFilter("needs_approval")}>
+                  {tr("عرض", "Show")}
+                </Button>
+              }
+            />
+          </div>
+        )}
         {orders.state.status === "loading" ? (
           <LoadingRows />
         ) : orders.state.status === "error" ? (

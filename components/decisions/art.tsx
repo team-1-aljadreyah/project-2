@@ -42,7 +42,7 @@ export function DeskArt({ counts, cheer }: { counts: Record<string, number>; che
     { x: 362, y: 80, r: 3 },
   ];
   return (
-    <svg viewBox="0 0 520 300" className="h-auto w-full text-[var(--dec-line)]" role="img" aria-label="" style={{ direction: "ltr" }}>
+    <svg viewBox="0 0 520 300" className="h-auto w-full text-[var(--dec-line)]" aria-hidden="true" style={{ direction: "ltr" }}>
       {/* Desk edge and rulers */}
       <path d="M 10 230 L 510 170" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" strokeDasharray="1 7" strokeLinecap="round" />
       <path d="M 18 40 L 118 40 L 18 120 Z M 38 56 L 78 56 L 38 88 Z" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" strokeLinejoin="round" />

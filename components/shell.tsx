@@ -11,7 +11,9 @@ import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
 import { NotificationAlerts } from "@/components/notification-alerts";
-import { ChatWidget } from "@/components/support/chat-widget";
+import dynamic from "next/dynamic";
+// The support chat is for shop owners only: loaded only for them (not in everyone's first load).
+const ChatWidget = dynamic(() => import("@/components/support/chat-widget").then((m) => m.ChatWidget), { ssr: false });
 import { ShopSwitcher } from "@/components/shop-switcher";
 import { Avatar, MyAccountDialog } from "@/components/my-account";
 import { deniedOf, profileOf, useCurrentApp, useDenied } from "@/lib/access";
@@ -429,7 +431,7 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
         <ThemeToggle />
       </div>
       <div className="relative">
-        <button type="button" data-tour="account" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-label={tr("حسابي والإعدادات", "My account and settings")} className="ms-1 flex h-10 items-center gap-2 rounded-xl px-1.5 hover:bg-card-2 sm:px-2">
+        <button type="button" data-tour="account" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-label={`${user.name} ${jobName(user, tr)} · ${tr("حسابي والإعدادات", "My account and settings")}`} className="ms-1 flex h-10 items-center gap-2 rounded-xl px-1.5 hover:bg-card-2 sm:px-2">
           <Avatar user={user} size={32} />
           <span className="hidden text-start text-xs leading-tight lg:block">
             <span className="block font-medium text-text">{user.name}</span>
@@ -638,12 +640,13 @@ function Bell2({ user }: { user: User }) {
       <Link
         href="/notifications"
         data-tour="bell"
-        aria-label={tr("الإشعارات", "Notifications")}
+        // The spoken name holds the number shown on the bell too (what is seen is what is heard).
+        aria-label={unread > 0 ? tr(`الإشعارات: ${unread > 99 ? "99+" : unread} غير مقروءة`, `Notifications: ${unread > 99 ? "99+" : unread} unread`) : tr("الإشعارات", "Notifications")}
         className="relative inline-flex size-10 items-center justify-center rounded-xl text-muted hover:bg-card-2 hover:text-text"
       >
         <Bell className="size-5" />
         {unread > 0 && (
-          <span className="num absolute end-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
+          <span className="num absolute end-1 top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-on-danger">
             {unread > 99 ? "99+" : unread}
           </span>
         )}

@@ -119,7 +119,7 @@ export default function ItemsPage() {
             ]}
           />
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Select value={cat} onChange={(e) => setCat(e.target.value)} className="sm:w-40">
+            <Select value={cat} onChange={(e) => setCat(e.target.value)} className="sm:w-40" aria-label={tr("الفئة", "Category")}>
               <option value="">{tr("كل الأصناف", "All categories")}</option>
               {lookups.categories.map((c) => (
                 <option key={c}>{c}</option>

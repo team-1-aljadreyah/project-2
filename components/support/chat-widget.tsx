@@ -61,7 +61,7 @@ export function ChatWidget() {
           </motion.span>
         </AnimatePresence>
         {!open && unread > 0 && (
-          <span className="num absolute -end-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-danger text-[11px] font-bold text-white ring-2 ring-bg">{unread}</span>
+          <span className="num absolute -end-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-danger text-[11px] font-bold text-on-danger ring-2 ring-bg">{unread}</span>
         )}
       </motion.button>
 
@@ -146,7 +146,7 @@ function Choice({ icon: Icon, title, sub, onClick, badge, strong }: { icon: type
         <span className="block font-bold">{title}</span>
         <span className="block text-xs text-muted">{sub}</span>
       </span>
-      {badge && <span className="num flex size-6 items-center justify-center rounded-full bg-danger text-xs font-bold text-white">{badge}</span>}
+      {badge && <span className="num flex size-6 items-center justify-center rounded-full bg-danger text-xs font-bold text-on-danger">{badge}</span>}
     </motion.button>
   );
 }

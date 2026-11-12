@@ -12,7 +12,7 @@
   --card-2: #f4f5f7;        /* inner boxes, table header */
   --text: #111317;          /* main text, almost black */
   --muted: #5b616b;         /* secondary text */
-  --faint: #8d939c;         /* hints, placeholders */
+  --faint: #676d77;         /* hints, placeholders (4.5:1 on every background: readable) */
   --line: #e1e4e9;          /* borders */
   --line-strong: #cbd0d7;
 
@@ -21,6 +21,7 @@
   --primary-soft: #e8eaee;
   --primary-ink: #1d2127;   /* graphite text on soft gray */
   --on-primary: #ffffff;
+  --on-danger: #ffffff;     /* text on the red (badges) */
 
   --action: #e1692b;        /* safety orange: the ONE main button per screen */
   --action-hover: #cc5a1f;
@@ -43,7 +44,7 @@
   --card-2: #1c2026;
   --text: #e9ebee;
   --muted: #a3a9b2;
-  --faint: #7a808a;
+  --faint: #8b919b;
   --line: #262a31;
   --line-strong: #343a43;
 
@@ -52,6 +53,7 @@
   --primary-soft: #252a31;
   --primary-ink: #e6e8eb;
   --on-primary: #111317;
+  --on-danger: #16191e;
 
   --action: #f07a3a;
   --action-hover: #f48e55;
@@ -82,6 +84,7 @@
   --color-primary-soft: var(--primary-soft);
   --color-primary-ink: var(--primary-ink);
   --color-on-primary: var(--on-primary);
+  --color-on-danger: var(--on-danger);
   --color-action: var(--action);
   --color-action-hover: var(--action-hover);
   --color-on-action: var(--on-action);
@@ -344,7 +347,13 @@ html[data-vt="fade"]::view-transition-new(root) {
 }
 
 /* The 3D city map's markers (components/map3d): white clay badges, orange for the brand, a pulse for the live rep. */
-.map3d-marker { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer; }
+.map3d-marker { display: flex; flex-direction: column; align-items: center; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer; min-width: 28px; min-height: 28px; }
+/* The map's place before it starts: a soft street grid. */
+.map3d-wait {
+  background-color: var(--card-2);
+  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
 .map3d-badge { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 14px; background: #fff; color: #1d2127; box-shadow: 0 6px 16px rgb(17 19 23 / 0.18), 0 1px 0 rgb(17 19 23 / 0.06); font: 700 15px/1 var(--font-plex), sans-serif; }
 .map3d-marker[data-kind="warehouse"] .map3d-badge { background: #1d2127; color: #fff; }
 .map3d-marker[data-kind="rep"] .map3d-badge { background: #e1692b; color: #1a0b03; border-radius: 999px; animation: map3d-pulse 1.8s ease-out infinite; }
@@ -404,4 +413,130 @@ html[data-vt="fade"]::view-transition-new(root) {
 
 @media (prefers-reduced-motion: reduce) {
   .blob, .text-gradient-pan, .scan-line, .shine::after, .river-flow { animation: none; }
+}
+
+/* Small entrances in plain CSS (buttons and cards on every page: no animation library needed there). */
+@keyframes pop-spin {
+  from {
+    transform: rotate(-120deg) scale(0);
+    opacity: 0;
+  }
+}
+@keyframes slide-up {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+}
+@keyframes drop-in {
+  from {
+    transform: translateY(-16px) scale(0.96);
+    opacity: 0;
+  }
+}
+.anim-pop-spin {
+  animation: pop-spin 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.anim-slide-up {
+  animation: slide-up 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.anim-drop-in {
+  animation: drop-in 0.35s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-pop-spin,
+  .anim-slide-up,
+  .anim-drop-in {
+    animation: none;
+  }
+}
+
+/* The landing's headings: the words rise out of their line (components/landing/shared.tsx WordReveal).
+   "off" waits below the line; "on" (scrolled into view) slides up; "load" plays once at the start. */
+[data-rise="off"] .word-rise {
+  transform: translateY(110%);
+}
+[data-rise="on"] .word-rise {
+  transform: none;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-rise="load"] .word-rise {
+  animation: word-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes word-rise {
+  from {
+    transform: translateY(110%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-rise] .word-rise {
+    transform: none;
+    animation: none;
+    transition: none;
+  }
+}
+
+/* The login page's entrances and its drawing (no animation library there). */
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+}
+@keyframes rise-item {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes la-float {
+  50% {
+    transform: translateY(var(--la-dy, -8px));
+  }
+}
+@keyframes la-blink {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+}
+.anim-card-in {
+  animation: card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.rise-item {
+  animation: rise-item 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.la-float {
+  animation: la-float 4s ease-in-out infinite;
+}
+.la-blink {
+  animation: la-blink 3s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-card-in,
+  .rise-item,
+  .la-float,
+  .la-blink {
+    animation: none;
+  }
+}
+
+/* The shop's floating bag bar slides up from the bottom. */
+@keyframes bag-in {
+  from {
+    transform: translateY(80px);
+    opacity: 0;
+  }
+}
+.anim-bag-in {
+  animation: bag-in 0.35s cubic-bezier(0.34, 1.3, 0.64, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-bag-in {
+    animation: none;
+  }
 }

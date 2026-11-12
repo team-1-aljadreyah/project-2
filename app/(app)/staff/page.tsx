@@ -88,7 +88,7 @@ export default function StaffHome() {
                   <span className="block truncate text-sm font-semibold">{t.customer}</span>
                   <span className="block truncate text-xs opacity-75">{t.last.text}</span>
                 </span>
-                <span className="shrink-0 text-[11px] opacity-70">{ago(t.last.at)}</span>
+                <span className="shrink-0 text-[11px] opacity-90">{ago(t.last.at)}</span>
               </Link>
             ))}
             <Button variant="action" href="/support" className="w-full sm:w-auto">

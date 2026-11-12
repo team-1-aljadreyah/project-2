@@ -106,6 +106,17 @@ export function SetupHome({ go }: { go: (s: string) => void }) {
           <HealthCards h={health.data} />
         </>
       )}
+      {/* While the measures load: the same space, so the page doesn't jump when they arrive. */}
+      {!health.data && (
+        <div aria-hidden className="space-y-3">
+          <div className="h-7 w-56 rounded-lg bg-card-2" />
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-[23rem] animate-pulse rounded-2xl bg-card-2" />
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-3">
         <HomeCard title={tr("ملفات الصلاحيات", "Permission profiles")} value={site.profiles.length} hint={tr(`${inProfiles} شخص داخل ملفات`, `${inProfiles} people in profiles`)} onClick={() => go("profiles")} />
         <HomeCard title={tr("التطبيقات", "Apps")} value={site.apps.filter((a) => a.active).length} hint={tr(`من ${site.apps.length} تطبيق`, `of ${site.apps.length} apps`)} onClick={() => go("apps")} />

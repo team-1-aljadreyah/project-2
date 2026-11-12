@@ -101,7 +101,7 @@ export default function CustomersPage() {
           />
           <div className="flex flex-col gap-2 sm:flex-row">
             {user.role !== "rep" && (
-              <Select value={rep} onChange={(e) => setRep(Number(e.target.value) || "")} className="sm:w-44">
+              <Select value={rep} onChange={(e) => setRep(Number(e.target.value) || "")} className="sm:w-44" aria-label={tr("المندوب", "Rep")}>
                 <option value="">{tr("كل المندوبين", "All reps")}</option>
                 {lookups.reps.map((r) => (
                   <option key={r.id} value={r.id}>

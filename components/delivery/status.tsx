@@ -78,9 +78,9 @@ export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; 
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-1.5 font-bold">
+        <h2 className="flex items-center gap-1.5 font-bold">
           <Truck className="size-4 text-action" /> {tr("التوصيل", "Delivery")}
-        </h3>
+        </h2>
         <DeliveryChip d={d} tr={tr} />
       </div>
 

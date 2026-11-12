@@ -61,8 +61,10 @@ export default function RepHome() {
         <span className="flex size-12 items-center justify-center rounded-full bg-primary text-xl font-bold text-on-primary ring-4 ring-primary-soft">{user.name.trim()[0]}</span>
       </div>
 
+      {/* While his orders load, the trip card's place is kept (the page below doesn't jump when it arrives). */}
+      {delivers && orders.state.status === "loading" && <div aria-hidden className="h-20 rounded-3xl bg-card-2" />}
       {delivers && myShipments.length > 0 && (
-        <Link href="/deliveries" className="brand-panel relative flex items-center gap-4 overflow-hidden rounded-3xl p-4">
+        <Link href="/deliveries" className="brand-panel relative flex h-20 items-center gap-4 overflow-hidden rounded-3xl px-4">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-action text-on-action">
             <Route className="size-6" />
           </span>

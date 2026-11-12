@@ -6,7 +6,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
 import { BellRing, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { AppNotification } from "@/lib/api/types";
@@ -48,11 +47,9 @@ export function NotificationAlerts({ list }: { list: AppNotification[] | undefin
   if (typeof document === "undefined") return null;
   return createPortal(
     <div className="no-print pointer-events-none fixed inset-x-3 top-16 z-[60] flex flex-col items-end gap-2 sm:top-[4.5rem]" aria-live="polite">
-      <AnimatePresence initial={false}>
-        {cards.map((n) => (
-          <AlertCard key={n.id} n={n} onClose={() => close(n.id)} />
-        ))}
-      </AnimatePresence>
+      {cards.map((n) => (
+        <AlertCard key={n.id} n={n} onClose={() => close(n.id)} />
+      ))}
     </div>,
     document.body,
   );
@@ -73,14 +70,10 @@ function AlertCard({ n, onClose }: { n: AppNotification; onClose: () => void }) 
     onClose();
   };
   return (
-    <motion.div
-      layout
+    // The card drops in with a CSS animation (anim-drop-in): this is on every page, so no animation library.
+    <div
       role="status"
-      initial={{ opacity: 0, y: -16, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 40, transition: { duration: 0.2 } }}
-      transition={{ type: "spring", stiffness: 320, damping: 26 }}
-      className="box-link pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border border-action/40 bg-card p-3 shadow-xl transition-colors hover:bg-card-2"
+      className="anim-drop-in box-link pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border border-action/40 bg-card p-3 shadow-xl transition-colors hover:bg-card-2"
     >
       <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-action/15 text-action">
         <BellRing className="size-5" />
@@ -101,6 +94,6 @@ function AlertCard({ n, onClose }: { n: AppNotification; onClose: () => void }) 
       <button type="button" onClick={onClose} aria-label={tr("إغلاق", "Close")} className="flex size-7 shrink-0 items-center justify-center rounded-lg text-faint hover:bg-line hover:text-text">
         <X className="size-4" />
       </button>
-    </motion.div>
+    </div>
   );
 }

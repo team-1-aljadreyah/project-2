@@ -8,7 +8,6 @@
 import Link from "next/link";
 import { useAppRouter } from "@/lib/app-path";
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
   Candy,
@@ -37,10 +36,9 @@ import {
 import { useApp } from "@/components/shell";
 import { Dialog, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { type Customer, type Item, type NewOrder, type Unit } from "@/lib/api/types";
+import { type Customer, type Item, type NewOrder, type Order, type Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { enqueue, isNetworkError, newClientRef } from "@/lib/offline";
-import { useLoad } from "@/lib/use-load";
 import { cn, matches, piecesOf, priceOf } from "@/lib/utils";
 
 // ---------- How an item looks: its photo, or (no photo yet) a colored tile with the category icon ----------
@@ -178,7 +176,7 @@ function toggleFav(userId: number, customerId: number, itemId: number) {
   window.dispatchEvent(new Event(FAV_EVENT));
 }
 
-export function ShopStore({ customer }: { customer: Customer }) {
+export function ShopStore({ customer, orders }: { customer: Customer; orders: Order[] }) {
   const { tr, money, name } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useAppRouter();
@@ -204,8 +202,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
   const favRaw = useSyncExternalStore(subscribeFav, () => readFav(user.id, customer.id), () => "");
   const favs = useMemo(() => new Set(favRaw.split(",").filter(Boolean).map(Number)), [favRaw]);
   // His last order (not cancelled): «اطلب مثل آخر مرة» puts it back in the bag in one tap.
-  const myOrders = useLoad(() => api.listOrders(), [customer.id]);
-  const last = (myOrders.data ?? []).filter((o) => o.customer_id === customer.id && o.status !== "cancelled" && !o.shipment_of).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const last = orders.filter((o) => o.customer_id === customer.id && o.status !== "cancelled" && !o.shipment_of).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
 
   const active = items.filter((i) => i.active);
   // In the manager's order (lookups), only the categories that have something to sell.
@@ -356,7 +353,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
       </div>
 
       {/* The banner: in the design it's a discount; for a wholesale shop the useful thing is the credit left */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="brand-panel relative mt-4 overflow-hidden rounded-3xl p-5 sm:p-6">
+      <div className="rise-item brand-panel relative mt-4 overflow-hidden rounded-3xl p-5 sm:p-6">
         <div className="brand-grid absolute inset-0" aria-hidden />
         <div className="relative flex items-center justify-between gap-4">
           <div className="min-w-0">
@@ -382,7 +379,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
           <ShoppingBag className="hidden size-28 shrink-0 rotate-[-8deg] text-[#f5b48a] opacity-90 sm:block" strokeWidth={1.2} />
         </div>
         <div className="hazard absolute inset-x-0 bottom-0 h-1.5" aria-hidden />
-      </motion.div>
+      </div>
 
       {/* Order like last time */}
       {last && !bag.edit && (
@@ -425,7 +422,8 @@ export function ShopStore({ customer }: { customer: Customer }) {
           const l = lineOf(it.id);
           const out = available(it) <= 0;
           return (
-            <motion.div key={it.id} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03 }} className="relative flex flex-col rounded-3xl border border-line bg-card p-2.5">
+            // A light CSS entrance (rise-item), one after another: the store is the shop owner's first page.
+            <div key={it.id} style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }} className="rise-item relative flex flex-col rounded-3xl border border-line bg-card p-2.5">
               <button
                 type="button"
                 onClick={() => toggleFav(user.id, customer.id, it.id)}
@@ -462,7 +460,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
                   </RoundBtn>
                 )}
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>
@@ -470,15 +468,11 @@ export function ShopStore({ customer }: { customer: Customer }) {
       {!shown.length && <p className="mt-10 text-center text-sm text-muted">{tr("لا توجد مادة بهذا الاسم", "No item by that name")}</p>}
 
       {/* The floating bag bar */}
-      <AnimatePresence>
-        {count > 0 && !bagOpen && (
-          <motion.button
+      {count > 0 && !bagOpen && (
+          <button
             type="button"
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
             onClick={() => setBagOpen(true)}
-            className="fixed inset-x-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-primary px-4 py-3 text-on-primary shadow-2xl"
+            className="anim-bag-in fixed inset-x-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-primary px-4 py-3 text-on-primary shadow-2xl"
           >
             <span className="relative">
               <ShoppingBag className="size-6" />
@@ -486,9 +480,8 @@ export function ShopStore({ customer }: { customer: Customer }) {
             </span>
             <span className="flex-1 text-start text-sm font-semibold">{tr("السلة", "Bag")}</span>
             <span className="num text-base font-bold">{money(total)}</span>
-          </motion.button>
+          </button>
         )}
-      </AnimatePresence>
 
       {open && (
         <ItemSheet
@@ -593,15 +586,14 @@ export function ShopStore({ customer }: { customer: Customer }) {
 
 function RoundBtn({ label, onClick, solid, children }: { label: string; onClick: () => void; solid?: boolean; children: React.ReactNode }) {
   return (
-    <motion.button
+    <button
       type="button"
-      whileTap={{ scale: 0.85 }}
       aria-label={label}
       onClick={onClick}
-      className={cn("flex size-8 items-center justify-center rounded-full transition", solid ? "bg-action text-on-action hover:bg-action-hover" : "border border-line-strong bg-card hover:bg-card-2")}
+      className={cn("flex size-8 items-center justify-center rounded-full transition active:scale-[0.85]", solid ? "bg-action text-on-action hover:bg-action-hover" : "border border-line-strong bg-card hover:bg-card-2")}
     >
       {children}
-    </motion.button>
+    </button>
   );
 }
 
