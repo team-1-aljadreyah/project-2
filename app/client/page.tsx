@@ -1,7 +1,7 @@
 "use client";
 
-import { AppLanding } from "@/components/apps/app-landing";
+import { ClientLanding } from "@/components/apps/client-landing";
 
-export default function ClientLanding() {
-  return <AppLanding app="client" />;
+export default function ClientLandingPage() {
+  return <ClientLanding />;
 }

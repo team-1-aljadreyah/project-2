@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
-import { ArrowLeft, ArrowRight, MapPin, Phone, Store, UserPlus, Warehouse } from "lucide-react";
+import { ArrowLeft, ArrowRight, MapPin, Phone, Store, Truck, UserPlus, Warehouse } from "lucide-react";
 import { Bento, Roles } from "@/components/landing/features";
 import { Hero } from "@/components/landing/hero";
 import { PhoneApps } from "@/components/landing/phone-apps";
@@ -116,13 +116,14 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
     <motion.header initial={{ y: -40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.6 }} className="fixed inset-x-0 top-0 z-40 px-3 pt-3">
       <nav
         className={cn(
-          "mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-full px-3 py-2 transition-all duration-300 sm:px-4",
+          "mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-full px-3 py-2 transition-all duration-300 sm:gap-3 sm:px-4",
           scrolled ? "border border-white/10 bg-[#0b0c0e]/70 shadow-lg backdrop-blur-xl" : "border border-transparent",
         )}
       >
         <Link href="/" className="flex items-center gap-2">
           <LogoMark size={34} />
-          <span className="text-base font-bold"><BrandName /></span>
+          {/* On a narrow phone the bar is full (two app buttons, language, log in): the logo alone says who we are. */}
+          <span className="hidden text-base font-bold min-[420px]:inline"><BrandName /></span>
         </Link>
         <div className="hidden items-center gap-7 text-sm text-muted md:flex">
           <a href="#platform" className="transition hover:text-text">
@@ -149,8 +150,18 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
           >
             <Store className="size-4 shrink-0 text-action" /> <span className="hidden sm:inline">{tr("لأصحاب المحلات", "For shop owners")}</span>
           </a>
+          {/* The reps' landing page is their app (/driver), opened in a new tab too. */}
+          <a
+            href="/driver"
+            target="_blank"
+            rel="noopener"
+            aria-label={tr("للمندوبين", "For reps")}
+            className="flex h-10 items-center gap-1.5 rounded-full border border-teal-400/40 bg-teal-400/10 px-3 text-sm font-semibold text-text transition hover:bg-teal-400/20 active:scale-[0.98]"
+          >
+            <Truck className="size-4 shrink-0 text-teal-300" /> <span className="hidden sm:inline">{tr("للمندوبين", "For reps")}</span>
+          </a>
           <LanguageSwitch onBrand />
-          <Link href={enter} className="flex h-10 items-center rounded-full bg-white px-4 text-sm font-bold text-[#0b0c0e] transition hover:bg-white/90">
+          <Link href={enter} className="flex h-10 items-center whitespace-nowrap rounded-full bg-white px-3 text-sm font-bold text-[#0b0c0e] transition hover:bg-white/90 sm:px-4">
             {enterLabel}
           </Link>
         </div>

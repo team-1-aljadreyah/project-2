@@ -374,3 +374,30 @@ html[data-vt="fade"]::view-transition-new(root) {
   /* The small "opens something" arrow hides when the box has no link (a job that may not open the page). */
   :is(.box-link, .box-row):not(:has(.box-link-main)) .box-go { display: none; }
 }
+
+/* ---------- The phone apps' landing pages (components/apps) ---------- */
+
+/* Big soft color clouds that drift behind the hero. */
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(9%, -7%) scale(1.15); }
+  66% { transform: translate(-7%, 8%) scale(0.9); }
+}
+.blob { position: absolute; border-radius: 9999px; filter: blur(64px); opacity: 0.5; animation: blob-drift 16s ease-in-out infinite; }
+
+/* Text painted with a gradient that slowly moves through its colors. */
+@keyframes gradient-pan { to { background-position: 200% center; } }
+.text-gradient-pan { background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: gradient-pan 6s linear infinite; }
+
+/* The laser line of the QR scanner on the reps' page. */
+@keyframes scan-line { 0%, 100% { top: 10%; } 50% { top: 86%; } }
+.scan-line { animation: scan-line 2.4s ease-in-out infinite; }
+
+/* A soft light that passes over a button. */
+@keyframes shine { from { transform: translateX(-120%) skewX(-20deg); } to { transform: translateX(220%) skewX(-20deg); } }
+.shine { position: relative; overflow: hidden; }
+.shine::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent); animation: shine 3.2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .blob, .text-gradient-pan, .scan-line, .shine::after { animation: none; }
+}

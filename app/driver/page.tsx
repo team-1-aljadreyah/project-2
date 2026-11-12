@@ -1,7 +1,7 @@
 "use client";
 
-import { AppLanding } from "@/components/apps/app-landing";
+import { DriverLanding } from "@/components/apps/driver-landing";
 
-export default function DriverLanding() {
-  return <AppLanding app="driver" />;
+export default function DriverLandingPage() {
+  return <DriverLanding />;
 }
