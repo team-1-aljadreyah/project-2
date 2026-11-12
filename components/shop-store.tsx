@@ -17,6 +17,8 @@ import {
   CupSoda,
   Droplets,
   FileText,
+  Heart,
+  RotateCcw,
   Leaf,
   Loader2,
   MapPin,
@@ -38,6 +40,7 @@ import { api, ApiError } from "@/lib/api";
 import { type Customer, type Item, type NewOrder, type Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { enqueue, isNetworkError, newClientRef } from "@/lib/offline";
+import { useLoad } from "@/lib/use-load";
 import { cn, matches, piecesOf, priceOf } from "@/lib/utils";
 
 // ---------- How an item looks: its photo, or (no photo yet) a colored tile with the category icon ----------
@@ -148,6 +151,33 @@ function subscribeBag(cb: () => void) {
   };
 }
 
+// Favourite items: a heart on each card, kept on the phone (per owner and shop). They come first in the store.
+const FAV_EVENT = "nahrain-fav";
+const favKey = (userId: number, customerId: number) => `nahrain.fav.${userId}.${customerId}`;
+function readFav(userId: number, customerId: number) {
+  try {
+    return localStorage.getItem(favKey(userId, customerId)) ?? "";
+  } catch {
+    return "";
+  }
+}
+function subscribeFav(cb: () => void) {
+  window.addEventListener(FAV_EVENT, cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener(FAV_EVENT, cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+function toggleFav(userId: number, customerId: number, itemId: number) {
+  const now = readFav(userId, customerId).split(",").filter(Boolean).map(Number);
+  const next = now.includes(itemId) ? now.filter((x) => x !== itemId) : [...now, itemId];
+  try {
+    localStorage.setItem(favKey(userId, customerId), next.join(","));
+  } catch {}
+  window.dispatchEvent(new Event(FAV_EVENT));
+}
+
 export function ShopStore({ customer }: { customer: Customer }) {
   const { tr, money, name } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
@@ -171,11 +201,48 @@ export function ShopStore({ customer }: { customer: Customer }) {
   const available = (it: Item) => it.stock.by_warehouse.find((w) => w.warehouse_id === warehouseId)?.qty ?? 0;
   const price = (it: Item, unit: Unit) => priceOf(it, customer.tier_id, unit);
 
+  const favRaw = useSyncExternalStore(subscribeFav, () => readFav(user.id, customer.id), () => "");
+  const favs = useMemo(() => new Set(favRaw.split(",").filter(Boolean).map(Number)), [favRaw]);
+  // His last order (not cancelled): «اطلب مثل آخر مرة» puts it back in the bag in one tap.
+  const myOrders = useLoad(() => api.listOrders(), [customer.id]);
+  const last = (myOrders.data ?? []).filter((o) => o.customer_id === customer.id && o.status !== "cancelled" && !o.shipment_of).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+
   const active = items.filter((i) => i.active);
   // In the manager's order (lookups), only the categories that have something to sell.
   const categories = useMemo(() => lookups.categories.filter((c) => items.some((i) => i.active && i.category === c)), [items, lookups.categories]);
   const catIndex = (c: string) => Math.max(0, categories.indexOf(c));
-  const shown = active.filter((i) => (cat === "all" || i.category === cat) && matches(q, i.name, i.name_en, i.barcode));
+  // His favourites first (in "all"), or only them (the ♥ chip).
+  const shown = active
+    .filter((i) => (cat === "all" || (cat === "fav" ? favs.has(i.id) : i.category === cat)) && matches(q, i.name, i.name_en, i.barcode))
+    .sort((a, b) => Number(favs.has(b.id)) - Number(favs.has(a.id)));
+
+  /** «اطلب مثل آخر مرة»: the last order's items into the bag (what is there now; less if less is left). */
+  function orderLikeLast() {
+    if (!last) return;
+    let added = 0;
+    const missing: string[] = [];
+    setBag((b) => {
+      const lines = [...b.lines];
+      for (const l of last.lines) {
+        const it = itemById.get(l.item_id);
+        if (!it || !it.active) continue;
+        const room = available(it) * (l.unit === "carton" ? 1 : it.pieces_per_carton);
+        const qty = Math.min(l.qty, Math.floor(room));
+        if (qty <= 0) {
+          missing.push(name(it));
+          continue;
+        }
+        const at = lines.findIndex((x) => x.item_id === l.item_id);
+        if (at >= 0) lines[at] = { ...lines[at], unit: l.unit, qty: Math.max(lines[at].qty, qty) };
+        else lines.push({ item_id: l.item_id, unit: l.unit, qty });
+        added++;
+      }
+      return { ...b, lines };
+    });
+    toast(added ? "success" : "danger", added ? tr(`أُضيفت ${added} مواد من طلبك الأخير إلى السلة: عدّل الكميات ثم أرسل`, `${added} items from your last order are in the bag`) : tr("مواد طلبك الأخير غير متوفرة الآن", "Your last order's items aren't available now"));
+    if (missing.length) toast("danger", tr(`غير متوفرة الآن: ${missing.join("، ")}`, `Not available now: ${missing.join(", ")}`));
+    if (added) setBagOpen(true);
+  }
   const pg = usePages(shown, 12);
 
   const lineOf = (id: number) => bag.lines.find((l) => l.item_id === id);
@@ -317,9 +384,25 @@ export function ShopStore({ customer }: { customer: Customer }) {
         <div className="hazard absolute inset-x-0 bottom-0 h-1.5" aria-hidden />
       </motion.div>
 
+      {/* Order like last time */}
+      {last && !bag.edit && (
+        <button type="button" onClick={orderLikeLast} className="box-row mt-4 flex w-full items-center gap-3 rounded-2xl border border-line bg-card p-3 text-start transition hover:border-action">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-action/15 text-action">
+            <RotateCcw className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-bold">{tr("اطلب مثل آخر مرة", "Order like last time")}</span>
+            <span className="block truncate text-xs text-muted">
+              <span className="num">{last.number}</span> · {tr(`${last.lines.length} مواد`, `${last.lines.length} items`)} · <span className="num">{money(last.total)}</span>
+            </span>
+          </span>
+          <span className="shrink-0 rounded-full bg-action px-3 py-1.5 text-xs font-bold text-on-action">{tr("إلى السلة", "To the bag")}</span>
+        </button>
+      )}
+
       {/* Category chips */}
       <div className="-mx-4 mt-5 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-        {["all", ...categories].map((c) => {
+        {["all", ...(favs.size ? ["fav"] : []), ...categories].map((c) => {
           const on = cat === c;
           return (
             <button
@@ -329,7 +412,8 @@ export function ShopStore({ customer }: { customer: Customer }) {
               aria-pressed={on}
               className={cn("flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition", on ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-card hover:bg-card-2")}
             >
-              {c === "all" ? <Package className="size-4" /> : <CatIcon category={c} className="size-4" />} {c === "all" ? tr("الكل", "All") : c}
+              {c === "all" ? <Package className="size-4" /> : c === "fav" ? <Heart className="size-4 fill-current" /> : <CatIcon category={c} className="size-4" />}{" "}
+              {c === "all" ? tr("الكل", "All") : c === "fav" ? tr(`المفضلة (${favs.size})`, `Favourites (${favs.size})`) : c}
             </button>
           );
         })}
@@ -341,7 +425,16 @@ export function ShopStore({ customer }: { customer: Customer }) {
           const l = lineOf(it.id);
           const out = available(it) <= 0;
           return (
-            <motion.div key={it.id} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03 }} className="flex flex-col rounded-3xl border border-line bg-card p-2.5">
+            <motion.div key={it.id} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03 }} className="relative flex flex-col rounded-3xl border border-line bg-card p-2.5">
+              <button
+                type="button"
+                onClick={() => toggleFav(user.id, customer.id, it.id)}
+                aria-pressed={favs.has(it.id)}
+                aria-label={favs.has(it.id) ? tr("أزل من المفضلة", "Remove from favourites") : tr("أضف إلى المفضلة", "Add to favourites")}
+                className="absolute end-4 top-4 z-10 flex size-8 items-center justify-center rounded-full bg-card/90 shadow-sm backdrop-blur transition active:scale-90"
+              >
+                <Heart className={cn("size-4", favs.has(it.id) ? "fill-[#e11d48] text-[#e11d48]" : "text-muted")} />
+              </button>
               <button type="button" onClick={() => setOpen(it)} className="text-start">
                 <Art category={it.category} index={catIndex(it.category)} image={it.image} />
                 <p className="mt-2 line-clamp-2 min-h-10 px-1 text-sm font-bold leading-5">{name(it)}</p>
