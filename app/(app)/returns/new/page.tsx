@@ -1,5 +1,7 @@
 "use client";
 
+import { useUnsaved } from "@/lib/unsaved";
+
 import { useAppRouter } from "@/lib/app-path";
 import { useMemo, useState } from "react";
 import { CheckCircle2, PackageCheck, PackageX } from "lucide-react";
@@ -30,6 +32,8 @@ export default function NewReturnPage() {
   const [customerId, setCustomerId] = useState<number | "">("");
   const [lines, setLines] = useState<Record<number, RLine>>({});
   const [note, setNote] = useState("");
+  // Returned quantities written and not saved: leaving asks first.
+  useUnsaved(Object.values(lines).some((l) => l.qty > 0));
   const [ref] = useState(newClientRef);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<Record<string, string>>({});

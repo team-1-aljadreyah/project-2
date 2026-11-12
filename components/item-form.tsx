@@ -1,4 +1,6 @@
 "use client";
+
+import { useUnsaved } from "@/lib/unsaved";
 import { CustomInputs, missingRequired, saveCustom, useFields } from "@/components/custom-fields";
 
 // Add / edit an item (manager): carton size, minimum stock, commission and a price for every tier.
@@ -28,6 +30,9 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<ItemInput>) => setF((x) => ({ ...x, ...p }));
+  // Changed and not saved: leaving the page asks first.
+  const [start] = useState(() => JSON.stringify(f));
+  useUnsaved(open && !busy && JSON.stringify(f) !== start);
   const setPrice = (tier: number, p: { carton_price?: number; piece_price?: number }) => set({ prices: f.prices.map((x) => (x.tier_id === tier ? { ...x, ...p } : x)) });
   // The manager's own fields (advanced settings), saved right after the item.
   const [cv, setCv] = useState<Record<string, string | number | boolean | null>>(() => ({ ...item?.custom }));

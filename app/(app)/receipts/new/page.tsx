@@ -1,5 +1,7 @@
 "use client";
 
+import { useUnsaved } from "@/lib/unsaved";
+
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { CheckCircle2, ClipboardCheck, Plus, Trash2 } from "lucide-react";
@@ -71,6 +73,8 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
 
   // Sent: every chosen item, except the order's lines that didn't come (0 or not written).
   const filled = rows.filter((r) => r.item_id && (!r.ordered || (typeof r.qty === "number" && r.qty > 0)));
+  // Something counted or chosen and not saved: leaving asks first.
+  useUnsaved(!busy && rows.some((r) => (r.ordered ? r.qty !== "" : !!r.item_id) || r.expiry_date));
   // Each order line: what came, in the order's unit, and the difference (negative = less came).
   const arrivedOf = (r: Row) => {
     const it = r.item_id ? itemById.get(r.item_id) : undefined;

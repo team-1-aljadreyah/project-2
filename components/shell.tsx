@@ -18,6 +18,7 @@ import { deniedOf, profileOf, useCurrentApp, useDenied } from "@/lib/access";
 import { setExportBlocked } from "@/lib/utils";
 import { AppLauncher, AppBanner } from "@/components/app-launcher";
 import { QuickSearch } from "@/components/quick-search";
+import { UnsavedGuard } from "@/components/unsaved-guard";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
@@ -184,6 +185,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
         </main>
       </div>
       <BottomBar user={user} phone={phone} />
+      <UnsavedGuard />
       <QueueSender />
     </div>
   );

@@ -1,5 +1,7 @@
 "use client";
 
+import { useUnsaved } from "@/lib/unsaved";
+
 import { useSearchParams } from "next/navigation";
 import { useAppRouter } from "@/lib/app-path";
 import { Suspense, useEffect, useState } from "react";
@@ -39,6 +41,8 @@ function NewPaymentForm({ pre }: { pre?: number }) {
   const [method, setMethod] = useState<PayMethod>("cash");
   const [note, setNote] = useState("");
   const [ref] = useState(newClientRef);
+  // An amount written and not saved: leaving asks first.
+  useUnsaved(amount !== "" && amount > 0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<Record<string, string>>({});
   const [debounced, setDebounced] = useState(0);
