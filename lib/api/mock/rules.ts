@@ -10,6 +10,7 @@ import { fullSite } from "../site-defaults";
 import { missingValue, supplyGaps } from "../supply";
 import type {
   AppNotification,
+  OnlineStatus,
   CounterInfo,
   CounterSaleInput,
   RegisterInput,
@@ -2386,8 +2387,9 @@ export function onlineView(o: DbOnline): OnlinePayment {
   void _r;
   void _o;
   void _s;
-  // The real gateway's page is on Qi's site. The demo one is a page of ours.
-  return { ...rest, form_url: `/pay/qi?payment=${o.payment_id}` };
+  // ZainCash: its real (sandbox) page. Qi: the real one is on Qi's site; the demo one is a page of ours.
+  const { gateway_url: page, ...view } = rest;
+  return { ...view, form_url: page ?? `/pay/qi?payment=${o.payment_id}` };
 }
 
 export function startOnline(db: Db, actor: DbUser, input: StartOnlinePayment, now: Date): OnlinePayment {
@@ -2408,8 +2410,13 @@ export function startOnline(db: Db, actor: DbUser, input: StartOnlinePayment, no
   }
   // Only pages of our own site can be the way back (never another website).
   const back = input.return_url.startsWith("/") && !input.return_url.startsWith("//") ? input.return_url : "/";
+  if (input.provider === "zaincash" && input.amount < 1000) {
+    fail(422, "VALIDATION", "زين كاش يقبل من 1,000 د.ع", "ZainCash takes 1,000 IQD or more", { amount: msg("زين كاش يقبل من 1,000 د.ع فأكثر", "ZainCash takes 1,000 IQD or more") });
+  }
+  const zc = input.provider === "zaincash";
   const o: DbOnline = {
-    payment_id: `qi_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`,
+    payment_id: `${zc ? "zc" : "qi"}_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`,
+    ...(zc ? { provider: "zaincash" as const } : {}),
     customer_id: customer.id,
     amount: input.amount,
     status: "created",
@@ -2447,6 +2454,31 @@ export function settleOnline(db: Db, now: Date) {
     );
     o.recorded_payment_id = p.id;
   }
+}
+
+/** ZainCash said its final word about a payment: kept, and a success recorded as the shop's payment (once). */
+export function settleZainCash(db: Db, paymentId: string, status: OnlineStatus, wallet: string | undefined, now: Date) {
+  const o = db.online_payments.find((x) => x.payment_id === paymentId);
+  if (!o || o.status !== "created" || status === "created") return;
+  o.status = status;
+  if (status !== "success") return;
+  const customer = db.customers.find((c) => c.id === o.customer_id);
+  const user = db.users.find((u) => u.id === o.by.id);
+  if (!customer || !user) return;
+  const amount = Math.min(o.amount, customerBalance(db, customer.id));
+  if (amount <= 0) {
+    o.note = "nothing_owed";
+    return;
+  }
+  const hidden = wallet ? `${wallet.slice(0, 5)}•••••${wallet.slice(-3)}` : "ZainCash";
+  const p = addPayment(
+    db,
+    user,
+    { client_ref: `gateway:${o.payment_id}`, customer_id: customer.id, amount, method: "online", note: "ZainCash" },
+    now,
+    { provider: "zaincash", payment_id: o.gateway_id ?? o.payment_id, card: hidden },
+  );
+  o.recorded_payment_id = p.id;
 }
 
 // ---------- Delivery proof (no fake deliveries) ----------

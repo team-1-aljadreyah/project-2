@@ -231,7 +231,7 @@ export function PaymentList({ payments }: { payments: Payment[] }) {
                   <span className="num" dir="ltr">
                     {p.number}
                   </span>{" "}
-                  · {p.reversal_of ? tr("عملية عكسية", "Reversal") : methodLabel(p.method, tr)}
+                  · {p.reversal_of ? tr("عملية عكسية", "Reversal") : methodLabel(p.method, tr, p.gateway?.provider)}
                 </p>
                 <p className={cn("num text-base font-bold", off && "text-muted line-through")}>{money(Math.abs(p.amount))}</p>
               </div>

@@ -75,20 +75,24 @@ export default function PaymentView() {
             <KV k={tr("الزبون", "Customer")} href={customer.data && `/customers/${customer.data.id}`} v={customer.data?.name ?? "…"} />
             <KV k={tr("الوقت", "Time")} v={dateTime(p.date)} />
             <KV k={p.method === "online" ? tr("دفعه", "Paid by") : tr("سجّله", "Entered by")} v={`${p.received_by.name} (${roleName(p.received_by.role, tr)})`} />
-            <KV k={tr("الطريقة", "Method")} v={<MethodChip m={p.method} tr={tr} />} />
+            <KV k={tr("الطريقة", "Method")} v={<MethodChip m={p.method} tr={tr} gateway={p.gateway?.provider} />} />
             {p.note && <KV k={tr("ملاحظة", "Note")} v={p.note} />}
             {p.reason && <KV k={tr("سبب العكس", "Reason")} v={p.reason} />}
           </div>
-          {/* Online payment: what the Qi gateway told us (the full card number never reaches our site) */}
+          {/* Online payment: what the gateway told us (Qi: never the full card number; ZainCash: the wallet, hidden in the middle) */}
           {p.gateway && (
             <div className="mt-3 rounded-xl border border-line bg-card-2 p-3">
               <p className="mb-1 flex items-center gap-2 text-sm font-bold">
-                <span className="flex size-6 items-center justify-center rounded-md bg-[#f7c600] text-[10px] font-black text-black">Qi</span>
+                {p.gateway.provider === "zaincash" ? (
+                  <span className="flex size-6 items-center justify-center rounded-md bg-[#6b2a8c] text-[8px] font-black text-white">Zain</span>
+                ) : (
+                  <span className="flex size-6 items-center justify-center rounded-md bg-[#f7c600] text-[10px] font-black text-black">Qi</span>
+                )}
                 {tr("تفاصيل الدفع الأونلاين", "Online payment details")}
               </p>
-              <KV k={tr("بوابة الدفع", "Gateway")} v="Qi Card" />
+              <KV k={tr("بوابة الدفع", "Gateway")} v={p.gateway.provider === "zaincash" ? tr("زين كاش", "ZainCash") : "Qi Card"} />
               <KV
-                k={tr("رقم العملية لدى Qi", "Qi reference")}
+                k={p.gateway.provider === "zaincash" ? tr("رقم العملية لدى زين كاش", "ZainCash reference") : tr("رقم العملية لدى Qi", "Qi reference")}
                 v={
                   <span className="num text-xs" dir="ltr">
                     {p.gateway.payment_id}
@@ -96,7 +100,7 @@ export default function PaymentView() {
                 }
               />
               <KV
-                k={tr("البطاقة", "Card")}
+                k={p.gateway.provider === "zaincash" ? tr("المحفظة", "Wallet") : tr("البطاقة", "Card")}
                 v={
                   <span className="num" dir="ltr">
                     {p.gateway.card}
@@ -105,7 +109,9 @@ export default function PaymentView() {
               />
               <KV k={tr("حالة البوابة", "Gateway status")} v={<span className="font-semibold text-success">{tr("نجح", "Succeeded")}</span>} />
               <p className="mt-2 text-[11px] text-muted">
-                {tr("عند عكس تسديد أونلاين، يُرجَع المبلغ للزبون من لوحة Qi نفسها.", "If an online payment is reversed, refund the customer from Qi's own dashboard.")}
+                {p.gateway.provider === "zaincash"
+                  ? tr("عند عكس تسديد أونلاين، يُرجَع المبلغ للزبون من زين كاش (إرجاع كامل أو جزئي).", "If an online payment is reversed, refund the customer through ZainCash (full or partial reverse).")
+                  : tr("عند عكس تسديد أونلاين، يُرجَع المبلغ للزبون من لوحة Qi نفسها.", "If an online payment is reversed, refund the customer from Qi's own dashboard.")}
               </p>
             </div>
           )}

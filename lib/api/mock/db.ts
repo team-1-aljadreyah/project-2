@@ -99,6 +99,8 @@ export interface Db {
 export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   key: string;
   return_url: string;
+  /** ZainCash: its payment page for this payment. */
+  gateway_url?: string;
   /** What the gateway page decided; it becomes the status a moment later, like the gateway's notification. */
   outcome?: OnlineStatus;
   settles_at?: number;

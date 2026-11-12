@@ -14,7 +14,7 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn, dayOfIso, matches, today } from "@/lib/utils";
 
-// Payments: local (cash, transfer / Zain Cash) and online (Qi Card).
+// Payments: local (cash, transfer) and online (ZainCash wallet or Qi Card).
 // The manager and the accountant also see every online attempt, including the ones that didn't go through.
 export default function PaymentsPage() {
   const { tr, dateTime, ago, money } = useFmt();
@@ -44,8 +44,8 @@ export default function PaymentsPage() {
     { key: "n", head: tr("الرقم", "No."), cell: (p) => <span className="num">{p.number}</span> },
     { key: "d", head: tr("الوقت", "Time"), cell: (p) => dateTime(p.date) },
     { key: "c", head: tr("الزبون", "Customer"), cell: (p) => <RefLink href={`/customers/${p.customer_id}`}>{cName(p.customer_id)}</RefLink> },
-    { key: "by", head: tr("استلمه", "Taken by"), cell: (p) => (p.method === "online" ? <span className="text-muted">{tr("بوابة Qi", "Qi gateway")}</span> : p.received_by.name) },
-    { key: "m", head: tr("الطريقة", "Method"), cell: (p) => <MethodChip m={p.method} tr={tr} /> },
+    { key: "by", head: tr("استلمه", "Taken by"), cell: (p) => (p.method === "online" ? <span className="text-muted">{p.gateway?.provider === "zaincash" ? tr("بوابة زين كاش", "ZainCash gateway") : tr("بوابة Qi", "Qi gateway")}</span> : p.received_by.name) },
+    { key: "m", head: tr("الطريقة", "Method"), cell: (p) => <MethodChip m={p.method} tr={tr} gateway={p.gateway?.provider} /> },
     { key: "a", head: tr("المبلغ", "Amount"), cell: (p) => <Money value={p.amount} className={p.amount < 0 ? "text-danger font-semibold" : "font-semibold"} />, align: "end" },
     { key: "s", head: "", cell: (p) => (p.reversal_of ? <Badge tone="danger">{tr("عملية عكسية", "Reverse entry")}</Badge> : p.reversed ? <Badge>{tr("معكوس", "Reversed")}</Badge> : null) },
   ];
@@ -57,10 +57,13 @@ export default function PaymentsPage() {
     { key: "s", head: tr("النتيجة", "Result"), cell: (o) => <OnlineStatusChip s={o.status} tr={tr} /> },
     {
       key: "id",
-      head: tr("رقم العملية لدى Qi", "Qi reference"),
+      head: tr("البوابة ورقم العملية", "Gateway and reference"),
       cell: (o) => (
-        <span className="num text-xs text-muted" dir="ltr">
-          {o.payment_id}
+        <span className="text-xs text-muted">
+          <span className={o.provider === "zaincash" ? "font-semibold text-[#6b2a8c] dark:text-[#d3a6ec]" : "font-semibold"}>{o.provider === "zaincash" ? tr("زين كاش", "ZainCash") : "Qi"}</span>{" "}
+          <span className="num" dir="ltr">
+            {o.gateway_id ?? o.payment_id}
+          </span>
         </span>
       ),
     },
@@ -83,8 +86,8 @@ export default function PaymentsPage() {
       <PageHeader
         title={tr("التسديدات", "Payments")}
         subtitle={tr(
-          "محلياً (نقداً أو تحويل) أو أونلاين ببطاقة Qi. كل تسديد يُخصم من أقدم فاتورة أولاً، ولا يُحذف أبداً",
-          "Local (cash or transfer) or online with Qi Card. Each payment goes to the oldest invoice first, and is never deleted",
+          "محلياً (نقداً أو تحويل) أو أونلاين بزين كاش أو بطاقة Qi. كل تسديد يُخصم من أقدم فاتورة أولاً، ولا يُحذف أبداً",
+          "Local (cash or transfer) or online with ZainCash or Qi Card. Each payment goes to the oldest invoice first, and is never deleted",
         )}
         actions={
           <Button variant="action" href="/payments/new">
@@ -168,8 +171,8 @@ export default function PaymentsPage() {
             <>
               <p className="border-b border-line bg-card-2 px-4 py-2 text-xs text-muted">
                 {tr(
-                  "كل محاولة دفع ببطاقة Qi تظهر هنا. المحاولة الفاشلة لا تسحب أي مبلغ ولا تُسجَّل تسديداً.",
-                  "Every Qi Card attempt shows here. A failed attempt takes no money and records no payment.",
+                  "كل محاولة دفع أونلاين (زين كاش أو بطاقة Qi) تظهر هنا. المحاولة الفاشلة لا تسحب أي مبلغ ولا تُسجَّل تسديداً.",
+                  "Every online attempt (ZainCash or Qi Card) shows here. A failed attempt takes no money and records no payment.",
                 )}
               </p>
               <DataTable
@@ -211,7 +214,7 @@ export default function PaymentsPage() {
                     <span className="num">{p.number}</span> · {ago(p.date)}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    <MethodChip m={p.method} tr={tr} />
+                    <MethodChip m={p.method} tr={tr} gateway={p.gateway?.provider} />
                     {p.reversal_of && <Badge tone="danger">{tr("عملية عكسية", "Reverse entry")}</Badge>}
                   </div>
                 </div>

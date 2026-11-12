@@ -114,7 +114,7 @@ export function ClientLanding() {
           items={[
             { icon: Tag, t: tr("أسعار الجملة", "Wholesale prices"), c: C.main },
             { icon: MapPinned, t: tr("تتبّع مباشر", "Live tracking"), c: C.soft },
-            { icon: CreditCard, t: tr("دفع بكي كارد", "Pay with Qi Card"), c: C.soft },
+            { icon: CreditCard, t: tr("زين كاش وكي كارد", "ZainCash and Qi Card"), c: C.soft },
             { icon: FileText, t: tr("كشف حساب واضح", "A clear statement"), c: C.soft },
             { icon: PhoneOff, t: tr("بلا اتصالات", "No phone calls"), c: C.main },
             { icon: Printer, t: tr("فواتير تُطبع", "Printable invoices"), c: C.main },
@@ -164,7 +164,7 @@ export function ClientLanding() {
             items={[
               { q: tr("هل التسجيل مجاني فعلاً؟", "Is it really free?"), a: tr("نعم. لا رسوم تسجيل ولا اشتراك شهري، وتدفع فقط ثمن البضاعة التي تطلبها.", "Yes. No sign-up fee and no monthly fee: you pay only for the goods you order.") },
               { q: tr("كيف تُحدد أسعاري؟", "How are my prices set?"), a: tr("تراجع الشركة محلك وتضعه في نوع السعر المناسب (جملة، جملة كبيرة…)، وقد تكون لك أسعار خاصة ببعض المواد. ترى سعرك أنت فقط.", "The company checks your shop and gives it the right price tier, sometimes with special prices on some items. You see only your own price.") },
-              { q: tr("هل أستطيع الشراء بالآجل؟", "Can I buy on credit?"), a: tr("نعم، ضمن سقف دين تحدده الشركة لمحلك. ترى دينك والمتاح لك قبل أن تطلب، وتسدد نقداً للمندوب أو ببطاقة كي كارد من جوالك.", "Yes, within a debt limit the company sets for your shop. You see your debt and what is left before you order, and pay cash to the rep or with Qi Card.") },
+              { q: tr("هل أستطيع الشراء بالآجل؟", "Can I buy on credit?"), a: tr("نعم، ضمن سقف دين تحدده الشركة لمحلك. ترى دينك والمتاح لك قبل أن تطلب، وتسدد نقداً للمندوب أو بزين كاش أو ببطاقة كي كارد من جوالك.", "Yes, within a debt limit the company sets for your shop. You see your debt and what is left before you order, and pay cash to the rep, with ZainCash or with Qi Card.") },
               { q: tr("ماذا لو وصلت البضاعة ناقصة أو تالفة؟", "What if goods arrive short or damaged?"), a: tr("لا تعطِ رمز الاستلام. يُسجَّل ما سُلِّم فقط وتُصدر الفاتورة عليه، والباقي يبقى طلباً مفتوحاً أو يُلغى كما تريد.", "Don't give your PIN. Only what was delivered is recorded and invoiced; the rest stays an open order or is cancelled as you wish.") },
               { q: tr("هل أحتاج إلى تحميل تطبيق من المتجر؟", "Do I need to download an app?"), a: tr("لا. يعمل من المتصفح، ويمكنك وضعه على شاشة جوالك بأيقونته كأي تطبيق.", "No. It works in the browser, and you can put it on your home screen with its own icon.") },
             ]}

@@ -530,12 +530,15 @@ export type PayMethod = "cash" | "transfer" | "online";
 
 /** For an online payment: what the gateway told us. The full card number never reaches our site. */
 export interface GatewayInfo {
-  provider: "qi";
-  /** The gateway's own id for the payment (to find it in Qi's dashboard). */
+  provider: "qi" | "zaincash";
+  /** The gateway's own id for the payment (to find it in Qi's / ZainCash's dashboard). */
   payment_id: string;
-  /** Only the last 4 digits, like "**** 0000". */
+  /** Qi: only the last 4 digits ("**** 0000"). ZainCash: the wallet number, hidden in the middle. */
   card: string;
 }
+
+/** The online gateways: Qi Card (a card), ZainCash (a ZainCash wallet). */
+export type Gateway = "qi" | "zaincash";
 
 // ---------- Online payment (shaped like the Qi Card gateway, as in Project 1) ----------
 // Our server creates the payment, the customer pays on the gateway's own page and comes back.
@@ -544,6 +547,10 @@ export type OnlineStatus = "created" | "success" | "failed" | "authentication_fa
 
 export interface OnlinePayment {
   payment_id: string;
+  /** Which gateway (none = Qi Card, the older ones). */
+  provider?: Gateway;
+  /** The gateway's own id for it (ZainCash's transactionId). */
+  gateway_id?: string;
   customer_id: number;
   amount: number;
   status: OnlineStatus;
@@ -559,9 +566,11 @@ export interface OnlinePayment {
 export interface StartOnlinePayment {
   customer_id: number;
   amount: number;
+  /** Qi Card (default) or ZainCash. */
+  provider?: Gateway;
   /** Stops a double press from opening two payments. */
   key: string;
-  /** Where the gateway sends the customer back to (a page of our site). */
+  /** Where the gateway sends the customer back to (a page of our site, as a path: "/client/statement"). */
   return_url: string;
 }
 

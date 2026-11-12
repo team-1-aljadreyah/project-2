@@ -1,17 +1,18 @@
 "use client";
 
-// The shop owner pays his debt online with Qi Card, from his statement page:
+// The shop owner pays his debt online, with ZainCash (his wallet) or Qi Card (a card), from his statement page:
 // 1. PayOnlineCard: choose the amount → our server creates the payment → go to the gateway's page.
 // 2. OnlineReturn: back from the gateway with ?payment=…, ask our server until the result is final
 //    (coming back does not mean it worked: only the gateway's notification decides, like in Project 1).
 import { useSearchParams } from "next/navigation";
-import { useAppRouter } from "@/lib/app-path";
+import { inApp, useAppPath, useAppRouter } from "@/lib/app-path";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { CheckCircle2, CreditCard, Loader2, Lock, RotateCcw, X, XCircle } from "lucide-react";
+import { CheckCircle2, CreditCard, Loader2, Lock, RotateCcw, Wallet, X, XCircle } from "lucide-react";
 import { Button, Card, NumberInput, errorText } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import type { Customer } from "@/lib/api/types";
+import type { Customer, Gateway } from "@/lib/api/types";
+import { ZAINCASH } from "@/lib/zaincash";
 import { useFmt } from "@/lib/i18n";
 import { newClientRef } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
@@ -20,34 +21,40 @@ import { onlineStatusLabel } from "./pay-method";
 
 export function PayOnlineCard({ customer }: { customer: Customer }) {
   const { tr, money } = useFmt();
+  const { prefix } = useAppPath();
   const owed = Math.max(0, customer.balance ?? 0);
   const [amount, setAmount] = useState<number | "">(owed || "");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<Gateway | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (owed <= 0) return null;
+  const zcLow = amount !== "" && amount < ZAINCASH.min;
 
-  async function pay() {
+  async function pay(provider: Gateway) {
     if (!amount) return;
-    setBusy(true);
+    setBusy(provider);
     setError(null);
     try {
       // A new key for every attempt: after a failed try, "pay" again must open a NEW payment
       // (the same key would bring back the old, finished one). A double press is blocked by "busy".
-      const p = await api.startOnlinePayment({ customer_id: customer.id, amount, key: newClientRef(), return_url: "/statement" });
+      // The way back is this app's statement page (in the shop app: /client/statement).
+      const p = await api.startOnlinePayment({ customer_id: customer.id, amount, provider, key: newClientRef(), return_url: inApp(prefix, "/statement") });
       // The card is typed on the gateway's page, never on our site.
       window.location.assign(p.form_url);
     } catch (e) {
       setError(e instanceof ApiError && e.errors?.amount ? e.errors.amount : errorText(e, tr));
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
     <Card className="mb-4 overflow-hidden">
       <div className="flex flex-wrap items-center gap-3 border-b border-line bg-[#1a1a1a] px-4 py-3 text-white">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-[#f7c600] text-sm font-black text-black">Qi</span>
+        <span className="flex -space-x-2 rtl:space-x-reverse">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-[#6b2a8c] text-[10px] font-black text-white ring-2 ring-[#1a1a1a]">Zain</span>
+          <span className="flex size-9 items-center justify-center rounded-lg bg-[#f7c600] text-sm font-black text-black ring-2 ring-[#1a1a1a]">Qi</span>
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="font-bold">{tr("سدّد أونلاين ببطاقة Qi", "Pay online with Qi Card")}</p>
+          <p className="font-bold">{tr("سدّد أونلاين: زين كاش أو بطاقة Qi", "Pay online: ZainCash or Qi Card")}</p>
           <p className="text-xs opacity-75">{tr("يُسجَّل التسديد فوراً ويُخصم من أقدم فاتورة", "Recorded at once, applied to your oldest invoice")}</p>
         </div>
         <Lock className="size-4 opacity-70" />
@@ -70,9 +77,16 @@ export function PayOnlineCard({ customer }: { customer: Customer }) {
           </div>
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
         </div>
-        <Button variant="action" className="h-12 px-6" disabled={!amount || busy} onClick={pay}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />} {tr("ادفع عبر Qi", "Pay with Qi")}
-        </Button>
+        <div className="flex flex-col gap-2 sm:w-56">
+          {/* ZainCash: from the customer's wallet, on ZainCash's own page (sandbox in the demo). */}
+          <Button className="h-12 border-0 bg-[#6b2a8c] px-6 text-white hover:bg-[#5a2276]" disabled={!amount || !!busy || zcLow} onClick={() => pay("zaincash")}>
+            {busy === "zaincash" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />} {tr("ادفع بزين كاش", "Pay with ZainCash")}
+          </Button>
+          <Button variant="action" className="h-12 px-6" disabled={!amount || !!busy} onClick={() => pay("qi")}>
+            {busy === "qi" ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />} {tr("ادفع ببطاقة Qi", "Pay with Qi Card")}
+          </Button>
+          {zcLow && <p className="text-[11px] text-muted">{tr(`زين كاش من ${money(ZAINCASH.min)} فأكثر`, `ZainCash from ${money(ZAINCASH.min)}`)}</p>}
+        </div>
       </div>
     </Card>
   );
@@ -99,9 +113,18 @@ function ReturnBanner({ id }: { id: string }) {
   }, [status, p.reload]);
 
   const close = () => router.replace("/statement");
-  if (p.state.status === "error") return null;
   const ok = status === "success";
   const waiting = !status || status === "created";
+  const zc = p.data?.provider === "zaincash";
+  const gw = zc ? tr("زين كاش", "ZainCash") : "Qi";
+  // ZainCash waits up to 15 minutes for the customer: back here without paying, he can finish it or leave it.
+  const [long, setLong] = useState(false);
+  useEffect(() => {
+    if (!zc || !waiting) return;
+    const t = setTimeout(() => setLong(true), 20000);
+    return () => clearTimeout(t);
+  }, [zc, waiting]);
+  if (p.state.status === "error") return null;
 
   return (
     <motion.div
@@ -115,15 +138,28 @@ function ReturnBanner({ id }: { id: string }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-bold">
-          {waiting ? tr("نتحقق من الدفع مع Qi…", "Checking the payment with Qi…") : ok ? tr("تم الدفع بنجاح", "Payment succeeded") : tr("لم يتم الدفع", "The payment didn't go through")}
+          {waiting ? tr(`نتحقق من الدفع مع ${gw}…`, `Checking the payment with ${gw}…`) : ok ? tr("تم الدفع بنجاح", "Payment succeeded") : tr("لم يتم الدفع", "The payment didn't go through")}
         </p>
         <p className="text-sm text-muted">
           {waiting
             ? tr("لحظات فقط. لا تغلق الصفحة.", "Just a moment. Don't close the page.")
             : ok
               ? tr(`سُجّل تسديد ${money(p.data!.amount)} وخُصم من أقدم فواتيرك.`, `${money(p.data!.amount)} was recorded and applied to your oldest invoices.`)
-              : tr(`${onlineStatusLabel(status!, tr)}. لم يُسحب أي مبلغ من بطاقتك، ويمكنك المحاولة مرة أخرى.`, `${onlineStatusLabel(status!, tr)}. Nothing was taken from your card; you can try again.`)}
+              : zc
+                ? tr(`${onlineStatusLabel(status!, tr)}. لم يُسحب أي مبلغ من محفظتك، ويمكنك المحاولة مرة أخرى.`, `${onlineStatusLabel(status!, tr)}. Nothing was taken from your wallet; you can try again.`)
+                : tr(`${onlineStatusLabel(status!, tr)}. لم يُسحب أي مبلغ من بطاقتك، ويمكنك المحاولة مرة أخرى.`, `${onlineStatusLabel(status!, tr)}. Nothing was taken from your card; you can try again.`)}
         </p>
+        {waiting && long && p.data && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted">{tr("لم تُكمل الدفع بعد في زين كاش.", "You haven't finished paying at ZainCash yet.")}</span>
+            <Button size="sm" className="border-0 bg-[#6b2a8c] text-white hover:bg-[#5a2276]" href={p.data.form_url}>
+              {tr("أكمل الدفع في زين كاش", "Finish at ZainCash")}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={close}>
+              {tr("إلغاء", "Cancel")}
+            </Button>
+          </div>
+        )}
         {!waiting && !ok && (
           <Button size="sm" className="mt-2" onClick={close}>
             <RotateCcw className="size-3.5" /> {tr("حاول مرة أخرى", "Try again")}
