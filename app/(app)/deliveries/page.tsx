@@ -229,6 +229,8 @@ export default function DeliveriesPage() {
                         <span className="num" dir="ltr">
                           {o.number}
                         </span>
+                        {/* Which vehicle carries it (a big order's load says so in its number: ORD-…/2). */}
+                        {o.delivery?.vehicle && <> · {o.delivery.vehicle.name}</>}
                       </p>
                       {c?.address_info?.lat !== undefined && (
                         <a

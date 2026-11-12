@@ -29,7 +29,8 @@ export default function OrdersPage() {
   const cName = (id: number) => customers.data?.find((c) => c.id === id)?.name ?? `#${id}`;
   const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
   const wh = useWarehouseFilter();
-  const all = (orders.data ?? []).filter((o) => inWarehouse(wh, o.warehouse_id));
+  // A vehicle's shipment of a big order is shown on that order's page, not as an order of its own.
+  const all = (orders.data ?? []).filter((o) => inWarehouse(wh, o.warehouse_id) && !o.shipment_of);
   const count = (f: Filter) => all.filter((o) => pass(o, f)).length;
   const rows = all.filter((o) => pass(o, filter) && matches(q, o.number, cName(o.customer_id), rName(o.rep_id)));
   const canCreate = user.role === "rep" || user.role === "manager";
@@ -40,7 +41,16 @@ export default function OrdersPage() {
     { key: "r", head: tr("المندوب", "Rep"), cell: (o) => rName(o.rep_id), hideOnMobile: true },
     { key: "s", head: tr("المصدر", "Source"), cell: (o) => <SourceBadge source={o.source} /> },
     { key: "t", head: tr("المبلغ", "Amount"), cell: (o) => <Money value={o.total} className="font-medium" />, align: "end" },
-    { key: "st", head: tr("الحالة", "Status"), cell: (o) => <OrderStatusBadge status={o.status} waiting={o.waiting_stock} /> },
+    {
+      key: "st",
+      head: tr("الحالة", "Status"),
+      cell: (o) => (
+        <span className="flex flex-wrap items-center gap-1">
+          <OrderStatusBadge status={o.status} waiting={o.waiting_stock} />
+          {!!o.shipments?.length && <span className="rounded-md bg-card-2 px-1.5 py-0.5 text-[11px] font-semibold text-muted">{tr(`${o.shipments.length} دفعات`, `${o.shipments.length} loads`)}</span>}
+        </span>
+      ),
+    },
     { key: "d", head: tr("الوقت", "Time"), cell: (o) => <span className="text-muted">{dateTime(o.created_at)}</span> },
   ];
 

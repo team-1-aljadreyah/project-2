@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ClipboardCheck, Plus } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
+import { inWarehouse, useMyWarehouses, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Badge, Button, Card, DataTable, Dialog, Empty, ErrorBox, Field, LoadingRows, PageHeader, Select, errorText, useToast, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Stocktake } from "@/lib/api/types";
@@ -19,6 +19,7 @@ export default function StocktakesPage() {
   const list = useLoad(() => api.listStocktakes(), []);
   const whF = useWarehouseFilter();
   const [open, setOpen] = useState(false);
+  const mine = useMyWarehouses();
   const [wh, setWh] = useState(user.warehouse_id ?? lookups.warehouses[0].id);
   const [cat, setCat] = useState("");
   const [busy, setBusy] = useState(false);
@@ -81,8 +82,8 @@ export default function StocktakesPage() {
         }
       >
         <Field label={tr("المخزن", "Warehouse")} hint={tr("النظام يحفظ الكميات الحالية، وأنت تكتب الموجود فعلاً على الرف", "The system saves current quantities; you write what is really on the shelf")}>
-          <Select value={wh} onChange={(e) => setWh(Number(e.target.value))} disabled={user.role === "warehouse"}>
-            {lookups.warehouses.map((w) => (
+          <Select value={wh} onChange={(e) => setWh(Number(e.target.value))} disabled={!!mine && mine.length < 2}>
+            {lookups.warehouses.filter((w) => !mine || mine.includes(w.id)).map((w) => (
               <option key={w.id} value={w.id}>
                 {name(w)}
               </option>

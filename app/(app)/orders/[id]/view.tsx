@@ -7,7 +7,7 @@ import { useApp } from "@/components/shell";
 import { OrderStatusBadge, SourceBadge } from "@/components/status";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, RefLink, Textarea, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { Batch } from "@/lib/api/types";
+import { worksIn, type Batch } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
@@ -16,6 +16,7 @@ import { ShipmentTracker, useRepLocations } from "@/components/delivery/live-map
 import { OrderTotals } from "@/components/discount";
 import { editOrderInBag } from "@/components/shop-store";
 import { PrepareOrder } from "@/components/prepare-order";
+import { ShipmentsCard, VehicleBox } from "@/components/vehicles";
 import { piecesOf, useIdParam } from "@/lib/utils";
 
 export default function OrderView() {
@@ -49,9 +50,9 @@ export default function OrderView() {
   const canAccept = ["manager", "accountant"].includes(user.role) && (o.status === "pending" || o.status === "expired");
   // A keeper prepares only his own warehouse: the order of his warehouse (deciding where each line comes from),
   // or his part of an order split with the other warehouse. The manager can do any part.
-  const myPartWaits = !!o.prep_parts?.some((p) => !p.prepared_by && (user.role === "manager" || p.warehouse_id === user.warehouse_id));
+  const myPartWaits = !!o.prep_parts?.some((p) => !p.prepared_by && (user.role === "manager" || worksIn(user, p.warehouse_id, lookups.warehouses)));
   const canPrepare =
-    o.status === "approved" && !o.delivery && (o.prep_parts ? myPartWaits : user.role === "manager" || (user.role === "warehouse" && (!user.warehouse_id || user.warehouse_id === o.warehouse_id)));
+    o.status === "approved" && !o.delivery && !o.shipments?.length && (o.prep_parts ? myPartWaits : user.role === "manager" || (user.role === "warehouse" && worksIn(user, o.warehouse_id, lookups.warehouses)));
   const canApprove = user.role === "manager" && o.status === "needs_approval";
   const canCancel = (beforeDelivery && (user.role === "manager" || user.role === "accountant")) || (open && o.created_by.id === user.id);
   const canEditDiscount = open && (user.role === "manager" || (user.role === "rep" && o.rep_id === user.id) || user.role === "accountant");
@@ -157,7 +158,16 @@ export default function OrderView() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
+          {o.shipment_of && (
+            <Notice tone="primary" href={`/orders/${o.shipment_of}`} title={tr(`الدفعة ${o.shipment_no} من طلب أكبر`, `Load ${o.shipment_no} of a bigger order`)}>
+              {tr("الطلب حُمّل على أكثر من سيارة، وهذه حمولة سيارة واحدة منه، لها رمز استلامها وفاتورتها.", "The order went on more than one vehicle; this is one vehicle's load, with its own PIN and invoice.")}
+            </Notice>
+          )}
+          {!!o.shipments?.length && <ShipmentsCard order={o} />}
           {o.delivery && <DeliveryPanel order={o} role={user.role} shop={c?.name ?? ""} rep={o.delivery.rep?.name ?? rep?.name ?? ""} area={c?.area} />}
+          {o.delivery && user.role !== "shop" && user.role !== "rep" && (
+            <VehicleBox order={o} canPlan={user.role === "manager" || ((user.role === "warehouse" || user.role === "staff") && worksIn(user, o.warehouse_id, lookups.warehouses))} onDone={order.reload} />
+          )}
           {o.delivery?.status === "out" && c && <ShipmentTracker order={o} shop={c} warehouse={wh} live={locations[o.delivery.rep?.id ?? o.rep_id]} />}
           {o.status === "needs_approval" && (
             <Notice
@@ -203,7 +213,9 @@ export default function OrderView() {
           )}
           {o.status === "approved" && (
             <Notice tone="primary" title={tr(`معتمد${o.accepted_by ? ` · ${o.accepted_by.name}` : ""}`, `Approved${o.accepted_by ? ` · ${o.accepted_by.name}` : ""}`)}>
-              {!o.delivery
+              {o.shipments?.length
+                ? tr(`جُهّز ووُزّع على ${o.shipments.length} سيارات: يُسلَّم على دفعات، ولكل دفعة فاتورتها.`, `Prepared and split across ${o.shipments.length} vehicles: delivered in loads, each with its invoice.`)
+                : !o.delivery
                 ? tr("البضاعة محجوزة له حتى التسليم، وينتظر أن يجهزه المخزن.", "The goods are held until delivery; the warehouse prepares it.")
                 : tr("جُهّز. تصدر الفاتورة ويثبت الدين عند التسليم للمحل.", "Prepared. The invoice and the debt come at delivery.")}
             </Notice>

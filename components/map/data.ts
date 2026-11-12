@@ -53,7 +53,7 @@ export interface Person {
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const isOpen = (o: Order) => o.status === "pending" || o.status === "needs_approval" || (o.status === "approved" && !o.delivery);
+const isOpen = (o: Order) => o.status === "pending" || o.status === "needs_approval" || (o.status === "approved" && !o.delivery && !o.shipments?.length);
 
 export function buildMap({
   items,

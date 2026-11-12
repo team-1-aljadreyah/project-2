@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { useMyWarehouses } from "@/components/warehouse-filter";
 import { Button, Card, Field, Input, LoadingRows, Money, NumberInput, Notice, PageHeader, Segmented, Select, errorText, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { SupplyOrder, Unit } from "@/lib/api/types";
@@ -44,6 +45,7 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useRouter();
   const toast = useToast();
+  const mine = useMyWarehouses();
   const [warehouse, setWarehouse] = useState<number>(supply?.warehouse_id ?? user.warehouse_id ?? lookups.warehouses[0].id);
   const [supplier, setSupplier] = useState(supply?.supplier ?? "");
   // From a supply order: one line per item still missing (the keeper adds the expiry date and checks the count).
@@ -105,8 +107,8 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
       )}
       <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-2">
         <Field label={tr("المخزن", "Warehouse")}>
-          <Select value={warehouse} onChange={(e) => setWarehouse(Number(e.target.value))} disabled={user.role === "warehouse"}>
-            {lookups.warehouses.map((w) => (
+          <Select value={warehouse} onChange={(e) => setWarehouse(Number(e.target.value))} disabled={!!mine && mine.length < 2}>
+            {lookups.warehouses.filter((w) => !mine || mine.includes(w.id)).map((w) => (
               <option key={w.id} value={w.id}>
                 {name(w)}
               </option>

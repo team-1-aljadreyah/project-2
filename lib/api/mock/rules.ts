@@ -3,7 +3,8 @@
 // The real backend must do the same things (see the client's requirements).
 import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
-import { DISCOUNT_MAX, SHOP_MAX_QTY, STAFF_DISCOUNT_MAX, orderCount } from "../types";
+import { DISCOUNT_MAX, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type ShipmentLoad, type Vehicle } from "../types";
+import { linesWeight } from "../vehicles";
 import type {
   AppNotification,
   RegisterInput,
@@ -128,7 +129,7 @@ export function shelfQty(db: Db, itemId: number, warehouseId: number) {
 }
 
 const holdsStock = (o: Order, nowIso: string) =>
-  o.status === "approved" || ((o.status === "pending" || o.status === "needs_approval") && !!o.reserved_until && o.reserved_until > nowIso);
+  (o.status === "approved" && !o.shipments?.length) || ((o.status === "pending" || o.status === "needs_approval") && !!o.reserved_until && o.reserved_until > nowIso);
 
 /** Pieces held by orders that are not confirmed yet. */
 export function reservedQty(db: Db, itemId: number, warehouseId: number | undefined, nowIso: string, exceptOrderId?: number) {
@@ -337,7 +338,7 @@ export function sweep(db: Db, now: Date) {
 
 export function createReceipt(db: Db, actor: DbUser, input: NewReceipt, now: Date): Receipt {
   need(actor, ["manager", "warehouse"]);
-  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== input.warehouse_id) {
+  if (actor.role === "warehouse" && !worksIn(actor, input.warehouse_id)) {
     fail(403, "FORBIDDEN", "تستطيع الاستلام في مخزنك فقط", "You can only receive into your own warehouse");
   }
   const errors: Record<string, string> = {};
@@ -458,9 +459,6 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     fail(409, "BAD_STATE", "حساب هذا الزبون موقوف", "This customer is not active");
   }
 
-  if (actor.role === "shop" && orderCount(input.lines) > SHOP_MAX_QTY) {
-    fail(422, "VALIDATION", `الحد الأعلى للطلب الواحد ${SHOP_MAX_QTY} (كل المواد معاً)`, `Up to ${SHOP_MAX_QTY} in one order (all items together)`);
-  }
   const warehouseId = input.warehouse_id ?? db.warehouses[0].id;
   // The price is fixed when the order is recorded (offline: the moment on the rep's phone, at most 3 days back).
   const recordedAt = input.recorded_at && input.recorded_at < now.toISOString() && input.recorded_at > new Date(now.getTime() - 3 * 86_400_000).toISOString() ? input.recorded_at : undefined;
@@ -662,7 +660,7 @@ export function setSpecialPrice(db: Db, actor: DbUser, customerId: number, itemI
 export function holdBatch(db: Db, actor: DbUser, batchId: number, reason: string, now: Date) {
   need(actor, ["manager", "warehouse"]);
   const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
-  if (actor.role === "warehouse" && actor.warehouse_id && b.warehouse_id !== actor.warehouse_id) fail(403, "FORBIDDEN", "هذه الدفعة في مخزن آخر: يوقفها أمينه أو المدير", "This batch is in another warehouse");
+  if (actor.role === "warehouse" && !worksIn(actor, b.warehouse_id)) fail(403, "FORBIDDEN", "هذه الدفعة في مخزن آخر: يوقفها أمينه أو المدير", "This batch is in another warehouse");
   if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب الإيقاف", "Write the reason", { reason: msg("السبب مطلوب", "Required") });
   const item = itemOf(db, b.item_id);
   // The same batch number may sit in both warehouses (a transfer splits it): stop every part of it.
@@ -685,7 +683,7 @@ export function releaseBatch(db: Db, actor: DbUser, batchId: number, now: Date) 
 export function traceBatch(db: Db, actor: DbUser, batchId: number) {
   need(actor, ["manager", "warehouse", "accountant"]);
   const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
-  if (actor.role === "warehouse" && actor.warehouse_id && b.warehouse_id !== actor.warehouse_id) fail(403, "FORBIDDEN", "هذه الدفعة في مخزن آخر", "This batch is in another warehouse");
+  if (actor.role === "warehouse" && !worksIn(actor, b.warehouse_id)) fail(403, "FORBIDDEN", "هذه الدفعة في مخزن آخر", "This batch is in another warehouse");
   const ids = new Set(db.batches.filter((x) => x.id === b.id || (x.item_id === b.item_id && x.expiry_date === b.expiry_date && x.receipt_id && x.receipt_id === b.receipt_id)).map((x) => x.id));
   const out: BatchTrace[] = [];
   for (const inv of db.invoices) {
@@ -758,9 +756,6 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
   if (o.status !== "pending" && o.status !== "needs_approval") fail(409, "BAD_STATE", "ثُبّت الطلب أو أُلغي، ولا يمكن تعديله الآن", "The order was confirmed or cancelled; it can't change now");
   const wanted = (input.lines ?? []).filter((l) => l.qty > 0);
   if (!wanted.length) fail(422, "VALIDATION", "الطلب فارغ. لإلغائه استخدم زر الإلغاء", "The order is empty. To drop it, cancel it");
-  if (actor.role === "shop" && orderCount(wanted) > SHOP_MAX_QTY) {
-    fail(422, "VALIDATION", `الحد الأعلى للطلب الواحد ${SHOP_MAX_QTY} (كل المواد معاً)`, `Up to ${SHOP_MAX_QTY} in one order (all items together)`);
-  }
   const customer = db.customers.find((c) => c.id === o.customer_id)!;
   const lines = orderLines(db, customer.tier_id, wanted, customer.id);
   // Its own held stock doesn't count against it.
@@ -851,6 +846,22 @@ export function cancelOrder(db: Db, actor: DbUser, id: number, reason: string, n
   o.cancel_reason = reason.trim();
   // Before delivery nothing was owed: the held goods simply go back to the stock.
   delete o.delivery;
+  // A big order on several vehicles: its shipments not delivered yet are cancelled with it (the delivered ones stay).
+  if (o.shipments?.length) {
+    let delivered = false;
+    for (const sid of o.shipments) {
+      const part = db.orders.find((x) => x.id === sid);
+      if (!part) continue;
+      if (part.status === "confirmed") delivered = true;
+      else if (part.status !== "cancelled") {
+        part.status = "cancelled";
+        part.cancel_reason = o.cancel_reason;
+        delete part.delivery;
+      }
+    }
+    if (delivered) o.status = "confirmed";
+  }
+  syncShipments(db, o);
   audit(db, actor, "cancel", "order", o.id, `${wasWaiting && actor.role === "manager" ? "رفض" : "إلغاء"} الطلب ${o.number}: ${o.cancel_reason}`, `Cancelled ${o.number}: ${o.cancel_reason}`, now);
   const owner = shopOwnerOf(db, o.customer_id);
   const n = {
@@ -894,7 +905,7 @@ export function acceptOrder(db: Db, actor: DbUser, id: number, now: Date): Order
 export function prepPlan(db: Db, actor: DbUser, id: number, now: Date): PrepLine[] {
   need(actor, ["warehouse", "manager"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
-  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== o.warehouse_id && !o.prep_parts?.some((p) => p.warehouse_id === actor.warehouse_id)) {
+  if (actor.role === "warehouse" && !worksIn(actor, o.warehouse_id) && !o.prep_parts?.some((p) => worksIn(actor, p.warehouse_id))) {
     fail(403, "FORBIDDEN", "هذا الطلب من مخزن آخر", "This order is for another warehouse");
   }
   const today = dayOf(now);
@@ -919,14 +930,15 @@ export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Reco
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status !== "approved") fail(409, "BAD_STATE", o.status === "pending" ? "الطلب لم يُعتمد بعد: يعتمده المحاسب أو المدير" : "الطلب ليس معتمداً للتجهيز", "The order isn't approved for preparing");
   if (o.delivery) fail(409, "BAD_STATE", "جُهّز هذا الطلب من قبل", "This order is already prepared");
-  const keeperWh = actor.role === "warehouse" ? actor.warehouse_id : undefined;
+  // The warehouses this keeper works in now: his own, and one he covers for an absent keeper.
+  const keeperWhs = actor.role === "warehouse" ? workWarehouses(actor) : undefined;
   const whName = (wid: number) => db.warehouses.find((w) => w.id === wid)?.name ?? "";
 
   let decided = false;
   if (!o.prep_parts) {
     decided = true;
     // Deciding where each line comes from: the keeper of the order's own warehouse (or the manager).
-    if (keeperWh && keeperWh !== o.warehouse_id) fail(403, "FORBIDDEN", "يجهّز هذا الطلب أمين مخزنه", "The keeper of this order's warehouse prepares it");
+    if (keeperWhs && !keeperWhs.includes(o.warehouse_id)) fail(403, "FORBIDDEN", "يجهّز هذا الطلب أمين مخزنه", "The keeper of this order's warehouse prepares it");
     const ids = new Set(db.warehouses.map((w) => w.id));
     const next = o.lines.map((l) => ({ ...l, warehouse_id: ids.has(warehouses?.[l.item_id]) ? warehouses[l.item_id] : (l.warehouse_id ?? o.warehouse_id) }));
     // Enough free stock in each chosen warehouse (its own hold doesn't count against it).
@@ -940,14 +952,14 @@ export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Reco
   }
 
   // Which parts this person prepares now: a keeper only his own warehouse's part; the manager every open part.
-  const mine = o.prep_parts.filter((p) => !p.prepared_by && (!keeperWh || p.warehouse_id === keeperWh));
+  const mine = o.prep_parts.filter((p) => !p.prepared_by && (!keeperWhs || keeperWhs.includes(p.warehouse_id)));
   // He put every line on the other warehouse: his decision is saved, and that keeper prepares it.
   if (!mine.length && decided) {
     audit(db, actor, "update", "order", o.id, `${o.number} يُجهَّز من ${o.prep_parts.map((p) => whName(p.warehouse_id)).join(" + ")}`, `${o.number} goes to the other warehouse`, now);
     notify(db, { type: "order_accepted", roles: ["warehouse"], title: `${o.number} ينتظر تجهيزك`, title_en: `${o.number} waits for you`, body: `من ${o.prep_parts.map((p) => whName(p.warehouse_id)).join(" + ")}`, body_en: o.number, link: `/orders/${o.id}` }, now);
     return o;
   }
-  if (!mine.length) fail(403, "FORBIDDEN", keeperWh ? "لا يوجد جزء من هذا الطلب في مخزنك ينتظر التجهيز" : "جُهّزت كل الأجزاء", "Nothing of this order waits in your warehouse");
+  if (!mine.length) fail(403, "FORBIDDEN", keeperWhs ? "لا يوجد جزء من هذا الطلب في مخزنك ينتظر التجهيز" : "جُهّزت كل الأجزاء", "Nothing of this order waits in your warehouse");
   for (const p of mine) Object.assign(p, { prepared_by: person(actor), at: now.toISOString() });
   audit(db, actor, "update", "order", o.id, `تجهيز ${o.number} من ${mine.map((p) => whName(p.warehouse_id)).join(" + ")}`, `Prepared ${o.number}`, now);
 
@@ -961,7 +973,146 @@ export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Reco
   o.delivery = newDelivery();
   const carrier = deliveryRepFor(db, o.rep_id);
   if (carrier) o.delivery.rep = person(carrier);
+  // The vehicle of that delivery rep carries it. Too heavy for it: the warehouse and the manager are told,
+  // and the order page suggests how to split it across vehicles (it stays one order for the shop).
+  const vehicle = vehiclesOf(db).find((v) => v.active && v.driver_id === carrier?.id);
+  if (vehicle) o.delivery.vehicle = { id: vehicle.id, name: vehicle.name };
+  const kg = linesWeight(o.lines, (id) => db.items.find((i) => i.id === id));
+  if (vehicle && kg > vehicle.capacity_kg) {
+    const n = {
+      type: "order_accepted" as const,
+      title: `${o.number} أثقل من حمولة ${vehicle.name}`,
+      title_en: `${o.number} is heavier than ${vehicle.name}'s load`,
+      body: `${Math.round(kg)} كغم والحمولة ${vehicle.capacity_kg} كغم: وزّعه على أكثر من سيارة من صفحة الطلب.`,
+      body_en: `${Math.round(kg)} kg for a ${vehicle.capacity_kg} kg load: split it across vehicles from the order page.`,
+      link: `/orders/${o.id}`,
+    };
+    notify(db, { ...n, roles: ["warehouse"] }, now);
+    notify(db, { ...n, roles: ["manager"] }, now);
+  }
   return o;
+}
+
+// ---------- Vehicles: the load of each, and a big order on more than one ----------
+
+/** The delivery vehicles (an older copy of the data has none yet: three default ones, one per delivery rep). */
+export function vehiclesOf(db: Db): Vehicle[] {
+  if (!db.vehicles) {
+    const drivers = db.users.filter((u) => u.role === "rep" && (!u.rep_kinds?.length || u.rep_kinds.includes("delivery")));
+    const kinds: [string, string, number][] = [
+      ["كيا بونكو 1", "12345 كربلاء", 1500],
+      ["كيا بونكو 2", "23456 كربلاء", 1500],
+      ["إيسوزو 4 طن", "34567 كربلاء", 4000],
+    ];
+    db.vehicles = kinds.map(([name, plate, capacity_kg], i) => ({ id: i + 1, name, plate, capacity_kg, driver_id: drivers[i]?.id, active: true }));
+  }
+  return db.vehicles;
+}
+
+/**
+ * Put a prepared order on vehicles (before it is loaded).
+ * - One load: that vehicle (and its driver) carries the whole order.
+ * - More: the order becomes one shipment per vehicle, each an order of its own (`shipment_of`) with its own label,
+ *   PIN, delivery rep and, at delivery, its own invoice. The shop keeps seeing this one order.
+ * Every load must fit its vehicle's maximum load, and together they carry exactly the order.
+ */
+export function planShipments(db: Db, actor: DbUser, id: number, loads: ShipmentLoad[], now: Date): Order {
+  need(actor, ["manager", "warehouse", "staff"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if ((actor.role === "warehouse" || actor.role === "staff") && !worksIn(actor, o.warehouse_id)) fail(403, "FORBIDDEN", "هذا الطلب من مخزن آخر", "This order is from another warehouse");
+  const d = o.delivery;
+  if (!d || d.status !== "ready") fail(409, "BAD_STATE", "يُوزَّع الطلب على السيارات بعد تجهيزه وقبل خروجه", "An order is put on vehicles after it is prepared and before it leaves");
+  if (d.loaded_at) fail(409, "BAD_STATE", "حُمّلت الشحنة من قبل: لا يمكن توزيعها الآن", "The shipment is already loaded");
+  const vehicles = vehiclesOf(db);
+  const itemOf = (iid: number) => db.items.find((i) => i.id === iid);
+  const clean = loads.map((l) => ({ vehicle_id: l.vehicle_id, lines: l.lines.filter((x) => x.qty > 0) })).filter((l) => l.lines.length);
+  if (!clean.length) fail(422, "VALIDATION", "ضع الطلب على سيارة واحدة على الأقل", "Put the order on one vehicle at least");
+  if (new Set(clean.map((l) => l.vehicle_id)).size !== clean.length) fail(422, "VALIDATION", "سيارة مكررة: اجمع حمولتها في سطر واحد", "A vehicle twice: put its load in one place");
+  // Together the loads carry exactly the order: every line, all of it.
+  for (const l of o.lines) {
+    const put = clean.reduce((s, x) => s + x.lines.filter((y) => y.item_id === l.item_id && y.unit === l.unit).reduce((a, y) => a + y.qty, 0), 0);
+    if (put !== l.qty) fail(422, "VALIDATION", `${itemOf(l.item_id)?.name ?? ""}: وُزّع ${put} من ${l.qty}`, `${itemOf(l.item_id)?.name_en ?? ""}: ${put} of ${l.qty} placed`);
+  }
+  for (const x of clean) for (const y of x.lines) if (!o.lines.some((l) => l.item_id === y.item_id && l.unit === y.unit)) fail(422, "VALIDATION", "مادة ليست في الطلب", "An item that isn't in the order");
+  // Each load fits its vehicle (its maximum load set by the manager).
+  for (const x of clean) {
+    const v = vehicles.find((y) => y.id === x.vehicle_id && y.active) ?? fail(422, "VALIDATION", "سيارة غير موجودة أو موقوفة", "Unknown or stopped vehicle");
+    const kg = linesWeight(x.lines, itemOf);
+    if (kg > v.capacity_kg) {
+      fail(422, "VALIDATION", `${v.name} لا تتسع: ${Math.round(kg)} كغم والحمولة القصوى ${v.capacity_kg} كغم. أضف سيارة ثانية.`, `${v.name} is full: ${Math.round(kg)} kg for a ${v.capacity_kg} kg load. Add another vehicle.`);
+    }
+  }
+  const driverOf = (v: Vehicle) => (v.driver_id ? db.users.find((u) => u.id === v.driver_id && u.active) : undefined);
+
+  if (clean.length === 1) {
+    const v = vehicles.find((y) => y.id === clean[0].vehicle_id)!;
+    d.vehicle = { id: v.id, name: v.name };
+    const driver = driverOf(v);
+    if (driver) d.rep = person(driver);
+    audit(db, actor, "update", "order", o.id, `${o.number} على ${v.name}${driver ? ` مع ${driver.name}` : ""}`, `${o.number} on ${v.name}`, now);
+    return o;
+  }
+
+  // More than one vehicle: one shipment (an order of its own) per vehicle.
+  const priceOf = (iid: number, unit: string) => o.lines.find((l) => l.item_id === iid && l.unit === unit)!;
+  o.shipments = clean.map((x, k) => {
+    const v = vehicles.find((y) => y.id === x.vehicle_id)!;
+    const driver = driverOf(v);
+    const sid = nextId(db, "order");
+    const lines = x.lines.map((y) => {
+      const base = priceOf(y.item_id, y.unit);
+      return { ...base, qty: y.qty, total: y.qty * base.unit_price };
+    });
+    const sub = lines.reduce((a, l) => a + l.total, 0);
+    const delivery = newDelivery();
+    delivery.vehicle = { id: v.id, name: v.name };
+    delivery.rep = driver ? person(driver) : d.rep;
+    const part: Order = {
+      id: sid,
+      number: `${o.number}/${k + 1}`,
+      client_ref: `${o.client_ref}-s${k + 1}`,
+      customer_id: o.customer_id,
+      rep_id: o.rep_id,
+      warehouse_id: o.warehouse_id,
+      source: o.source,
+      status: "approved",
+      lines,
+      total: sub,
+      ...(o.discount ? { discount: { ...o.discount, amount: Math.round((sub * o.discount.percent) / 100) }, subtotal: sub } : {}),
+      shipment_of: o.id,
+      shipment_no: k + 1,
+      accepted_by: o.accepted_by,
+      accepted_at: o.accepted_at,
+      prep_parts: o.prep_parts,
+      delivery,
+      note: o.note,
+      created_at: now.toISOString(),
+      created_by: person(actor),
+    };
+    setTotal(part, sub - (part.discount?.amount ?? 0));
+    db.orders.push(part);
+    if (delivery.rep) {
+      notify(db, { type: "order_accepted", roles: ["rep"], user_id: delivery.rep.id, title: `شحنة جديدة لك: ${part.number}`, title_en: `A new shipment for you: ${part.number}`, body: `على ${v.name} · ${Math.round(linesWeight(lines, itemOf))} كغم`, body_en: `On ${v.name}`, link: "/deliveries" }, now);
+    }
+    return sid;
+  });
+  delete o.delivery;
+  const names = clean.map((x) => vehicles.find((y) => y.id === x.vehicle_id)!.name).join(" + ");
+  audit(db, actor, "update", "order", o.id, `توزيع ${o.number} على ${clean.length} سيارات: ${names}`, `${o.number} split across ${clean.length} vehicles`, now);
+  const owner = shopOwnerOf(db, o.customer_id);
+  if (owner) {
+    notify(db, { type: "order_accepted", roles: ["shop"], user_id: owner.id, title: `طلبك ${o.number} يصلك على ${clean.length} دفعات`, title_en: `Your order ${o.number} comes in ${clean.length} loads`, body: "كل دفعة لها رمز استلام وفاتورة خاصة بها.", body_en: "Each load has its own PIN and invoice.", link: `/orders/${o.id}` }, now);
+  }
+  return o;
+}
+
+/** A shipment was delivered or cancelled: the big order it belongs to is done when all of them are. */
+export function syncShipments(db: Db, part: Order) {
+  if (!part.shipment_of) return;
+  const parent = db.orders.find((x) => x.id === part.shipment_of);
+  if (!parent?.shipments) return;
+  const all = parent.shipments.map((sid) => db.orders.find((x) => x.id === sid)).filter((x): x is Order => !!x);
+  if (all.every((x) => x.status === "confirmed" || x.status === "cancelled")) parent.status = all.some((x) => x.status === "confirmed") ? "confirmed" : "cancelled";
 }
 
 /** At delivery: the invoice for what the shop took, the stock leaves (oldest expiry first), the debt counts. */
@@ -1008,7 +1159,7 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status === "needs_approval") fail(409, "BAD_STATE", "الطلب يحتاج موافقة المدير أولاً", "The manager must approve this order first");
   if (o.status !== "pending" && o.status !== "expired" && o.status !== "approved") fail(409, "BAD_STATE", "الطلب ليس بانتظار التثبيت", "This order isn't waiting for confirmation");
-  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== o.warehouse_id) {
+  if (actor.role === "warehouse" && !worksIn(actor, o.warehouse_id)) {
     fail(403, "FORBIDDEN", "هذا الطلب من مخزن آخر", "This order is for another warehouse");
   }
   // An expired reservation is checked again: the stock may be gone now.
@@ -1321,7 +1472,7 @@ export function createTransfer(db: Db, actor: DbUser, input: NewTransfer, now: D
   if (input.from_warehouse_id === input.to_warehouse_id) {
     fail(422, "VALIDATION", "اختر مخزنين مختلفين", "Choose two different warehouses", { to_warehouse_id: msg("نفس المخزن", "Same warehouse") });
   }
-  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== input.from_warehouse_id) {
+  if (actor.role === "warehouse" && !worksIn(actor, input.from_warehouse_id)) {
     fail(403, "FORBIDDEN", "تستطيع التحويل من مخزنك فقط", "You can only transfer out of your own warehouse");
   }
   const lines = input.lines.filter((l) => l.qty > 0);
@@ -1369,7 +1520,7 @@ export function receiveTransfer(db: Db, actor: DbUser, id: number, received: Rec
   need(actor, ["warehouse", "manager"]);
   const t = db.transfers.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "التحويل غير موجود", "Transfer not found");
   if (t.status && t.status !== "sent") fail(409, "BAD_STATE", "استُلم هذا التحويل من قبل", "This transfer was already received");
-  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== t.to_warehouse_id) fail(403, "FORBIDDEN", "يستلمه أمين المخزن المستلم", "The receiving warehouse's keeper takes it in");
+  if (actor.role === "warehouse" && !worksIn(actor, t.to_warehouse_id)) fail(403, "FORBIDDEN", "يستلمه أمين المخزن المستلم", "The receiving warehouse's keeper takes it in");
   let short = false;
   for (const l of t.lines) {
     const got = Math.max(0, Math.round(received?.[l.item_id] ?? l.pieces));
@@ -1527,7 +1678,7 @@ function receiveSupply(db: Db, actor: DbUser, id: number, receipt: Receipt, now:
 
 export function createStocktake(db: Db, actor: DbUser, warehouseId: number, now: Date, category?: string): Stocktake {
   need(actor, ["manager", "warehouse"]);
-  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== warehouseId) {
+  if (actor.role === "warehouse" && !worksIn(actor, warehouseId)) {
     fail(403, "FORBIDDEN", "تستطيع جرد مخزنك فقط", "You can only count your own warehouse");
   }
   if (db.stocktakes.some((s) => s.warehouse_id === warehouseId && s.status === "open")) {
@@ -1557,7 +1708,7 @@ export function createStocktake(db: Db, actor: DbUser, warehouseId: number, now:
 export function saveStocktake(db: Db, actor: DbUser, id: number, lines: StocktakeLine[], now: Date): Stocktake {
   need(actor, ["manager", "warehouse"]);
   const s = db.stocktakes.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الجرد غير موجود", "Count not found");
-  if (actor.role === "warehouse" && actor.warehouse_id && s.warehouse_id !== actor.warehouse_id) fail(403, "FORBIDDEN", "هذا جرد مخزن آخر", "This is another warehouse's count");
+  if (actor.role === "warehouse" && !worksIn(actor, s.warehouse_id)) fail(403, "FORBIDDEN", "هذا جرد مخزن آخر", "This is another warehouse's count");
   if (s.status !== "open") fail(409, "BAD_STATE", "هذا الجرد مغلق", "This count is closed");
   for (const l of lines) {
     const row = s.lines.find((x) => x.item_id === l.item_id);
@@ -2337,6 +2488,14 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
         created_by: person(actor),
       };
       setTotal(rest, rsub - (rest.discount?.amount ?? 0));
+      // The rest of one vehicle's shipment stays a shipment of the same big order (the shop sees one order).
+      const parent = o.shipment_of ? db.orders.find((x) => x.id === o.shipment_of) : undefined;
+      if (parent?.shipments) {
+        rest.shipment_of = parent.id;
+        rest.shipment_no = parent.shipments.length + 1;
+        rest.number = `${parent.number}/${rest.shipment_no}`;
+        parent.shipments.push(rid);
+      }
       db.orders.push(rest);
       o.rest_order_id = rid;
       audit(db, actor, "create", "order", rid, `باقي الطلب ${o.number} بقي طلباً مفتوحاً (${rest.number})`, `The rest of ${o.number} stays open as ${rest.number}`, now);
@@ -2344,6 +2503,7 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
       audit(db, actor, "cancel", "order", o.id, `أُلغي ما لم يُسلَّم من ${o.number} برغبة المحل`, `What wasn't delivered of ${o.number} was cancelled`, now);
     }
   }
+  syncShipments(db, o);
   audit(db, actor, "update", "order", o.id, `تسليم ${o.number} إلى ${customer?.name ?? ""} برمز الاستلام وصورة`, `${o.number} delivered with PIN and photo`, now);
   const shopUser = shopOwnerOf(db, o.customer_id);
   if (shopUser) {
@@ -2416,7 +2576,7 @@ export function reportDeliveryProblem(db: Db, actor: DbUser, input: ProblemInput
 export function returnToWarehouse(db: Db, actor: DbUser, id: number, now: Date): Order {
   need(actor, ["manager", "warehouse"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
-  if (actor.role === "warehouse" && actor.warehouse_id && actor.warehouse_id !== o.warehouse_id) fail(403, "FORBIDDEN", "هذه الشحنة من مخزن آخر", "This shipment is from another warehouse");
+  if (actor.role === "warehouse" && !worksIn(actor, o.warehouse_id)) fail(403, "FORBIDDEN", "هذه الشحنة من مخزن آخر", "This shipment is from another warehouse");
   const d = o.delivery ?? fail(409, "BAD_STATE", "هذا الطلب ليس له شحنة", "This order has no shipment");
   if (d.status !== "out") fail(409, "BAD_STATE", "الشحنة ليست في الطريق", "The shipment isn't on the way");
   const why = d.problem ? PROBLEM_TEXT[d.problem.reason][0] : "";

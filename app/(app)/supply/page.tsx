@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { Ban, FileDown, FileSpreadsheet, PackagePlus, Plus, Trash2, Truck } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { useWarehouseFilter, inWarehouse } from "@/components/warehouse-filter";
+import { useMyWarehouses, useWarehouseFilter, inWarehouse } from "@/components/warehouse-filter";
 import {
   Badge,
   Button,
@@ -204,7 +204,8 @@ function RowActions({ order, warehouse, onCancel }: { order: SupplyOrder; wareho
   const { tr, date } = useFmt();
   const brand = useBrand();
   const { user, itemById } = useApp();
-  const canReceive = (user.role === "warehouse" && user.warehouse_id === order.warehouse_id) || user.role === "manager";
+  const mine = useMyWarehouses();
+  const canReceive = (user.role === "warehouse" && (!mine || mine.includes(order.warehouse_id))) || user.role === "manager";
   const canCancel = (user.role === "accountant" || user.role === "manager") && order.status === "sent";
   const open = order.status === "sent" || order.status === "partial";
   return (

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, PackagePlus, PackageX } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { hasWarehouseFilter, setWarehouseFilter, useWarehouseFilter } from "@/components/warehouse-filter";
+import { hasWarehouseFilter, setWarehouseFilter, useMyWarehouses, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
 import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, PageHeader, SearchBox, Segmented, Select, Stat, type Column } from "@/components/ui";
 import { api, type ShelfRow } from "@/lib/api";
@@ -20,6 +20,7 @@ export default function StockPage() {
   const [tab, setTab] = useState<Tab>("stock");
   // Keeper / staff: their own warehouse. Manager / accountant: the warehouse filter of the top bar.
   const globalWh = useWarehouseFilter();
+  const mine = useMyWarehouses();
   const [ownWh, setOwnWh] = useState<number | "">(user.role === "warehouse" || user.role === "staff" ? (user.warehouse_id ?? "") : "");
   const wh: number | "" = hasWarehouseFilter(user) ? (globalWh ?? "") : ownWh;
   const setWh = (v: number | "") => (hasWarehouseFilter(user) ? setWarehouseFilter(v || null) : setOwnWh(v));
@@ -29,7 +30,7 @@ export default function StockPage() {
   const expiry = useLoad(() => api.nearExpiry(lookups.settings.near_expiry_days), [lookups.settings.near_expiry_days]);
   const damaged = useLoad(() => api.listDamaged(), []);
   const orders = useLoad(() => api.listOrders(), []);
-  const toIssue = (orders.data ?? []).filter((o) => o.status === "approved" && !o.delivery && (!wh || o.warehouse_id === wh)).length;
+  const toIssue = (orders.data ?? []).filter((o) => o.status === "approved" && !o.delivery && !o.shipments?.length && (!wh || o.warehouse_id === wh)).length;
 
   const sum = (r: ShelfRow, k: "on_shelf" | "sellable" | "reserved" | "expired") => r.by_warehouse.filter((w) => !wh || w.warehouse_id === wh).reduce((s, w) => s + w[k], 0);
   const rows = (shelf.data ?? []).filter((r) => {
@@ -157,9 +158,9 @@ export default function StockPage() {
                 {tr("تحت الحد الأدنى فقط", "Below minimum only")}
               </label>
             )}
-            <Select value={wh} onChange={(e) => setWh(Number(e.target.value) || "")} disabled={user.role === "warehouse" || user.role === "staff"} className="sm:w-56">
-              <option value="">{tr("كل المخازن", "All warehouses")}</option>
-              {lookups.warehouses.map((w) => (
+            <Select value={wh} onChange={(e) => setWh(Number(e.target.value) || "")} disabled={!!mine && mine.length < 2} className="sm:w-56">
+              <option value="">{mine ? tr("مخازني", "My warehouses") : tr("كل المخازن", "All warehouses")}</option>
+              {lookups.warehouses.filter((w) => !mine || mine.includes(w.id)).map((w) => (
                 <option key={w.id} value={w.id}>
                   {name(w)}
                 </option>

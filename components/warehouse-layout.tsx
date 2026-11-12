@@ -8,19 +8,20 @@
 // The warehouse map, the picking hall and the shelf codes (Z03-A02) follow the new layout at once.
 import { useMemo, useState } from "react";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { ArrowDown, ArrowUp, GripVertical, LayoutGrid, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, LayoutGrid, Plus, RotateCcw, Search, Trash2, UserCheck } from "lucide-react";
 import { layoutOf, nextZoneCode, zoneOfItem } from "@/components/map/data";
 import { MapPin } from "@/components/map-pin";
 import { useApp } from "@/components/shell";
-import { Button, Dialog, Field, Input, NumberInput, errorText, useToast } from "@/components/ui";
+import { Button, Dialog, Field, Input, Notice, NumberInput, Select, errorText, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import type { Item, User, Warehouse, WarehouseInput, WarehouseZone } from "@/lib/api/types";
+import { worksIn, type Item, type User, type Warehouse, type WarehouseInput, type WarehouseZone } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
-import { cn, matches } from "@/lib/utils";
+import { cn, matches, today } from "@/lib/utils";
+import { useLoad } from "@/lib/use-load";
 
 /** May this person arrange this warehouse? The manager: every one. A keeper: his own. */
-export const canArrange = (user: Pick<User, "role" | "warehouse_id">, warehouseId: number) =>
-  user.role === "manager" || (user.role === "warehouse" && (!user.warehouse_id || user.warehouse_id === warehouseId));
+export const canArrange = (user: Pick<User, "id" | "role" | "warehouse_id">, warehouseId: number, warehouses: Warehouse[]) =>
+  user.role === "manager" || (user.role === "warehouse" && worksIn(user, warehouseId, warehouses));
 
 // ---------- a new warehouse, or its details ----------
 
@@ -329,5 +330,95 @@ function Chip({ item, handle, overlay, children }: { item: Item; handle?: React.
       <span className="min-w-0 flex-1 truncate font-medium">{name(item)}</span>
       {children}
     </div>
+  );
+}
+
+// ---------- the keeper is away: his warehouse to another keeper, for a while ----------
+
+/** Is a cover running now? */
+export const coverActive = (w: Warehouse) => !!w.cover && w.cover.until > new Date().toISOString();
+
+/**
+ * The manager gives an absent keeper's warehouse to another keeper until a day (at most a month).
+ * Until then that keeper prepares, receives, transfers, counts and arranges it too; then it ends by itself.
+ */
+export function CoverDialog({ warehouse, onClose }: { warehouse: Warehouse; onClose: () => void }) {
+  const { tr, name, date } = useFmt();
+  const { reloadLookups } = useApp();
+  const toast = useToast();
+  const users = useLoad(() => api.listUsers(), []);
+  const running = coverActive(warehouse) ? warehouse.cover : undefined;
+  // The other warehouses' keepers (its own keeper is the one who is away).
+  const keepers = (users.data ?? []).filter((u) => u.role === "warehouse" && u.active && u.warehouse_id !== warehouse.id);
+  const [userId, setUserId] = useState<number | "">(running?.user_id ?? "");
+  const [day, setDay] = useState(running?.until.slice(0, 10) ?? today(3));
+  const [busy, setBusy] = useState(false);
+  const own = (users.data ?? []).find((u) => u.role === "warehouse" && u.warehouse_id === warehouse.id);
+
+  async function save(end?: boolean) {
+    setBusy(true);
+    try {
+      // To the end of the chosen day, on this device's clock.
+      await api.setCover(warehouse.id, end ? null : { user_id: Number(userId), until: new Date(`${day}T23:59:00`).toISOString() });
+      toast("success", end ? tr("انتهى التكليف", "The cover ended") : tr("تم التكليف، وأُبلغ أمين المخزن", "Done; the keeper was told"));
+      reloadLookups();
+      onClose();
+    } catch (e) {
+      toast("danger", errorText(e, tr));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={
+        <span className="flex items-center gap-2">
+          <UserCheck className="size-5 text-action" /> {tr(`تكليف مؤقت: ${warehouse.name}`, `Temporary cover: ${warehouse.name_en}`)}
+        </span>
+      }
+      footer={
+        <>
+          {running && (
+            <Button variant="danger" className="me-auto" loading={busy} onClick={() => save(true)}>
+              {tr("إنهاء التكليف الآن", "End the cover now")}
+            </Button>
+          )}
+          <Button onClick={onClose}>{tr("إلغاء", "Cancel")}</Button>
+          <Button variant="primary" loading={busy} disabled={!userId || !day} onClick={() => save()}>
+            {tr("حفظ التكليف", "Save the cover")}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Notice tone="primary">
+          {tr(
+            `إذا غاب ${own?.name ?? "أمين المخزن"}، يعمل الأمين الذي تختاره في ${name(warehouse)} أيضاً حتى نهاية اليوم المحدد: يجهّز ويستلم ويحوّل ويجرد. ثم ينتهي التكليف وحده.`,
+            `If ${own?.name ?? "the keeper"} is away, the keeper you pick also works in ${name(warehouse)} until the end of the chosen day: preparing, receiving, transfers and counts. Then it ends by itself.`,
+          )}
+        </Notice>
+        {running && (
+          <p className="rounded-xl bg-card-2 p-3 text-sm">
+            {tr(`الآن: ${running.name} مكلّف حتى ${date(running.until)} (كلّفه ${running.by}).`, `Now: ${running.name} covers until ${date(running.until)} (set by ${running.by}).`)}
+          </p>
+        )}
+        <Field label={tr("الأمين المكلّف", "The covering keeper")}>
+          <Select value={userId} onChange={(e) => setUserId(Number(e.target.value) || "")}>
+            <option value="">{tr("اختر أمين مخزن", "Choose a keeper")}</option>
+            {keepers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={tr("حتى نهاية يوم", "Until the end of")} hint={tr("شهر واحد كحد أعلى", "One month at most")}>
+          <Input type="date" value={day} min={today()} max={today(31)} onChange={(e) => setDay(e.target.value)} />
+        </Field>
+      </div>
+    </Dialog>
   );
 }

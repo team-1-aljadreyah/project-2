@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { SiteCustom, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
+import type { SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -26,7 +26,8 @@ import type { SiteCustom, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund
   Warehouse,
 } from "../types";
 
-export type DbUser = User & { password: string };
+/** `covering`: warehouses a keeper covers right now (worked out per request, never saved). */
+export type DbUser = User & { password: string; covering?: number[] };
 export type DbItem = Omit<Item, "stock" | "nearest_expiry" | "avg_cost">;
 export type DbBatch = Omit<Batch, "status"> & { purchase_price: number };
 export type DbCustomer = Omit<Customer, "balance" | "last_order_at"> & { debt_limit: number };
@@ -60,6 +61,8 @@ export interface Db {
   audit: AuditEntry[];
   notifications: AppNotification[];
   settings: Settings;
+  /** The delivery vehicles. None (an older copy) = the default ones (see vehiclesOf). */
+  vehicles?: Vehicle[];
   /** The manager's customization of the site. None = the defaults. */
   custom?: SiteCustom;
   closed_months: Record<string, CommissionRow[]>;

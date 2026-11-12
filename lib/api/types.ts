@@ -70,7 +70,58 @@ export interface Warehouse {
   lng?: number;
   /** How the goods are placed inside (set by the manager or its keeper). None = one zone per category. */
   layout?: WarehouseLayout;
+  /** Its keeper is away: the manager gave the warehouse to another keeper until a time (a temporary cover). */
+  cover?: WarehouseCover;
 }
+
+/** A delivery vehicle: its maximum load (set by the manager) and its usual driver (a delivery rep). */
+export interface Vehicle {
+  id: number;
+  name: string;
+  plate?: string;
+  capacity_kg: number;
+  driver_id?: number;
+  active: boolean;
+}
+
+export type VehicleInput = Omit<Vehicle, "id">;
+
+/** One vehicle's part of an order: which lines (and how much of each) it carries. */
+export interface ShipmentLoad {
+  vehicle_id: number;
+  lines: { item_id: number; unit: Unit; qty: number }[];
+}
+
+/** A temporary cover: another keeper works in this warehouse too, until `until`. */
+export interface WarehouseCover {
+  user_id: number;
+  name: string;
+  until: string;
+  /** Who gave it (the manager), and when. */
+  by: string;
+  at: string;
+}
+
+/**
+ * The warehouses a keeper (or warehouse staff) works in right now: his own, and those he covers until their
+ * end time. `undefined` = every warehouse (the office jobs, or a keeper with no warehouse set).
+ * `covering`: already worked out (the API does it once per request); else it is read from `warehouses`.
+ */
+export function workWarehouses(
+  user: { id: number; role: Role; warehouse_id?: number; covering?: number[] },
+  warehouses?: { id: number; cover?: WarehouseCover }[],
+  nowIso = new Date().toISOString(),
+): number[] | undefined {
+  if ((user.role !== "warehouse" && user.role !== "staff") || !user.warehouse_id) return undefined;
+  const covering = user.covering ?? (warehouses ?? []).filter((w) => w.cover?.user_id === user.id && w.cover.until > nowIso).map((w) => w.id);
+  return [user.warehouse_id, ...covering.filter((id) => id !== user.warehouse_id)];
+}
+
+/** Does this person work in this warehouse now? (Always yes for the office jobs.) */
+export const worksIn = (user: Parameters<typeof workWarehouses>[0], warehouseId: number, warehouses?: Parameters<typeof workWarehouses>[1]) => {
+  const list = workWarehouses(user, warehouses);
+  return !list || list.includes(warehouseId);
+};
 
 /** A zone of a warehouse: a rack or an area on the floor ("Z03 · زيوت"). */
 export interface WarehouseZone {
@@ -110,6 +161,8 @@ export interface ItemPrice {
 
 export interface Item {
   id: number;
+  /** The weight of one piece in kg (for the vehicles' loads). None = read from the name ("5 kg", "1 L"). */
+  weight_kg?: number;
   name: string;
   name_en: string;
   category: string;
@@ -247,6 +300,12 @@ export interface OrderLine {
 
 export interface Order {
   id: number;
+  /** A big order carried by more than one vehicle: the order of each vehicle load (a "shipment"). The shop sees
+   *  this order; each shipment has its own label, PIN and invoice. */
+  shipments?: number[];
+  /** This order is one vehicle load (shipment number `shipment_no`) of the order `shipment_of`. */
+  shipment_of?: number;
+  shipment_no?: number;
   number: string;
   client_ref: string;
   customer_id: number;
@@ -303,6 +362,8 @@ export interface Delivery {
   rep?: Person;
   /** The 4-digit delivery PIN. Sent ONLY to the shop owner of this order; everyone else gets it hidden. */
   pin?: string;
+  /** The vehicle that carries it (chosen at the warehouse; its driver is the delivery rep). */
+  vehicle?: { id: number; name: string };
   /** The warehouse staff loaded it into the delivery rep's van (the step before he scans it and leaves). */
   loaded_at?: string;
   loaded_by?: Person;
@@ -329,12 +390,8 @@ export interface DeliveryProblem {
   by: Person;
 }
 
-/** The most a shop owner can order in one order: all the lines together (cartons and pieces counted
- *  as they are typed). Bigger orders go through his rep or the office, who check the stock and limit first. */
-export const SHOP_MAX_QTY = 100;
-
-/** How much an order holds, for the limit above: the quantities of all its lines added up. */
-export const orderCount = (lines: { qty: number }[]) => lines.reduce((s, l) => s + (l.qty > 0 ? l.qty : 0), 0);
+/* No limit on the size of one order (the company's decision, 2026-11-12): a big order is split across
+   vehicles at the warehouse (see Vehicle and splitShipments), and the shop keeps one order. */
 
 export interface ProblemInput {
   /** The shipments it is about: one, the ones he picked, or all he has on the way (an accident). */
@@ -930,6 +987,7 @@ export interface NewTransfer {
 }
 
 export interface ItemInput {
+  weight_kg?: number;
   name: string;
   name_en: string;
   category: string;

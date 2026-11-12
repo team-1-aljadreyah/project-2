@@ -10,6 +10,7 @@ import type { User, Warehouse as Wh } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useApp } from "./shell";
+import { workWarehouses } from "@/lib/api/types";
 
 const KEY = "nahrain.whfilter";
 const EVENT = "nahrain-whfilter";
@@ -75,4 +76,13 @@ export function WarehouseFilterSwitch({ warehouses }: { warehouses: Wh[] }) {
       ))}
     </div>
   );
+}
+
+/**
+ * The warehouses this keeper (or warehouse staff) works in now: his own, and one he covers for an absent keeper.
+ * `undefined` = every warehouse (the office jobs). See workWarehouses in lib/api/types.ts.
+ */
+export function useMyWarehouses() {
+  const { user, lookups } = useApp();
+  return workWarehouses(user, lookups.warehouses);
 }

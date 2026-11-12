@@ -14,8 +14,9 @@ import { HallPlan } from "@/components/hall/plan";
 import { buildMissions, type Mission } from "@/components/hall/data";
 import { useNow } from "@/components/hall/live";
 import { useApp } from "@/components/shell";
+import { useMyWarehouses } from "@/components/warehouse-filter";
 import { LayoutEditor, canArrange } from "@/components/warehouse-layout";
-import { Button, Card, Dialog, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
+import { Button, Card, Dialog, ErrorBox, PageHeader, Segmented, Skeleton } from "@/components/ui";
 import { PrintButton, ShipmentLabel } from "@/components/delivery/qr";
 import { api } from "@/lib/api";
 import type { Order, Receipt } from "@/lib/api/types";
@@ -27,7 +28,7 @@ import { cn, dayOfIso, today } from "@/lib/utils";
 const INTRO_KEY = "nahrain.hall-intro";
 
 export default function HallPage() {
-  const { tr, name, num } = useFmt();
+  const { tr, name, num, date } = useFmt();
   const { user, lookups, items } = useApp();
   const now = useNow();
   const shelf = useLoad(() => api.shelfStock(), []);
@@ -65,7 +66,11 @@ export default function HallPage() {
     return () => clearTimeout(t);
   }, [intro]);
 
-  const whId = user.warehouse_id ?? lookups.warehouses[0]?.id;
+  // His own warehouse, or (covering for an absent keeper) the other one he picks above the plan.
+  const mine = useMyWarehouses();
+  const [pickedWh, setPickedWh] = useState<number | null>(null);
+  const whId = pickedWh && mine?.includes(pickedWh) ? pickedWh : (user.warehouse_id ?? lookups.warehouses[0]?.id);
+  const covers = lookups.warehouses.filter((w) => w.cover?.user_id === user.id && w.cover.until > new Date().toISOString());
   const view = useMemo(() => {
     if (!shelf.data || !batches.data || !orders.data) return null;
     return buildMap({ items, warehouses: lookups.warehouses, shelf: shelf.data, batches: batches.data, orders: orders.data, reps: lookups.reps }).find((v) => v.wh.id === whId) ?? null;
@@ -123,7 +128,7 @@ export default function HallPage() {
         subtitle={tr("طلبات مخزنك ومسار تجهيز كل طلب على المخطط", "Your warehouse's orders and the picking route of each one")}
         actions={
           <>
-            {view && canArrange(user, view.wh.id) && (
+            {view && canArrange(user, view.wh.id, lookups.warehouses) && (
               <Button onClick={() => setArranging(true)}>
                 <LayoutGrid className="size-4" /> {tr("ترتيب المخزن", "Arrange the warehouse")}
               </Button>
@@ -135,6 +140,19 @@ export default function HallPage() {
         }
       />
       {arranging && view && <LayoutEditor warehouse={view.wh} onClose={() => setArranging(false)} />}
+      {covers.length > 0 && mine && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-action/30 bg-action/10 p-3">
+          <p className="min-w-0 flex-1 text-sm">
+            <b>{tr("تكليف مؤقت:", "Temporary cover:")}</b>{" "}
+            {covers.map((w) => tr(`تعمل أيضاً في ${w.name} حتى ${date(w.cover!.until)}`, `you also work in ${w.name_en} until ${date(w.cover!.until)}`)).join(tr("، ", ", "))}
+          </p>
+          <Segmented
+            value={String(whId)}
+            onChange={(v) => setPickedWh(Number(v))}
+            options={lookups.warehouses.filter((w) => mine.includes(w.id)).map((w) => ({ value: String(w.id), label: name(w) }))}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
         {/* Missions panel */}
