@@ -74,7 +74,7 @@ export function PrepareOrder({ order, onClose, onDone }: { order: Order; onClose
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-semibold">{name(it)}</p>
-                    <p className="text-xs text-muted">{it && qty(need, it.pieces_per_carton)}</p>
+                    <p className="text-xs text-muted">{it && qty(need, it.pieces_per_carton, it)}</p>
                   </div>
                   <Select value={w} onChange={(e) => setPick((p) => ({ ...p, [l.item_id]: Number(e.target.value) }))} className="w-56">
                     {lookups.warehouses.map((wh) => (
@@ -88,7 +88,7 @@ export function PrepareOrder({ order, onClose, onDone }: { order: Order; onClose
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
                   {l.free.map((f) => (
                     <span key={f.warehouse_id} className={cn("rounded-full px-2 py-0.5", f.warehouse_id === w ? "bg-action/15 text-text" : "bg-card-2 text-muted")}>
-                      {name(lookups.warehouses.find((x) => x.id === f.warehouse_id))}: {it ? qty(f.pieces, it.pieces_per_carton) : f.pieces}
+                      {name(lookups.warehouses.find((x) => x.id === f.warehouse_id))}: {it ? qty(f.pieces, it.pieces_per_carton, it) : f.pieces}
                       {f.nearest_expiry ? ` · ${tr("أقدم صلاحية", "oldest")} ${date(f.nearest_expiry)}` : ""}
                     </span>
                   ))}

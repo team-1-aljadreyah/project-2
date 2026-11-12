@@ -40,6 +40,7 @@ import {
 import { api, ApiError } from "@/lib/api";
 import type { Item, NewSupplyOrder, SupplyOrder, SupplyStatus, Unit, Warehouse } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { unitName } from "@/lib/units";
 import { useBrand } from "@/lib/site";
 import { useLoad } from "@/lib/use-load";
 import { cn, downloadCsv, today } from "@/lib/utils";
@@ -205,7 +206,7 @@ function fileRows(
       i + 1,
       it ? tr(it.name, it.name_en) : `#${l.item_id}`,
       it?.barcode ?? "",
-      l.unit === "carton" ? tr("كارتون", "Carton") : tr("قطعة", "Piece"),
+      unitName(it, l.unit, tr("ar", "en") as "ar" | "en"),
       l.qty,
       l.price,
       l.qty * l.price,
@@ -282,7 +283,7 @@ function SupplyDetails({ order, warehouse, onClose, onCancel }: { order: SupplyO
   const started = order.receipt_ids.length > 0;
   const short = gaps.filter((g) => g.diff < 0);
   const over = gaps.filter((g) => g.diff > 0);
-  const unitOf = (u: Unit) => (u === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc"));
+  const { unit: un } = useFmt();
   return (
     <Dialog
       open
@@ -351,7 +352,7 @@ function SupplyDetails({ order, warehouse, onClose, onCancel }: { order: SupplyO
                   {it ? name(it) : `#${l.item_id}`}
                 </RefLink>
                 <span className="text-xs text-muted">
-                  <span className="num">{num(l.qty)}</span> {l.unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc")} × <Money value={l.price} />
+                  <span className="num">{num(l.qty)}</span> {un(itemById.get(l.item_id), l.unit, true)} × <Money value={l.price} />
                 </span>
               </span>
               <span className="shrink-0 text-end">
@@ -361,7 +362,7 @@ function SupplyDetails({ order, warehouse, onClose, onCancel }: { order: SupplyO
                 </span>
                 {started && g.diff !== 0 && (
                   <span className={cn("ms-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold", g.diff < 0 ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning")}>
-                    {g.diff < 0 ? tr(`ناقص ${num(-g.diff)} ${unitOf(l.unit)}`, `${num(-g.diff)} ${unitOf(l.unit)} short`) : tr(`زائد ${num(g.diff)} ${unitOf(l.unit)}`, `${num(g.diff)} ${unitOf(l.unit)} over`)}
+                    {g.diff < 0 ? tr(`ناقص ${num(-g.diff)} ${un(itemById.get(l.item_id), l.unit, true)}`, `${num(-g.diff)} ${un(itemById.get(l.item_id), l.unit, true)} short`) : tr(`زائد ${num(g.diff)} ${un(itemById.get(l.item_id), l.unit, true)}`, `${num(g.diff)} ${un(itemById.get(l.item_id), l.unit, true)} over`)}
                   </span>
                 )}
               </span>
@@ -400,7 +401,7 @@ let k = 0;
 const blank = (): Line => ({ key: ++k, item_id: "", unit: "carton", qty: "", price: "" });
 
 function NewSupply({ onClose, onDone, fillLow }: { onClose: () => void; onDone: () => void; fillLow?: boolean }) {
-  const { tr, name, money } = useFmt();
+  const { tr, name, money, unit: un } = useFmt();
   const { lookups, items, itemById } = useApp();
   const toast = useToast();
   const filterWh = useWarehouseFilter();
@@ -561,8 +562,8 @@ function NewSupply({ onClose, onDone, fillLow }: { onClose: () => void; onDone: 
               </Field>
               <Field label={tr("الوحدة", "Unit")}>
                 <Select value={l.unit} onChange={(e) => set(l.key, { unit: e.target.value as Unit, price: l.item_id ? lastCost(l.item_id, e.target.value as Unit) : l.price })}>
-                  <option value="carton">{tr("كارتون", "Carton")}</option>
-                  <option value="piece">{tr("قطعة", "Piece")}</option>
+                  <option value="carton">{un(itemById.get(Number(l.item_id)), "carton")}</option>
+                  <option value="piece">{un(itemById.get(Number(l.item_id)), "piece")}</option>
                 </Select>
               </Field>
               <Field label={tr("الكمية", "Qty")} error={err[`lines.${i}.qty`]}>

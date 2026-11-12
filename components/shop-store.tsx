@@ -38,6 +38,7 @@ import { Dialog, Segmented, Stepper, errorText, useToast, Pager, usePages } from
 import { api, ApiError } from "@/lib/api";
 import { type Customer, type Item, type NewOrder, type Order, type Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { firstUnit, soldUnits } from "@/lib/units";
 import { enqueue, isNetworkError, newClientRef } from "@/lib/offline";
 import { cn, matches, piecesOf, priceOf } from "@/lib/utils";
 
@@ -177,7 +178,7 @@ function toggleFav(userId: number, customerId: number, itemId: number) {
 }
 
 export function ShopStore({ customer, orders }: { customer: Customer; orders: Order[] }) {
-  const { tr, money, name } = useFmt();
+  const { tr, money, name, unit: unitOf } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useAppRouter();
   const toast = useToast();
@@ -222,7 +223,11 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
       const lines = [...b.lines];
       for (const l of last.lines) {
         const it = itemById.get(l.item_id);
-        if (!it || !it.active) continue;
+        // Gone, stopped, or no longer sold in that unit (the manager changed it): named as missing.
+        if (!it || !it.active || !soldUnits(it).includes(l.unit)) {
+          if (it) missing.push(name(it));
+          continue;
+        }
         const room = available(it) * (l.unit === "carton" ? 1 : it.pieces_per_carton);
         const qty = Math.min(l.qty, Math.floor(room));
         if (qty <= 0) {
@@ -258,7 +263,7 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
   };
   const addOne = (it: Item) => {
     const l = lineOf(it.id);
-    setLine(it.id, { unit: l?.unit ?? "carton", qty: (l?.qty ?? 0) + 1 });
+    setLine(it.id, { unit: l?.unit ?? firstUnit(it), qty: (l?.qty ?? 0) + 1 });
   };
 
   const total = bag.lines.reduce((s, l) => {
@@ -437,11 +442,11 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
                 <Art category={it.category} index={catIndex(it.category)} image={it.image} />
                 <p className="mt-2 line-clamp-2 min-h-10 px-1 text-sm font-bold leading-5">{name(it)}</p>
                 <p className="px-1 text-[11px] text-muted">
-                  {tr("كارتون", "Carton")} · {it.pieces_per_carton} {tr("قطعة", "pcs")}
+                  {firstUnit(it) === "carton" ? `${unitOf(it, "carton")} · ${it.pieces_per_carton} ${unitOf(it, "piece", true)}` : unitOf(it, "piece")}
                 </p>
               </button>
               <div className="mt-auto flex items-center justify-between gap-1 px-1 pt-2">
-                <span className="num text-sm font-bold">{money(price(it, "carton"))}</span>
+                <span className="num text-sm font-bold">{money(price(it, firstUnit(it)))}</span>
                 {out ? (
                   <span className="rounded-full bg-card-2 px-2 py-1 text-[11px] font-semibold text-faint">{tr("نفد", "Out")}</span>
                 ) : l ? (
@@ -547,7 +552,7 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold">{name(it)}</p>
                     <p className="num text-xs text-muted">
-                      {money(price(it, l.unit))} / {l.unit === "carton" ? tr("كارتون", "carton") : tr("قطعة", "piece")}
+                      {money(price(it, l.unit))} / {unitOf(it, l.unit)}
                     </p>
                   </div>
                   <span className="flex items-center gap-1" dir="ltr">
@@ -625,8 +630,8 @@ function ItemSheet({
   onClose: () => void;
   onSave: (line: Omit<Line, "item_id"> | null) => void;
 }) {
-  const { tr, money, name, qty: fmtQty } = useFmt();
-  const [unit, setUnit] = useState<Unit>(line?.unit ?? "carton");
+  const { tr, money, name, qty: fmtQty, unit: unitOf } = useFmt();
+  const [unit, setUnit] = useState<Unit>(line?.unit ?? firstUnit(item));
   const [n, setN] = useState(line?.qty ?? 1);
   // What is in stock, and never more than what is left of the order's limit.
   const max = unit === "carton" ? Math.floor(available / item.pieces_per_carton) : available;
@@ -664,22 +669,26 @@ function ItemSheet({
         </span>
       </div>
       <p className="mt-3 text-sm text-muted">
-        {tr(`الكارتون فيه ${item.pieces_per_carton} قطعة. المتوفر الآن ${fmtQty(available, item.pieces_per_carton)}.`, `A carton has ${item.pieces_per_carton} pieces. Available now: ${fmtQty(available, item.pieces_per_carton)}.`)}
+        {soldUnits(item).includes("carton") && tr(`${unitOf(item, "carton")} فيه ${item.pieces_per_carton} ${unitOf(item, "piece")}. `, `A ${unitOf(item, "carton")} has ${item.pieces_per_carton} ${unitOf(item, "piece")}. `)}
+        {tr(`المتوفر الآن ${fmtQty(available, item.pieces_per_carton, item)}.`, `Available now: ${fmtQty(available, item.pieces_per_carton, item)}.`)}
       </p>
 
       <p className="mt-4 text-sm font-bold">{tr("الوحدة", "Unit")}</p>
-      <Segmented
-        className="mt-2 w-full"
-        value={unit}
-        onChange={(u) => {
-          setUnit(u);
-          setN(1);
-        }}
-        options={[
-          { value: "carton", label: `${tr("كارتون", "Carton")} · ${money(price("carton"))}` },
-          { value: "piece", label: `${tr("قطعة", "Piece")} · ${money(price("piece"))}` },
-        ]}
-      />
+      {soldUnits(item).length > 1 ? (
+        <Segmented
+          className="mt-2 w-full"
+          value={unit}
+          onChange={(u) => {
+            setUnit(u);
+            setN(1);
+          }}
+          options={soldUnits(item).map((u) => ({ value: u, label: `${unitOf(item, u)} · ${money(price(u))}` }))}
+        />
+      ) : (
+        <p className="mt-2 text-sm">
+          {unitOf(item, unit)} · <span className="num font-semibold">{money(price(unit))}</span>
+        </p>
+      )}
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className="text-sm font-bold">{tr("الكمية", "Quantity")}</p>

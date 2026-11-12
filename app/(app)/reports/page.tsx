@@ -212,7 +212,7 @@ function Slow() {
             { key: "n", head: tr("المادة", "Item"), cell: (r) => name(itemById.get(r.item_id)) },
             { key: "l", head: tr("آخر بيع", "Last sale"), cell: (r) => (r.last_sale ? date(r.last_sale) : tr("لم تُبع", "Never")) },
             { key: "d", head: tr("بدون حركة", "Idle for"), cell: (r) => <span className="font-semibold text-warning">{r.days === null ? "—" : tr(`${r.days} يوم`, `${r.days} days`)}</span> },
-            { key: "s", head: tr("المخزون", "Stock"), cell: (r) => qty(r.stock, itemById.get(r.item_id)?.pieces_per_carton ?? 1) },
+            { key: "s", head: tr("المخزون", "Stock"), cell: (r) => qty(r.stock, itemById.get(r.item_id)?.pieces_per_carton ?? 1, itemById.get(r.item_id)) },
           ]}
           empty={<Empty title={tr("كل المواد تتحرك", "Everything is selling")} />}
         />
@@ -244,7 +244,7 @@ function Expiry() {
             { key: "n", head: tr("المادة", "Item"), cell: (r) => name(itemById.get(r.batch.item_id)) },
             { key: "w", head: tr("المخزن", "Warehouse"), cell: (r) => name(lookups.warehouses.find((w) => w.id === r.batch.warehouse_id)) },
             { key: "e", head: tr("الصلاحية", "Expiry"), cell: (r) => <span className="num">{r.batch.expiry_date}</span> },
-            { key: "q", head: tr("الكمية", "Qty"), cell: (r) => qty(r.batch.qty_left, itemById.get(r.batch.item_id)?.pieces_per_carton ?? 1) },
+            { key: "q", head: tr("الكمية", "Qty"), cell: (r) => qty(r.batch.qty_left, itemById.get(r.batch.item_id)?.pieces_per_carton ?? 1, itemById.get(r.batch.item_id)) },
             { key: "s", head: tr("الحالة", "Status"), cell: (r) => <BatchStatusBadge status={r.batch.status} days={r.days_left} /> },
             {
               key: "c",

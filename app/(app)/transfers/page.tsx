@@ -27,6 +27,7 @@ import {
 import { api, ApiError } from "@/lib/api";
 import type { Transfer, Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { unitName } from "@/lib/units";
 import { newClientRef } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
 
@@ -46,7 +47,7 @@ export default function TransfersPage() {
     { key: "n", head: tr("الرقم", "No."), cell: (t) => <span className="num">{t.number}</span> },
     { key: "d", head: tr("الوقت", "Time"), cell: (t) => dateTime(t.created_at) },
     { key: "f", head: tr("من ← إلى", "From → to"), cell: (t) => `${wName(t.from_warehouse_id)} ${tr("←", "→")} ${wName(t.to_warehouse_id)}` },
-    { key: "l", head: tr("المواد", "Items"), cell: (t) => t.lines.map((l) => `${itemById.get(l.item_id)?.name} (${qty(l.pieces, itemById.get(l.item_id)?.pieces_per_carton ?? 1)})`).join("، ") },
+    { key: "l", head: tr("المواد", "Items"), cell: (t) => t.lines.map((l) => `${itemById.get(l.item_id)?.name} (${qty(l.pieces, itemById.get(l.item_id)?.pieces_per_carton ?? 1, itemById.get(l.item_id))})`).join("، ") },
     { key: "b", head: tr("بواسطة", "By"), cell: (t) => t.created_by.name },
     {
       key: "s",
@@ -124,7 +125,7 @@ export default function TransfersPage() {
 }
 
 function TransferDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const { tr, name, qty } = useFmt();
+  const { tr, name, qty, lang } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const toast = useToast();
   const mine = useMyWarehouses();
@@ -207,7 +208,7 @@ function TransferDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
                     .filter((x) => x.active && avail(x.id) > 0)
                     .map((x) => (
                       <option key={x.id} value={x.id}>
-                        {name(x)} ({qty(avail(x.id), x.pieces_per_carton)})
+                        {name(x)} ({qty(avail(x.id), x.pieces_per_carton, x)})
                       </option>
                     ))}
                 </Select>
@@ -227,14 +228,14 @@ function TransferDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
                   value={l.unit}
                   onChange={(u) => setLines((x) => x.map((y, j) => (j === i ? { ...y, unit: u } : y)))}
                   options={[
-                    { value: "carton", label: tr("كارتون", "Carton") },
-                    { value: "piece", label: tr("قطعة", "Piece") },
+                    { value: "carton", label: unitName(itemById.get(Number(l.item_id)), "carton", lang) },
+                    { value: "piece", label: unitName(itemById.get(Number(l.item_id)), "piece", lang) },
                   ]}
                 />
                 <Stepper value={l.qty} min={0} onChange={(v) => setLines((x) => x.map((y, j) => (j === i ? { ...y, qty: v } : y)))} />
                 {it && (
                   <span className="text-xs text-muted">
-                    {tr("المتوفر", "Available")} {qty(avail(it.id), it.pieces_per_carton)}
+                    {tr("المتوفر", "Available")} {qty(avail(it.id), it.pieces_per_carton, it)}
                   </span>
                 )}
               </div>
@@ -306,7 +307,7 @@ function ReceiveDialog({ transfer, onClose, onDone }: { transfer: Transfer; onCl
               <span className="min-w-0 text-sm">
                 <span className="block truncate font-medium">{name(it)}</span>
                 <span className="text-xs text-muted">
-                  {tr("أُرسل", "Sent")} {qty(l.pieces, it?.pieces_per_carton ?? 1)}
+                  {tr("أُرسل", "Sent")} {qty(l.pieces, it?.pieces_per_carton ?? 1, it)}
                 </span>
               </span>
               <Stepper value={got[l.item_id] ?? l.pieces} onChange={(v) => setGot((g) => ({ ...g, [l.item_id]: v }))} min={0} max={l.pieces} />

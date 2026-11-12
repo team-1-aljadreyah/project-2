@@ -5,6 +5,7 @@ import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
 import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type RuleOp, type RuleTrigger, type ShipmentLoad, type Vehicle } from "../types";
 import { linesWeight } from "../vehicles";
+import { soldUnits, unitName } from "../../units";
 import { fullSite } from "../site-defaults";
 import { missingValue, supplyGaps } from "../supply";
 import type {
@@ -348,6 +349,7 @@ export function createReceipt(db: Db, actor: DbUser, input: NewReceipt, now: Dat
   const errors: Record<string, string> = {};
   if (!input.lines.length) errors["lines"] = msg("أضف مادة واحدة على الأقل", "Add at least one item");
   input.lines.forEach((l, i) => {
+    if (db.items.find((x) => x.id === l.item_id)?.deleted) errors[`lines.${i}.item_id`] = msg("هذه المادة محذوفة", "This item was deleted");
     if (!(l.qty > 0)) errors[`lines.${i}.qty`] = msg("الكمية مطلوبة", "Quantity is required");
     if (!l.expiry_date) errors[`lines.${i}.expiry_date`] = msg("تاريخ الصلاحية مطلوب", "Expiry date is required");
     else if (l.expiry_date <= dayOf(now)) errors[`lines.${i}.expiry_date`] = msg("هذه البضاعة منتهية الصلاحية", "This stock is already expired");
@@ -416,6 +418,10 @@ function orderLines(db: Db, tierId: number, lines: NewOrder["lines"], customerId
     const item = itemOf(db, l.item_id);
     if (!item.active) errors[`lines.${i}.item_id`] = msg("هذه المادة موقوفة", "This item is not active");
     if (!(l.qty > 0) || !Number.isInteger(l.qty)) errors[`lines.${i}.qty`] = msg("الكمية يجب أن تكون عدداً صحيحاً", "Quantity must be a whole number");
+    if (!soldUnits(item).includes(l.unit)) {
+      const only = soldUnits(item)[0];
+      errors[`lines.${i}.unit`] = msg(`${item.name} تُباع بـ${unitName(item, only)} فقط`, `${item.name_en} is sold by the ${unitName(item, only, "en")} only`);
+    }
     const unit_price = customerId ? shopPrice(db, customerId, tierId, l.item_id, l.unit, at) : priceFor(item, tierId, l.unit);
     return { item_id: l.item_id, unit: l.unit, qty: l.qty, unit_price, total: unit_price * l.qty };
   });
@@ -1689,7 +1695,7 @@ export function createSupplyOrder(db: Db, actor: DbUser, input: NewSupplyOrder, 
   const lines = (input.lines ?? []).filter((l) => l.item_id && l.qty > 0);
   if (!lines.length) errors.lines = msg("أضف مادة واحدة على الأقل", "Add at least one item");
   lines.forEach((l, i) => {
-    itemOf(db, l.item_id);
+    if (itemOf(db, l.item_id).deleted) errors[`lines.${i}.item_id`] = msg("هذه المادة محذوفة", "This item was deleted");
     if (!Number.isInteger(l.qty)) errors[`lines.${i}.qty`] = msg("عدد صحيح", "A whole number");
     if (!(l.price > 0)) errors[`lines.${i}.price`] = msg("سعر الشراء مطلوب", "The purchase price is required");
   });

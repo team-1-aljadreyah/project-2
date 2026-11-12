@@ -10,6 +10,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, PackageX, ShoppingCart, Trash
 import { api, ApiError } from "@/lib/api";
 import type { Customer, Item, NewOrder, Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { firstUnit, soldUnits } from "@/lib/units";
 import { enqueue, isNetworkError, newClientRef, useOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
 import { cn, matches, piecesOf, priceOf as tierPrice } from "@/lib/utils";
@@ -49,7 +50,7 @@ function readDraft(userId: number, fallbackWarehouse: number, customerId: number
 }
 
 export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCustomerId?: number; preselectCustomerId?: number }) {
-  const { tr, money, qty: fmtQty, name } = useFmt();
+  const { tr, money, qty: fmtQty, name, unit: unitOf } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useAppRouter();
   const toast = useToast();
@@ -96,7 +97,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
       let lines: Line[];
       if (patch === null) lines = d.lines.filter((l) => l.item_id !== itemId);
       else if (exists) lines = d.lines.map((l) => (l.item_id === itemId ? { ...l, ...patch } : l)).filter((l) => l.qty > 0);
-      else lines = [...d.lines, { item_id: itemId, unit: "carton", qty: 1, ...patch }];
+      else lines = [...d.lines, { item_id: itemId, unit: firstUnit(itemById.get(itemId)), qty: 1, ...patch }];
       return { ...d, lines };
     });
   };
@@ -188,7 +189,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
               <div className="min-w-0">
                 <p className="font-medium leading-snug">{name(it)}</p>
                 <p className="mt-0.5 text-xs text-muted">
-                  {money(priceOf(it, tierId, l.unit))} / {l.unit === "carton" ? tr("كارتون", "carton") : tr("قطعة", "piece")} · {tr("المتوفر", "available")} {fmtQty(avail, it.pieces_per_carton)}
+                  {money(priceOf(it, tierId, l.unit))} / {unitOf(it, l.unit)} · {tr("المتوفر", "available")} {fmtQty(avail, it.pieces_per_carton, it)}
                 </p>
               </div>
               <button type="button" aria-label={tr("حذف", "Remove")} onClick={() => setLine(l.item_id, null)} className="flex size-9 items-center justify-center rounded-lg text-faint hover:bg-danger-soft hover:text-danger">
@@ -196,18 +197,16 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
               </button>
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <Segmented
-                value={l.unit}
-                onChange={(u) => setLine(l.item_id, { unit: u })}
-                options={[
-                  { value: "carton", label: tr("كارتون", "Carton") },
-                  { value: "piece", label: tr("قطعة", "Piece") },
-                ]}
-              />
+              {/* Only the units this item is sold by (rice in bags: «كيس» alone, no choice). */}
+              {soldUnits(it).length > 1 ? (
+                <Segmented value={l.unit} onChange={(u) => setLine(l.item_id, { unit: u })} options={soldUnits(it).map((u) => ({ value: u, label: unitOf(it, u) }))} />
+              ) : (
+                <span className="text-sm font-medium text-muted">{unitOf(it, l.unit)}</span>
+              )}
               <Stepper value={l.qty} min={0} onChange={(v) => setLine(l.item_id, { qty: v })} />
             </div>
             {(over || errors[`lines.${i}.qty`]) && (
-              <p className="mt-2 text-xs font-medium text-danger">{errors[`lines.${i}.qty`] ?? tr(`الكمية أكثر من المتوفر (${fmtQty(avail, it.pieces_per_carton)})`, `More than available (${fmtQty(avail, it.pieces_per_carton)})`)}</p>
+              <p className="mt-2 text-xs font-medium text-danger">{errors[`lines.${i}.qty`] ?? tr(`الكمية أكثر من المتوفر (${fmtQty(avail, it.pieces_per_carton, it)})`, `More than available (${fmtQty(avail, it.pieces_per_carton, it)})`)}</p>
             )}
             <p className="num mt-1 text-end text-sm font-semibold">{money(priceOf(it, tierId, l.unit) * l.qty)}</p>
           </div>
@@ -349,19 +348,25 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
                     <div className="min-w-0 flex-1">
                       <p className="font-medium leading-snug">{name(it)}</p>
                       <p className="mt-0.5 text-xs text-muted">
-                        <span className="num font-semibold text-text">{money(priceOf(it, tierId, "carton"))}</span> {tr("كارتون", "ctn")} ({it.pieces_per_carton} {tr("قطعة", "pcs")}) · <span className="num">{money(priceOf(it, tierId, "piece"))}</span> {tr("قطعة", "pc")}
+                        {soldUnits(it).map((u, k) => (
+                          <span key={u}>
+                            {k > 0 && " · "}
+                            <span className={cn("num", k === 0 && "font-semibold text-text")}>{money(priceOf(it, tierId, u))}</span> {unitOf(it, u, true)}
+                            {u === "carton" && ` (${it.pieces_per_carton} ${unitOf(it, "piece", true)})`}
+                          </span>
+                        ))}
                       </p>
                       <p className={cn("mt-0.5 text-xs", avail === 0 ? "text-danger" : low ? "text-warning" : "text-faint")}>
-                        {avail === 0 ? tr("نفد من هذا المخزن", "Out of stock here") : `${tr("المتوفر", "Available")}: ${fmtQty(avail, it.pieces_per_carton)}`}
+                        {avail === 0 ? tr("نفد من هذا المخزن", "Out of stock here") : `${tr("المتوفر", "Available")}: ${fmtQty(avail, it.pieces_per_carton, it)}`}
                       </p>
                     </div>
                     {line ? (
                       <div className="flex flex-col items-end gap-1">
                         <Stepper value={line.qty} min={0} onChange={(v) => setLine(it.id, { qty: v })} />
-                        <span className="text-[11px] text-muted">{line.unit === "carton" ? tr("كارتون", "carton") : tr("قطعة", "piece")}</span>
+                        <span className="text-[11px] text-muted">{unitOf(it, line.unit)}</span>
                       </div>
                     ) : (
-                      <Button variant="soft" disabled={avail === 0} onClick={() => setLine(it.id, { unit: avail >= it.pieces_per_carton ? "carton" : "piece", qty: 1 })}>
+                      <Button variant="soft" disabled={avail === 0} onClick={() => setLine(it.id, { unit: soldUnits(it).length > 1 ? (avail >= it.pieces_per_carton ? "carton" : "piece") : firstUnit(it), qty: 1 })}>
                         {tr("أضف", "Add")}
                       </Button>
                     )}

@@ -13,7 +13,7 @@ import { priceOf } from "@/lib/utils";
 import { useApp } from "./shell";
 
 export function SpecialPrices({ customer }: { customer: Customer }) {
-  const { tr, name } = useFmt();
+  const { tr, name, unit: un } = useFmt();
   const { user, items, itemById } = useApp();
   const toast = useToast();
   const list = useLoad(() => api.specialPrices(customer.id), [customer.id]);
@@ -44,7 +44,7 @@ export function SpecialPrices({ customer }: { customer: Customer }) {
               </span>
               <span className="flex shrink-0 items-center gap-3 text-xs">
                 <span>
-                  <Money value={sp.carton_price} /> / {tr("كارتون", "ctn")}
+                  <Money value={sp.carton_price} /> / {un(it, "carton", true)}
                 </span>
                 <span className="text-muted">
                   {it && <s className="me-1">{priceOf(it, customer.tier_id, "carton").toLocaleString("en")}</s>}
@@ -78,7 +78,7 @@ export function SpecialPrices({ customer }: { customer: Customer }) {
 }
 
 function AddSpecial({ customer, items, onClose, onDone }: { customer: Customer; items: ReturnType<typeof useApp>["items"]; onClose: () => void; onDone: () => void }) {
-  const { tr, name, money } = useFmt();
+  const { tr, name, money, unit: un } = useFmt();
   const toast = useToast();
   const [itemId, setItemId] = useState<number>(items[0]?.id ?? 0);
   const it = items.find((i) => i.id === itemId);
@@ -124,12 +124,12 @@ function AddSpecial({ customer, items, onClose, onDone }: { customer: Customer; 
             ))}
           </Select>
         </Field>
-        {it && <p className="text-xs text-muted">{tr(`سعر فئته الآن: ${money(priceOf(it, customer.tier_id, "carton"))} للكارتون، ${money(priceOf(it, customer.tier_id, "piece"))} للقطعة`, `Tier price now: ${money(priceOf(it, customer.tier_id, "carton"))} / carton, ${money(priceOf(it, customer.tier_id, "piece"))} / piece`)}</p>}
+        {it && <p className="text-xs text-muted">{tr(`سعر فئته الآن: ${money(priceOf(it, customer.tier_id, "carton"))} لل${un(it, "carton")}، ${money(priceOf(it, customer.tier_id, "piece"))} لل${un(it, "piece")}`, `Tier price now: ${money(priceOf(it, customer.tier_id, "carton"))} / ${un(it, "carton")}, ${money(priceOf(it, customer.tier_id, "piece"))} / ${un(it, "piece")}`)}</p>}
         <div className="grid grid-cols-2 gap-3">
-          <Field label={tr("سعر الكارتون", "Carton price")}>
+          <Field label={tr(`سعر ال${un(it, "carton")}`, `${un(it, "carton")} price`)}>
             <NumberInput value={carton} onChange={setCarton} suffix={tr("د.ع", "IQD")} />
           </Field>
-          <Field label={tr("سعر القطعة", "Piece price")}>
+          <Field label={tr(`سعر ال${un(it, "piece")}`, `${un(it, "piece")} price`)}>
             <NumberInput value={piece} onChange={setPiece} suffix={tr("د.ع", "IQD")} />
           </Field>
         </div>

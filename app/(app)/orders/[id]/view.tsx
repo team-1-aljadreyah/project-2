@@ -25,7 +25,7 @@ import { piecesOf, useIdParam } from "@/lib/utils";
 
 export default function OrderView() {
   const id = useIdParam();
-  const { tr, dateTime, money, qty, name } = useFmt();
+  const { tr, dateTime, money, qty, name, unit: un } = useFmt();
   const { user, lookups, itemById, reloadItems } = useApp();
   const router = useAppRouter();
   const toast = useToast();
@@ -285,7 +285,7 @@ export default function OrderView() {
                           </RefLink>
                         </p>
                         <p className="text-xs text-muted">
-                          <span className="num">{l.qty}</span> {l.unit === "carton" ? tr("كارتون", "carton") : tr("قطعة", "piece")} × <span className="num">{money(l.unit_price)}</span>
+                          <span className="num">{l.qty}</span> {un(it, l.unit)} × <span className="num">{money(l.unit_price)}</span>
                           {it && l.unit === "carton" && (
                             <span>
                               {" "}
@@ -300,7 +300,7 @@ export default function OrderView() {
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {use.map(({ b, n }) => (
                           <Badge key={b.id} tone={b.status === "near_expiry" ? "warning" : "neutral"}>
-                            {tr("دفعة", "Batch")} #{b.id} · {tr("صلاحية", "exp")} <span className="num">{b.expiry_date}</span> · {it && qty(n, it.pieces_per_carton)}
+                            {tr("دفعة", "Batch")} #{b.id} · {tr("صلاحية", "exp")} <span className="num">{b.expiry_date}</span> · {it && qty(n, it.pieces_per_carton, it)}
                           </Badge>
                         ))}
                         {short && <Badge tone="danger">{tr("الكمية غير كافية في المخزن", "Not enough on the shelf")}</Badge>}

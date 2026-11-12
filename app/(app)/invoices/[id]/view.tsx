@@ -19,7 +19,7 @@ import { useIdParam } from "@/lib/utils";
 
 export default function InvoiceView() {
   const id = useIdParam();
-  const { tr, dateTime, money, name, qty, num } = useFmt();
+  const { tr, dateTime, money, name, qty, num, unit: un } = useFmt();
   const brand = useBrand();
   const { user, lookups, itemById } = useApp();
   const inv = useLoad(() => api.getInvoice(id), [id]);
@@ -56,7 +56,7 @@ export default function InvoiceView() {
   const showCost = user.role === "manager" || user.role === "accountant";
 
   const share = () => {
-    const lines = i.lines.map((l) => `- ${itemById.get(l.item_id)?.name}: ${l.qty} ${l.unit === "carton" ? "كارتون" : "قطعة"} = ${money(l.total)}`).join("\n");
+    const lines = i.lines.map((l) => `- ${itemById.get(l.item_id)?.name}: ${l.qty} ${un(itemById.get(l.item_id), l.unit)} = ${money(l.total)}`).join("\n");
     const text = `${brand.company}\nفاتورة ${i.number}\n${c?.name ?? ""}\n${lines}\nالمجموع: ${money(i.total)}\nالباقي: ${money(Math.max(0, i.remaining))}`;
     if (i.counter) return openWhatsApp(`${brand.company}\nفاتورة ${i.number}\n${lines}\nالمجموع: ${money(i.total)} (مدفوعة)`, i.counter.buyer_phone);
     openWhatsApp(`${text}\n${pageLink(`/client/invoices/${i.id}`)}`, c?.phone);
@@ -185,7 +185,7 @@ export default function InvoiceView() {
                     </p>
                     {l.returned_pieces > 0 && it && (
                       <p className="text-xs text-warning">
-                        {tr("أُرجع", "Returned")} {qty(l.returned_pieces, it.pieces_per_carton)}
+                        {tr("أُرجع", "Returned")} {qty(l.returned_pieces, it.pieces_per_carton, it)}
                       </p>
                     )}
                     {l.batches && l.batches.length > 0 && user.role !== "shop" && user.role !== "rep" && (
@@ -200,7 +200,7 @@ export default function InvoiceView() {
                     )}
                   </td>
                   <td className="num py-3 text-center">
-                    {l.qty} {l.unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc")}
+                    {l.qty} {un(itemById.get(l.item_id), l.unit, true)}
                   </td>
                   <td className="hidden py-3 text-end sm:table-cell">
                     <Money value={l.unit_price} />

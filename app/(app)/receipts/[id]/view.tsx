@@ -57,7 +57,7 @@ export default function ReceiptView() {
                     <RefLink href={`/items/${l.item_id}`}>{name(it)}</RefLink>
                   </td>
                   <td className="num px-4 py-3">#{l.batch_id}</td>
-                  <td className="px-4 py-3">{it && qty(l.pieces, it.pieces_per_carton)}</td>
+                  <td className="px-4 py-3">{it && qty(l.pieces, it.pieces_per_carton, it)}</td>
                   <td className="num px-4 py-3">{l.expiry_date}</td>
                   <td className="px-4 py-3 text-end">
                     <Money value={l.purchase_price} />

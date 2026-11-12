@@ -319,7 +319,7 @@ export default function DeliveriesPage() {
 
 /** At the shop: 1) photo of the packages, 2) the shop owner's PIN. Both are needed. */
 function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClose: () => void }) {
-  const { tr, name } = useFmt();
+  const { tr, name, unit: un } = useFmt();
   const { itemById } = useApp();
   const toast = useToast();
   // What the shop takes: everything by default; less if it refuses part of it (the invoice is for what it took).
@@ -432,7 +432,7 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
                     <span className="min-w-0 text-sm">
                       <span className="block truncate font-medium">{name(itemById.get(l.item_id))}</span>
                       <span className="text-xs text-muted">
-                        {tr("المطلوب", "Ordered")} <span className="num">{l.qty}</span> {l.unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc")}
+                        {tr("المطلوب", "Ordered")} <span className="num">{l.qty}</span> {un(itemById.get(l.item_id), l.unit, true)}
                       </span>
                     </span>
                     <Stepper value={got[k] ?? l.qty} onChange={(v) => setGot((g) => ({ ...g, [k]: v }))} min={0} max={l.qty} />

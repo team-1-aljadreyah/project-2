@@ -45,6 +45,16 @@ The server must filter and hide, not only the pages:
   categories the manager gave him (`rep_categories`, empty = all). His monthly target (`sales_target`, set by
   the manager on the user) is counted by `GET /reps/targets`: the month's invoices with his `rep_id` less the
   returns on them; he gets only his own row (with his rank), the manager and accountant get every marketing rep.
+- **Item units** (`pack_name`, `piece_name`, `sells` on the item; none = كارتون / قطعة, both sold): the two levels
+  stay `carton` (the big pack) and `piece` (the single) everywhere. Save: names up to 20 letters and different
+  from each other; `pieces_per_carton` 1 means the single only; a price is required only for a unit that is
+  sold, the other follows (`carton = piece × n`, or `piece = round(carton / n)`), also on the quick price edit.
+  Every sale (`POST /orders`, `/counter-sales`, the shop's order edit) refuses a line in a unit the item isn't
+  sold by (422 on `lines.i.unit`); receiving, supply orders and transfers may use either level.
+- **Deleting an item** (`DELETE /items/:id`, manager): refused (409) while any piece is in a warehouse, or it is on
+  an order not delivered or a supply order not received. Never received, ordered, moved or counted: removed for
+  good (`{result: "removed"}`). Otherwise `deleted: true` and `active: false` (`{result: "hidden"}`): still sent
+  in `GET /items` so old invoices show its name, but refused in receipts and supply orders, and the pages hide it.
 - **Counter sale** (`POST /counter-sales`, the warehouse keeper only, from a warehouse he works in): someone
   who came to the warehouse pays on the spot. One request does it all: the order (`source: "counter"`, no rep:
   `rep_id` 0), the invoice (stock out, oldest expiry first, the price of the `tier_id` he chose, total rounded to
@@ -191,7 +201,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 `ChatMessage`, `RepTarget`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 133 endpoints, generated from lib/api/http.ts -->
+<!-- 134 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -255,6 +265,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `listItems` | GET | `/items` |  | `Item[]` |  |
 | `getItem` | GET | `/items/:id` | `id: number` | `Item` |  |
 | `saveItem` | POST (new) / PATCH :id | `/items` | `id: number \| null, input: ItemInput` | `Item` |  |
+| `deleteItem` | DELETE | `/items/:id` | `id: number` | `{ result: "removed" \| "hidden" }` | Delete an item (manager). Never used: removed for good ("removed"). Used before: hidden everywhere, its name kept on the old records ("hidden"). Refused while it has stock or is on an open order. |
 | `setItemImage` | POST | `/items/:id/image` | `id: number, image: string \| null` | `Item` | image: a data URL from the page (the backend stores the file and returns its link in item.image), or null to remove. |
 | `itemBatches` | GET | `/items/:itemId/batches` | `itemId: number` | `Batch[]` |  |
 | `listBatches` | GET | `/batches` | `warehouseId?: number` | `Batch[]` |  |

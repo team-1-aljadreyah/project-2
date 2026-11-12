@@ -486,6 +486,11 @@ export function makeSeed(now = new Date()): Db {
   // عباس (marketing) sells only grains, sugar, oils and canned food; أسواق الكوثر has its own price for basmati rice.
   const abbas = db.users.find((u) => u.id === 5);
   if (abbas) abbas.rep_categories = ["حبوب ورز", "سكر وطحين", "زيوت وسمن", "معلبات"];
+  // Each item's own units: basmati rice comes in a «شوال» of 4 «أكياس» (both sold); anbar rice by the bag only.
+  const basmati = db.items.find((i) => i.id === 1);
+  if (basmati) Object.assign(basmati, { pack_name: "شوال", piece_name: "كيس" });
+  const anbar = db.items.find((i) => i.id === 2);
+  if (anbar) Object.assign(anbar, { pack_name: "شوال", piece_name: "كيس", sells: "piece" });
   // Monthly sales targets: about what each marketing rep is on pace to sell this month, one a stretch, one easy
   // (in whole millions), so the dashboard's ranking and the reps' bars show something real.
   const month = dayOf(now).slice(0, 7);
