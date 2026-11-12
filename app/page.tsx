@@ -113,7 +113,7 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
   const [scrolled, setScrolled] = useState(false);
   useMotionValueEvent(scrollY, "change", (y) => setScrolled(y > 24));
   return (
-    <motion.header initial={{ y: -40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.6 }} className="fixed inset-x-0 top-0 z-40 px-3 pt-3">
+    <header className="anim-header-in fixed inset-x-0 top-0 z-40 px-3 pt-3">
       <nav
         className={cn(
           "mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-full px-3 py-2 transition-all duration-300 sm:gap-3 sm:px-4",
@@ -166,6 +166,6 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
           </Link>
         </div>
       </nav>
-    </motion.header>
+    </header>
   );
 }

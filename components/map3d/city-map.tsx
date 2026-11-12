@@ -63,7 +63,8 @@ function markerElement(m: MapMarker): HTMLElement {
 }
 
 // The map is heavy for a phone (its code and 3D drawing keep it busy for seconds). It starts on the person's
-// first touch, scroll, click or key on the page, not while the page is still opening: the page shows at once,
+// first touch, click, wheel or key on the page (not a scroll: the site itself scrolls to the top when a page
+// opens), not while the page is still opening: the page shows at once,
 // and someone who never looks at the map never pays for it. A map opened by a tap (in a dialog) starts at once.
 let interacted = false;
 const waiting = new Set<() => void>();
@@ -81,11 +82,11 @@ if (typeof window !== "undefined") {
   const go = () => {
     if (interacted) return;
     interacted = true;
-    for (const ev of ["pointerdown", "keydown", "wheel", "touchstart", "scroll"]) window.removeEventListener(ev, go, true);
+    for (const ev of ["pointerdown", "keydown", "wheel", "touchstart"]) window.removeEventListener(ev, go, true);
     waiting.forEach((f) => f());
     waiting.clear();
   };
-  for (const ev of ["pointerdown", "keydown", "wheel", "touchstart", "scroll"]) window.addEventListener(ev, go, { capture: true, passive: true });
+  for (const ev of ["pointerdown", "keydown", "wheel", "touchstart"]) window.addEventListener(ev, go, { capture: true, passive: true });
 }
 
 export function CityMap({
