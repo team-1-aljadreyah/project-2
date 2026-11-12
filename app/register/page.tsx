@@ -11,7 +11,7 @@ import { LogoMark } from "@/components/logo";
 import { errorText } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { RegisterInput } from "@/lib/api/types";
-import { homeOf, setSession, useSession } from "@/lib/auth";
+import { homeOf, setSession, takeNext, useSession } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
 import { AddressCard } from "@/components/address-form";
 import { cn } from "@/lib/utils";
@@ -71,7 +71,7 @@ export default function RegisterPage() {
       void _c;
       const s = await api.register(input);
       setSession(s);
-      router.replace("/shop");
+      router.replace(takeNext() ?? "/shop");
       // Next keeps this page's state for later: leave it empty and not "busy", or after logging out
       // the form would come back filled in with every button disabled.
       setBusy(false);

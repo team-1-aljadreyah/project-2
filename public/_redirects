@@ -7,6 +7,38 @@
 /shops  /client  301
 /shops/  /client  301
 
+# The phone apps' detail screens (same trick as below, inside /client and /driver).
+/client/orders/:id/*  /client/orders/_/:splat  200
+/client/orders/:id/  /client/orders/_/  200
+/client/orders/:id  /client/orders/_/  200
+/client/invoices/:id/*  /client/invoices/_/:splat  200
+/client/invoices/:id/  /client/invoices/_/  200
+/client/invoices/:id  /client/invoices/_/  200
+/client/returns/:id/*  /client/returns/_/:splat  200
+/client/returns/:id/  /client/returns/_/  200
+/client/returns/:id  /client/returns/_/  200
+/driver/orders/new  /driver/orders/new/  200
+/driver/orders/new/*  /driver/orders/new/:splat  200
+/driver/returns/new  /driver/returns/new/  200
+/driver/returns/new/*  /driver/returns/new/:splat  200
+/driver/payments/new  /driver/payments/new/  200
+/driver/payments/new/*  /driver/payments/new/:splat  200
+/driver/orders/:id/*  /driver/orders/_/:splat  200
+/driver/orders/:id/  /driver/orders/_/  200
+/driver/orders/:id  /driver/orders/_/  200
+/driver/invoices/:id/*  /driver/invoices/_/:splat  200
+/driver/invoices/:id/  /driver/invoices/_/  200
+/driver/invoices/:id  /driver/invoices/_/  200
+/driver/returns/:id/*  /driver/returns/_/:splat  200
+/driver/returns/:id/  /driver/returns/_/  200
+/driver/returns/:id  /driver/returns/_/  200
+/driver/customers/:id/*  /driver/customers/_/:splat  200
+/driver/customers/:id/  /driver/customers/_/  200
+/driver/customers/:id  /driver/customers/_/  200
+/driver/payments/:id/*  /driver/payments/_/:splat  200
+/driver/payments/:id/  /driver/payments/_/  200
+/driver/payments/:id  /driver/payments/_/  200
+
 # Real pages
 /orders/new  /orders/new/  200
 /orders/new/  /orders/new/  200

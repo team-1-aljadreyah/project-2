@@ -16,6 +16,7 @@ import { ShopSwitcher } from "@/components/shop-switcher";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
+import { inApp, useAppPath, useAppRouter } from "@/lib/app-path";
 import { setCurrency, setCurrencyContext, subscribeCurrency, currencyVersion, wantedCurrency } from "@/lib/currency";
 import { useFmt } from "@/lib/i18n";
 import { flushQueue, setSimulatedOffline, useOffline, useQueue, isSimulatedOffline } from "@/lib/offline";
@@ -77,7 +78,27 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
   const lookups = useLoad(() => api.lookups(), []);
   const items = useLoad(() => api.listItems(), []);
   const me = useLoad(() => api.me(), [user.id]);
-  const path = usePathname();
+  // Inside a phone app (/client/..., /driver/...) the rules and the menus use the page's own path.
+  const { prefix, path } = useAppPath();
+  const appRouter = useAppRouter();
+  // Links inside a phone app keep its prefix (so the installed app keeps them in its window). One listener for
+  // every link of every page: it runs first (capture) and moves in the app instead.
+  useEffect(() => {
+    if (!prefix) return;
+    const click = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element).closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+      const href = a.getAttribute("href") ?? "";
+      const to = inApp(prefix, href);
+      if (to === href) return;
+      e.preventDefault();
+      e.stopPropagation();
+      appRouter.push(to);
+    };
+    document.addEventListener("click", click, true);
+    return () => document.removeEventListener("click", click, true);
+  }, [prefix, appRouter]);
 
   // Keep the saved user fresh (the manager may have changed the name or role).
   // Only for the same person: another tab may have logged in as someone else, and the two tabs must not fight.
@@ -166,7 +187,7 @@ function isActive(path: string, href: string) {
 
 function Sidebar({ user }: { user: User }) {
   const { tr, lang } = useFmt();
-  const path = usePathname();
+  const { path } = useAppPath();
   // Customize mode: the rows are dragged, renamed and hidden instead of opened.
   const editing = useCustomizing() && user.role === "manager";
   const nav = useNav(user, editing);
@@ -257,7 +278,7 @@ function Sidebar({ user }: { user: User }) {
 /** The tab bar: on phones for everyone; on every screen size in the phone frame (bigger buttons there). */
 function BottomBar({ user, phone }: { user: User; phone: boolean }) {
   const { tr } = useFmt();
-  const path = usePathname();
+  const { path } = useAppPath();
   const nav = useNav(user);
   // The "more" sheet closes by itself when the page changes: it is open only for the page it was opened on.
   const [openAt, setOpenAt] = useState<string | null>(null);
@@ -334,13 +355,14 @@ function BottomBar({ user, phone }: { user: User; phone: boolean }) {
 // The top bar sits outside the pages' data (useApp), so it gets the dollar rate from the frame.
 function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: Lookups["warehouses"]; usdRate: number; phone: boolean }) {
   const { tr } = useFmt();
+  const { prefix } = useAppPath();
   const [menu, setMenu] = useState(false);
   return (
     <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-1.5 border-b border-line bg-card/95 px-2 backdrop-blur sm:h-16 sm:px-4">
       {/* On a narrow phone the shop owner's bar is full (his shop switcher shows where he is): no logo there.
           overflow-hidden: a logo squeezed to nothing must not stick out and make the page scroll sideways. */}
       <div className={cn("flex min-w-0 flex-1 items-center gap-2 overflow-hidden", !phone && "md:hidden", phone && user.role === "shop" && "max-sm:invisible")}>
-        <Logo small href={phone ? homeOf(user.role, user.rep_kinds) : "/"} />
+        <Logo small href={phone ? inApp(prefix, homeOf(user.role, user.rep_kinds)) : "/"} />
       </div>
       <div className={cn("hidden flex-1", !phone && "md:block")}>
         {user.role === "shop" && <ShopSwitcher user={user} />}

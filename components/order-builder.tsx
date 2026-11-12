@@ -2,7 +2,7 @@
 
 // The order screen. Built for the rep's phone: big buttons, search, carton/piece switch, live stock,
 // the customer's own prices, a debt-limit warning, a saved draft, and it keeps working without internet.
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/lib/app-path";
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, PackageX, ShoppingCart, Trash2, WifiOff } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
@@ -49,7 +49,7 @@ function readDraft(userId: number, fallbackWarehouse: number, customerId: number
 export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCustomerId?: number; preselectCustomerId?: number }) {
   const { tr, money, qty: fmtQty, name } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
-  const router = useRouter();
+  const router = useAppRouter();
   const toast = useToast();
   const offline = useOffline();
   const customers = useLoad(() => api.listCustomers(), []);

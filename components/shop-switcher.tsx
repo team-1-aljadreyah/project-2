@@ -4,7 +4,7 @@
 // all his shops (switch with one tap) and "add another shop". A new shop waits for the manager's approval,
 // like a sign-up: its page shows "waiting" until then. Orders, the statement and the chat follow the chosen shop.
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/lib/app-path";
 import { Check, ChevronDown, Clock, Plus, Store } from "lucide-react";
 import { Button, Dialog, Field, Input, errorText, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -19,7 +19,7 @@ const AREAS = ["حي الحسين", "سيف سعد", "حي العباس", "ال�
 
 export function ShopSwitcher({ user }: { user: User }) {
   const { tr } = useFmt();
-  const router = useRouter();
+  const router = useAppRouter();
   const toast = useToast();
   const shops = useLoad(() => api.myShops(), [user.id]);
   const [open, setOpen] = useState(false);
