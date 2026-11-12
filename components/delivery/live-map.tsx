@@ -9,7 +9,7 @@
 // and it arrives live over the WebSocket (topic "location"). Before the first one arrives, the tracker
 // estimates it from the time the shipment left (about 25 km/h in the city), and says so.
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Clock, LocateFixed, Navigation, Radio } from "lucide-react";
+import { Clock, LocateFixed, Navigation, Phone, Radio } from "lucide-react";
 import { CityMap, type LatLng, type MapMarker } from "@/components/map3d/city-map";
 import { OpenInMaps } from "@/components/open-in-maps";
 import { shareAlong, useRoadRoute } from "@/lib/road";
@@ -176,7 +176,16 @@ export function RepTripMap({ stops, warehouse, sharing }: { stops: Stop[]; wareh
   const left = places.filter((x) => !x.s.done);
   const last = left[left.length - 1];
   return (
-    <CityMap markers={markers} route={route} routeDone={doneShare} className="h-72 sm:h-80">
+    <CityMap
+      markers={markers}
+      route={route}
+      routeDone={doneShare}
+      className="h-[22rem] sm:h-96"
+      tools
+      follow={sharing.me}
+      followLabel={tr("تابعني وأنا أقود", "Follow me as I drive")}
+      next={left[0] ? { ...left[0].p, label: left[0].s.customer.name } : null}
+    >
       {last && (
         <div className="absolute inset-x-3 bottom-3 z-10 flex justify-end">
           <OpenInMaps
@@ -229,6 +238,8 @@ export function ShipmentTracker({ order, shop, warehouse, live }: { order: Order
   const at: LatLng = fresh ? { lat: fresh.lat, lng: fresh.lng } : out ? along(route, t) : from;
   // From a live position: the share of the road still ahead, at the road's pace (or ~25 km/h without it).
   const ahead = road ? 1 - shareAlong(road.path, at) : km(at, to) / Math.max(dist, 0.01);
+  // How far the rep still is (by the road when known).
+  const away = out ? (road ? ahead * road.km : km(at, to)) : dist;
   const left = out ? Math.max(1, Math.round(fresh ? (road ? ahead * road.min + 2 : (km(at, to) / 25) * 60 + 2) : minutes - elapsed)) : null;
   const markers: MapMarker[] = [
     { id: "wh", kind: "warehouse", ...from, label: tr("المخزن", "Warehouse") },
@@ -251,7 +262,15 @@ export function ShipmentTracker({ order, shop, warehouse, live }: { order: Order
       : []),
   ];
   return (
-    <CityMap markers={markers} route={route} routeDone={fresh ? 1 - Math.min(1, ahead) : t} className="h-56 sm:h-64">
+    <CityMap
+      markers={markers}
+      route={route}
+      routeDone={fresh ? 1 - Math.min(1, ahead) : t}
+      className="h-72 sm:h-80"
+      tools
+      follow={out ? at : null}
+      followLabel={tr("تابع المندوب", "Follow the rep")}
+    >
       {/* Where the rep is right now, in the phone's maps app (only from a live position). */}
       {out && fresh && (
         <div className="absolute end-3 top-3 z-10">
@@ -266,7 +285,14 @@ export function ShipmentTracker({ order, shop, warehouse, live }: { order: Order
               ? tr("يصل الآن", "Arriving now")
               : tr(`يصل خلال ${num(left ?? 0)} دقيقة تقريباً`, `Arrives in about ${num(left ?? 0)} min`)
             : tr("يُجهَّز في المخزن", "Being packed at the warehouse")}
+          {out && left !== null && left > 1 && away >= 0.1 && <span className="text-xs font-semibold text-muted">{tr(` · على بُعد ${away.toFixed(1)} كم`, ` · ${away.toFixed(1)} km away`)}</span>}
         </span>
+        {/* Call the rep on the way (his phone from when he took it out). */}
+        {out && d.out_phone && (
+          <a href={`tel:${d.out_phone}`} className="pointer-events-auto flex items-center gap-1.5 rounded-2xl bg-action px-3 py-2 text-sm font-bold text-on-action shadow-lg">
+            <Phone className="size-4" /> {tr("اتصل بالمندوب", "Call the rep")}
+          </a>
+        )}
         {out && (
           <span className="flex items-center gap-1 rounded-full bg-black/65 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
             {fresh ? <Radio className="size-3.5 text-success" /> : <Navigation className="size-3.5" />}
@@ -308,7 +334,7 @@ export function DeliveriesOverview({ orders, customers, warehouses, locations }:
   for (const l of Object.values(locations)) markers.push({ id: `r${l.rep_id}`, kind: "rep", lat: l.lat, lng: l.lng });
   if (!markers.length) return null;
   return (
-    <CityMap markers={markers} className="h-72">
+    <CityMap markers={markers} className="h-72" tools>
       <span className="pointer-events-none absolute start-3 top-3 z-10 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
         {tr(`${out.length} شحنة في الطريق`, `${out.length} shipments on the way`)}
       </span>

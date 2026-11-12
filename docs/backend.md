@@ -51,6 +51,10 @@ The server must filter and hide, not only the pages:
   OpenStreetMap) or add `GET /route?points=lng,lat;lng,lat…` that forwards to a paid router, and change `ROUTER`.
   Same answer shape as OSRM (`routes[0].geometry.coordinates`, `distance` m, `duration` s); cache it per point list.
   The «افتح في» buttons (Google Maps / Waze / Apple Maps / Android's geo: chooser) need nothing from the server.
+- **The rep's phone on a shipment** (`delivery.out_phone`): saved when he scans it out (`POST /deliveries/dispatch`),
+  so the shop owner's tracker can show «اتصل بالمندوب» while it is on the way.
+- **Map names**: the map draws Arabic street, area and place names from OpenFreeMap's tiles and fonts (no key);
+  the Arabic text plugin is served by the site itself (`public/vendor/mapbox-gl-rtl-text.min.js`, BSD licence).
 - **Item units** (`pack_name`, `piece_name`, `sells` on the item; none = كارتون / قطعة, both sold): the two levels
   stay `carton` (the big pack) and `piece` (the single) everywhere. Save: names up to 20 letters and different
   from each other; `pieces_per_carton` 1 means the single only; a price is required only for a unit that is

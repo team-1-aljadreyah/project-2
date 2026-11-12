@@ -325,10 +325,12 @@ function BottomBar({ user, phone }: { user: User; phone: boolean }) {
   const setOpen = (v: boolean) => setOpenAt(v ? path : null);
   const main = nav.filter((n) => n.mobile?.includes(user.role)).slice(0, 4);
   const rest = nav.filter((n) => !main.includes(n));
+  // Every page already in the bar (the shop owner): no «المزيد» (it would open an empty sheet).
+  const more = rest.length > 0;
   return (
     <>
       <nav data-tour="menu" className={cn("no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur", !phone && "md:hidden")}>
-        <div className="mx-auto grid max-w-lg grid-cols-5">
+        <div className={cn("mx-auto grid max-w-lg", more ? "grid-cols-5" : main.length === 4 ? "grid-cols-4" : main.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
           {main.map((n) => {
             const active = isActive(path, n.href);
             return (
@@ -348,6 +350,7 @@ function BottomBar({ user, phone }: { user: User; phone: boolean }) {
               </Link>
             );
           })}
+          {more && (
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -358,9 +361,10 @@ function BottomBar({ user, phone }: { user: User; phone: boolean }) {
             </span>
             {tr("المزيد", "More")}
           </button>
+          )}
         </div>
       </nav>
-      {open && (
+      {open && more && (
         <div className={cn("no-print fixed inset-0 z-50 flex items-end justify-center bg-black/40", !phone && "md:hidden")} onClick={() => setOpen(false)}>
           <div className="max-h-[80dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-card p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between px-1">

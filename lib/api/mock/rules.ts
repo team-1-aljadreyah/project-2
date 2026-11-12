@@ -2496,7 +2496,7 @@ export function dispatchDelivery(db: Db, actor: DbUser, rawCode: string, now: Da
   if (actor.role === "rep" && deliveryRepId(o) !== actor.id) fail(403, "FORBIDDEN", "هذه الشحنة لمندوب توصيل آخر", "This shipment belongs to another delivery rep");
   if (d.status === "delivered") fail(409, "BAD_STATE", "هذه الشحنة سُلِّمت من قبل", "This shipment was already delivered");
   if (d.status === "out") return o; // scanned twice: nothing changes
-  Object.assign(d, { status: "out", out_at: now.toISOString(), out_by: person(actor) });
+  Object.assign(d, { status: "out", out_at: now.toISOString(), out_by: person(actor), out_phone: actor.phone });
   const customer = db.customers.find((c) => c.id === o.customer_id);
   audit(db, actor, "update", "order", o.id, `خروج الشحنة ${o.number} مع ${actor.name} إلى ${customer?.name ?? ""}`, `Shipment ${o.number} out with ${actor.name}`, now);
   // Only the shop owner gets the PIN, in his own notification.

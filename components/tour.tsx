@@ -3,7 +3,7 @@
 // A short first-time tour for each job: a few steps that light up the real buttons (the menu, the search,
 // the notifications, the account) and say what each one is for. Shown once on this device, and replayed
 // from the account menu («جولة تعريفية»). A step whose button isn't on screen (phone vs computer) is skipped.
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Role, User } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -84,6 +84,18 @@ export function Tour({ user }: { user: User }) {
   }, [on]);
   const target = on && step?.target ? findTarget(step.target) : null;
   const box = target ? target.getBoundingClientRect() : null;
+  // A lit button out of view (the page scrolled) comes into view first.
+  useEffect(() => {
+    if (!on || !step?.target) return;
+    findTarget(step.target)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [on, at, step?.target]);
+  // The card's real height (its text differs per step and language), for placing it inside the screen.
+  const card = useRef<HTMLDivElement>(null);
+  const [cardH, setCardH] = useState(190);
+  useLayoutEffect(() => {
+    const h = card.current?.offsetHeight;
+    if (h && Math.abs(h - cardH) > 1) setCardH(h);
+  }, [cardH, at, on]);
 
   const finish = () => {
     try {
@@ -102,17 +114,29 @@ export function Tour({ user }: { user: User }) {
   if (!on || !step) return null;
   const last = at >= steps.length - 1;
   const pad = 6;
-  // The card: under the lit button, or above it near the bottom; in the middle without a button.
+  // The card: under the lit thing, or above it, or beside it (a tall side menu), whichever fits on the screen;
+  // in the middle without one. It never leaves the screen (it was lost above a full-height side menu).
   const W = typeof window === "undefined" ? 400 : window.innerWidth;
   const H = typeof window === "undefined" ? 800 : window.innerHeight;
   const cardW = Math.min(340, W - 24);
-  const style: React.CSSProperties = box
-    ? {
-        width: cardW,
-        left: Math.max(12, Math.min(W - cardW - 12, box.left + box.width / 2 - cardW / 2)),
-        ...(box.bottom + 200 < H ? { top: box.bottom + 14 } : { bottom: H - box.top + 14 }),
-      }
-    : { width: cardW, left: (W - cardW) / 2, top: Math.max(24, H / 2 - 120) };
+  const gap = 14;
+  const m = 12;
+  const clampX = (x: number) => Math.max(m, Math.min(W - cardW - m, x));
+  const clampY = (y: number) => Math.max(m, Math.min(H - cardH - m, y));
+  let pos = { left: (W - cardW) / 2, top: clampY(H / 2 - cardH / 2) };
+  if (box) {
+    const midX = clampX(box.left + box.width / 2 - cardW / 2);
+    const midY = clampY(box.top + box.height / 2 - cardH / 2);
+    const options = [
+      { ok: box.bottom + gap + cardH <= H - m, left: midX, top: box.bottom + gap },
+      { ok: box.top - gap - cardH >= m, left: midX, top: box.top - gap - cardH },
+      { ok: box.left - gap - cardW >= m, left: box.left - gap - cardW, top: midY },
+      { ok: box.right + gap + cardW <= W - m, left: box.right + gap, top: midY },
+    ];
+    const fit = options.find((o) => o.ok);
+    pos = fit ? { left: fit.left, top: fit.top } : { left: midX, top: clampY(H - cardH - m) };
+  }
+  const style: React.CSSProperties = { width: cardW, left: pos.left, top: pos.top };
 
   return createPortal(
     <div className="fixed inset-0 z-[95]" role="dialog" aria-modal aria-label={tr("جولة تعريفية", "Tour")}>
@@ -125,7 +149,7 @@ export function Tour({ user }: { user: User }) {
         />
         {box && <rect x={box.left - pad} y={box.top - pad} width={box.width + pad * 2} height={box.height + pad * 2} rx="12" fill="none" stroke="#e1692b" strokeWidth="2" />}
       </svg>
-      <div className="fixed rounded-2xl border border-line bg-card p-4 shadow-2xl" style={style}>
+      <div ref={card} className="fixed max-h-[calc(100dvh-24px)] overflow-y-auto rounded-2xl border border-line bg-card p-4 shadow-2xl" style={style}>
         <p className="text-xs font-semibold text-muted">
           {tr(`الخطوة ${at + 1} من ${steps.length}`, `Step ${at + 1} of ${steps.length}`)}
         </p>
