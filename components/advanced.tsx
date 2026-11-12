@@ -13,7 +13,8 @@ import { roleName } from "@/components/status";
 import { Badge, Button, Card, Dialog, Empty, errorText, Field, Input, Notice, Switch, Textarea, useToast } from "@/components/ui";
 import { NAV, type NavItem } from "@/components/nav";
 import { api } from "@/lib/api";
-import type { AppDef, Profile, Role, User } from "@/lib/api/types";
+import type { AppDef, CustomField, CustomObject, CustomType, CustomValue, Profile, Role, User } from "@/lib/api/types";
+import { FieldInput } from "@/components/custom-fields";
 import { homeOf } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
 import { saveSite, useSite } from "@/lib/site";
@@ -697,6 +698,328 @@ function AppWizard({ app, onClose }: { app?: AppDef; onClose: () => void }) {
             </Notice>
           )}
           <p className="text-xs text-muted">{tr("كل شخص يرى من صفحات التطبيق ما تسمح به وظيفته وملفه فقط.", "Each person sees only the app's pages their job and profile allow.")}</p>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+// ---------- Object manager: the manager's own fields ----------
+
+const OBJECTS: { key: CustomObject; ar: string; en: string; about: string; aboutEn: string; standard: string[] }[] = [
+  {
+    key: "customer",
+    ar: "الزبائن",
+    en: "Customers",
+    about: "المحلات التي تشتري منكم",
+    aboutEn: "The shops that buy from you",
+    standard: ["اسم المحل", "صاحب المحل", "الهاتف", "المنطقة", "العنوان", "نوع السعر", "المندوب", "سقف الدين", "فعّال"],
+  },
+  {
+    key: "item",
+    ar: "المواد",
+    en: "Items",
+    about: "البضاعة وأسعارها",
+    aboutEn: "The goods and their prices",
+    standard: ["الاسم", "الاسم بالإنكليزية", "الفئة", "الباركود", "القطع في الكارتون", "الحد الأدنى", "عمولة المندوب", "الوزن", "الأسعار", "فعّالة"],
+  },
+  {
+    key: "order",
+    ar: "الطلبات",
+    en: "Orders",
+    about: "طلبات المحلات والمندوبين",
+    aboutEn: "The shops' and reps' orders",
+    standard: ["الرقم", "الزبون", "المندوب", "المخزن", "السطور", "المجموع", "الخصم", "الحالة", "التوصيل"],
+  },
+];
+
+const TYPES: { key: CustomType; ar: string; en: string; hint: string; hintEn: string }[] = [
+  { key: "text", ar: "نص", en: "Text", hint: "اسم، ملاحظة، رقم سجل…", hintEn: "A name, a note…" },
+  { key: "number", ar: "رقم", en: "Number", hint: "مساحة، عدد، مبلغ…", hintEn: "An area, a count…" },
+  { key: "date", ar: "تاريخ", en: "Date", hint: "تاريخ انتهاء رخصة…", hintEn: "A licence expiry…" },
+  { key: "list", ar: "قائمة اختيار", en: "Choice list", hint: "يختار واحداً من خيارات تكتبها", hintEn: "Pick one of your choices" },
+  { key: "yesno", ar: "نعم / لا", en: "Yes / No", hint: "مثلاً: يقبل الدفع الإلكتروني", hintEn: "e.g. takes card payments" },
+];
+const typeName = (t: CustomType, tr: (a: string, b: string) => string) => {
+  const x = TYPES.find((y) => y.key === t)!;
+  return tr(x.ar, x.en);
+};
+
+export function ObjectsSection({ openObj, go }: { openObj?: string; go: (s: string) => void }) {
+  const { tr, num } = useFmt();
+  const site = useSite();
+  const obj = OBJECTS.find((o) => o.key === openObj);
+  if (obj) return <ObjectPage obj={obj} onBack={() => go("objects")} />;
+  return (
+    <div>
+      <div className="mb-4">
+        <h2 className="text-xl font-bold">{tr("مدير الكائنات والحقول", "Objects and fields")}</h2>
+        <p className="text-sm text-muted">{tr("أضف حقولك الخاصة إلى الزبائن والمواد والطلبات: تظهر في النماذج والصفحات والجداول، بلا مبرمج.", "Add your own fields to customers, items and orders: they show in the forms, pages and tables, no developer.")}</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {OBJECTS.map((o) => {
+          const n = site.fields.filter((f) => f.object === o.key).length;
+          return (
+            <button key={o.key} type="button" onClick={() => go(`objects:${o.key}`)} className="box-row rounded-2xl border border-line bg-card p-5 text-start transition hover:border-primary">
+              <p className="text-lg font-bold">{tr(o.ar, o.en)}</p>
+              <p className="text-sm text-muted">{tr(o.about, o.aboutEn)}</p>
+              <p className="mt-3 text-xs text-muted">
+                {tr(`${num(o.standard.length)} حقل أساسي · `, `${o.standard.length} standard · `)}
+                <b className="text-text">{tr(`${num(n)} حقل مخصص`, `${n} custom`)}</b>
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ObjectPage({ obj, onBack }: { obj: (typeof OBJECTS)[number]; onBack: () => void }) {
+  const { tr } = useFmt();
+  const site = useSite();
+  const save = useSave();
+  const [edit, setEdit] = useState<CustomField | "new" | null>(null);
+  const [removing, setRemoving] = useState<CustomField | null>(null);
+  const fields = site.fields.filter((f) => f.object === obj.key);
+  const rolesText = (r: Role[], all: string) => (r.length ? r.map((x) => roleName(x, tr)).join(tr("، ", ", ")) : all);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={onBack} className="text-sm font-semibold text-primary-ink hover:underline">
+          {tr("← كل الكائنات", "← All objects")}
+        </button>
+        <h2 className="flex-1 text-xl font-bold">{tr(obj.ar, obj.en)}</h2>
+        <Button variant="action" onClick={() => setEdit("new")}>
+          <Plus className="size-4" /> {tr("حقل جديد", "New field")}
+        </Button>
+      </div>
+      <Card className="overflow-x-auto">
+        <p className="border-b border-line px-4 py-3 font-bold">{tr("الحقول المخصصة", "Custom fields")}</p>
+        {fields.length === 0 ? (
+          <p className="p-4 text-sm text-muted">{tr("لا حقول بعد. مثال للزبائن: «رقم السجل التجاري» أو «يوم الزيارة».", "None yet. e.g. for customers: “Trade licence no.” or “Visit day”.")}</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line bg-card-2 text-xs text-muted">
+                <th className="px-3 py-2 text-start font-medium">{tr("الحقل", "Field")}</th>
+                <th className="px-3 py-2 text-start font-medium">{tr("النوع", "Type")}</th>
+                <th className="px-3 py-2 text-start font-medium">{tr("يراه", "Seen by")}</th>
+                <th className="px-3 py-2 text-start font-medium">{tr("يعدّله", "Changed by")}</th>
+                <th className="px-3 py-2 text-start font-medium">{tr("فعّال", "Active")}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {fields.map((f) => (
+                <tr key={f.id} className="box-row cursor-pointer border-b border-line last:border-0 hover:bg-card-2" onClick={() => setEdit(f)}>
+                  <td className="px-3 py-3">
+                    <span className="font-semibold">{f.label}</span>
+                    <span className="ms-2 inline-flex gap-1">
+                      {f.required && <Badge tone="warning">{tr("مطلوب", "Required")}</Badge>}
+                      {f.in_table && <Badge>{tr("في الجدول", "In the table")}</Badge>}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3">{typeName(f.type, tr)}</td>
+                  <td className="px-3 py-3 text-xs">{rolesText(f.view_roles, tr("الجميع", "Everyone"))}</td>
+                  <td className="px-3 py-3 text-xs">{rolesText(["manager", ...f.edit_roles], "")}</td>
+                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                    <Switch
+                      checked={f.active}
+                      onChange={(v) => save((s) => ({ ...s, fields: s.fields.map((x) => (x.id === f.id ? { ...x, active: v } : x)) }), v ? tr("الحقل ظاهر", "Field on") : tr("أُخفي الحقل (قيمه محفوظة)", "Field hidden (values kept)"))}
+                      label={<span className="sr-only">{f.label}</span>}
+                    />
+                  </td>
+                  <td className="px-3 py-3 text-end" onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" variant="ghost" className="text-danger" onClick={() => setRemoving(f)} aria-label={tr("حذف", "Delete")}>
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+      <Card className="p-4">
+        <p className="mb-2 font-bold">{tr("الحقول الأساسية", "Standard fields")}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {obj.standard.map((s) => (
+            <span key={s} className="flex items-center gap-1 rounded-lg bg-card-2 px-2 py-1 text-xs text-muted">
+              <Lock className="size-3" /> {s}
+            </span>
+          ))}
+        </div>
+      </Card>
+      {edit && <FieldWizard object={obj.key} field={edit === "new" ? undefined : edit} onClose={() => setEdit(null)} />}
+      {removing && (
+        <Dialog
+          open
+          onClose={() => setRemoving(null)}
+          title={tr(`حذف «${removing.label}»`, `Delete ${removing.label}`)}
+          footer={
+            <>
+              <Button onClick={() => setRemoving(null)}>{tr("تراجع", "Back")}</Button>
+              <Button
+                variant="danger"
+                onClick={async () => {
+                  const id = removing.id;
+                  if (await save((s) => ({ ...s, fields: s.fields.filter((x) => x.id !== id) }), tr("حُذف الحقل", "Field deleted"))) setRemoving(null);
+                }}
+              >
+                <Trash2 className="size-4" /> {tr("حذف", "Delete")}
+              </Button>
+            </>
+          }
+        >
+          <Notice tone="warning" title={tr("يختفي الحقل من كل الصفحات", "The field leaves every page")}>
+            {tr("إن أردت إخفاءه مع حفظ قيمه فأطفئ «فعّال» بدلاً من الحذف.", "To hide it but keep its values, switch “Active” off instead.")}
+          </Notice>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+/** New field (or edit one) in three steps: the type → the details (with a live preview) → who sees and changes it. */
+function FieldWizard({ object, field, onClose }: { object: CustomObject; field?: CustomField; onClose: () => void }) {
+  const { tr } = useFmt();
+  const save = useSave();
+  const [step, setStep] = useState(field ? 1 : 0);
+  const [busy, setBusy] = useState(false);
+  const [f, setF] = useState<CustomField>(field ?? { id: newId("f"), object, label: "", type: "text", view_roles: [], edit_roles: [], active: true });
+  const [optionsText, setOptionsText] = useState((field?.options ?? []).join("\n"));
+  const [preview, setPreview] = useState<CustomValue | null>(null);
+  const options = optionsText
+    .split("\n")
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const ready = f.label.trim().length >= 2 && (f.type !== "list" || options.length > 0);
+  const steps = [tr("النوع", "Type"), tr("التفاصيل", "Details"), tr("الصلاحيات", "Access")];
+  const chip = (on: boolean) => cn("rounded-xl border px-3 py-2 text-sm font-semibold", on ? "border-primary bg-primary-soft text-primary-ink" : "border-line hover:bg-card-2");
+
+  async function finish() {
+    setBusy(true);
+    const clean: CustomField = { ...f, label: f.label.trim(), label_en: f.label_en?.trim() || undefined, help: f.help?.trim() || undefined, options: f.type === "list" ? options : undefined };
+    const ok = await save(
+      (s) => ({ ...s, fields: field ? s.fields.map((x) => (x.id === f.id ? clean : x)) : [...s.fields, clean] }),
+      field ? tr("حُفظ الحقل", "Field saved") : tr(`أُضيف «${clean.label}» ويظهر الآن في النماذج والصفحات`, `${clean.label} added; it shows in the forms and pages now`),
+    );
+    setBusy(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <Dialog
+      open
+      wide
+      onClose={onClose}
+      title={field ? tr(`تعديل «${field.label}»`, `Edit ${field.label}`) : tr("حقل جديد", "New field")}
+      footer={
+        <>
+          {step > 0 && <Button onClick={() => setStep(step - 1)}>{tr("السابق", "Back")}</Button>}
+          <span className="flex-1" />
+          {step < 2 ? (
+            <Button variant="primary" disabled={step === 1 && !ready} onClick={() => setStep(step + 1)}>
+              {tr("التالي", "Next")}
+            </Button>
+          ) : (
+            <Button variant="action" loading={busy} disabled={!ready} onClick={finish}>
+              <Check className="size-4" /> {tr("حفظ", "Save")}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <ol className="mb-5 flex items-center gap-2">
+        {steps.map((s, i) => (
+          <li key={s} className="flex flex-1 items-center gap-2">
+            <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold", i <= step ? "bg-primary text-on-primary" : "bg-card-2 text-muted")}>{i + 1}</span>
+            <span className={cn("hidden text-sm sm:inline", i === step ? "font-bold" : "text-muted")}>{s}</span>
+            {i < steps.length - 1 && <span className="h-px flex-1 bg-line" />}
+          </li>
+        ))}
+      </ol>
+
+      {step === 0 && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {TYPES.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => {
+                setF({ ...f, type: t.key });
+                setPreview(null);
+                setStep(1);
+              }}
+              className={cn("box-row rounded-2xl border p-4 text-start transition hover:border-primary", f.type === t.key ? "border-primary bg-primary-soft" : "border-line")}
+            >
+              <p className="font-bold">{tr(t.ar, t.en)}</p>
+              <p className="text-xs text-muted">{tr(t.hint, t.hintEn)}</p>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {step === 1 && (
+        <div className="grid gap-4 md:grid-cols-[1fr_260px]">
+          <div className="space-y-3">
+            <Field label={tr("اسم الحقل", "Field name")}>
+              <Input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} placeholder={tr("مثال: رقم السجل التجاري", "e.g. Trade licence no.")} autoFocus />
+            </Field>
+            <Field label={tr("الاسم بالإنكليزية (اختياري)", "English name (optional)")}>
+              <Input dir="ltr" value={f.label_en ?? ""} onChange={(e) => setF({ ...f, label_en: e.target.value })} />
+            </Field>
+            {f.type === "list" && (
+              <Field label={tr("الخيارات (كل خيار في سطر)", "Choices (one per line)")} error={options.length ? undefined : tr("أضف خياراً واحداً على الأقل", "Add at least one")}>
+                <Textarea rows={4} value={optionsText} onChange={(e) => setOptionsText(e.target.value)} placeholder={tr("السبت\nالأحد\nالإثنين", "Saturday\nSunday")} />
+              </Field>
+            )}
+            <Field label={tr("تلميح تحت الحقل (اختياري)", "Hint under it (optional)")}>
+              <Input value={f.help ?? ""} onChange={(e) => setF({ ...f, help: e.target.value })} />
+            </Field>
+            <Switch checked={!!f.required} onChange={(v) => setF({ ...f, required: v || undefined })} label={tr("مطلوب: لا يُحفظ السجل وهو فارغ", "Required: the record can't be saved without it")} />
+            <Switch checked={!!f.in_table} onChange={(v) => setF({ ...f, in_table: v || undefined })} label={tr("عمود في الجدول أيضاً", "Also a column in the table")} />
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-medium">{tr("هكذا يظهر", "How it looks")}</p>
+            <div className="rounded-2xl border border-line bg-card-2 p-3">
+              <FieldInput field={{ ...f, label: f.label || tr("اسم الحقل", "Field name"), options }} value={preview} onChange={setPreview} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1 text-sm font-medium">{tr("من يراه", "Who sees it")}</p>
+            <p className="mb-2 text-xs text-muted">{tr("بلا اختيار = كل من يرى السجل. المدير يرى كل شيء.", "None chosen = everyone who sees the record. The manager sees everything.")}</p>
+            <div className="flex flex-wrap gap-2">
+              {JOBS.map((r) => {
+                const on = f.view_roles.includes(r);
+                return (
+                  <button key={r} type="button" onClick={() => setF({ ...f, view_roles: on ? f.view_roles.filter((x) => x !== r) : [...f.view_roles, r], edit_roles: on ? f.edit_roles.filter((x) => x !== r) : f.edit_roles })} className={chip(on)}>
+                    {roleName(r, tr)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-sm font-medium">{tr("من يعدّله", "Who changes it")}</p>
+            <p className="mb-2 text-xs text-muted">{tr("المدير دائماً. أضف من يحتاج أن يكتب فيه أيضاً.", "Always the manager. Add whoever also needs to fill it.")}</p>
+            <div className="flex flex-wrap gap-2">
+              {JOBS.filter((r) => !f.view_roles.length || f.view_roles.includes(r)).map((r) => {
+                const on = f.edit_roles.includes(r);
+                return (
+                  <button key={r} type="button" onClick={() => setF({ ...f, edit_roles: on ? f.edit_roles.filter((x) => x !== r) : [...f.edit_roles, r] })} className={chip(on)}>
+                    {roleName(r, tr)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </Dialog>

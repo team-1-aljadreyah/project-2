@@ -1,4 +1,5 @@
 "use client";
+import { CustomInputs, missingRequired, saveCustom, useFields } from "@/components/custom-fields";
 
 // Add / edit an item (manager): carton size, minimum stock, commission and a price for every tier.
 import { useState } from "react";
@@ -28,12 +29,21 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<ItemInput>) => setF((x) => ({ ...x, ...p }));
   const setPrice = (tier: number, p: { carton_price?: number; piece_price?: number }) => set({ prices: f.prices.map((x) => (x.tier_id === tier ? { ...x, ...p } : x)) });
+  // The manager's own fields (advanced settings), saved right after the item.
+  const [cv, setCv] = useState<Record<string, string | number | boolean | null>>(() => ({ ...item?.custom }));
+  const { editable } = useFields("item");
 
   async function save() {
+    const missing = missingRequired(editable, cv);
+    if (missing.length) {
+      setErr(Object.fromEntries(missing.map((m) => [`custom.${m.id}`, tr("مطلوب", "Required")])));
+      return;
+    }
     setBusy(true);
     setErr({});
     try {
       const it = await api.saveItem(item?.id ?? null, f);
+      await saveCustom("item", it.id, item?.custom, cv);
       toast("success", tr("تم حفظ المادة", "Item saved"));
       reloadItems();
       onSaved?.(it);
@@ -116,6 +126,9 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
           <Notice tone="primary">{tr("تغيير السعر يسري على الطلبات الجديدة فقط. الفواتير القديمة تبقى بسعرها.", "A new price applies to new orders only. Old invoices keep their price.")}</Notice>
         </div>
       )}
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <CustomInputs object="item" values={cv} onChange={setCv} errors={err} />
+      </div>
     </Dialog>
   );
 }

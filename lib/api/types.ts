@@ -166,6 +166,8 @@ export interface ItemPrice {
 }
 
 export interface Item {
+  /** The manager's own fields (id → value), only the ones this person may see. */
+  custom?: Record<string, CustomValue>;
   id: number;
   /** The weight of one piece in kg (for the vehicles' loads). None = read from the name ("5 kg", "1 L"). */
   weight_kg?: number;
@@ -268,6 +270,8 @@ export interface ShopAddress {
 }
 
 export interface Customer {
+  /** The manager's own fields (id → value), only the ones this person may see. */
+  custom?: Record<string, CustomValue>;
   id: number;
   name: string;
   owner_name: string;
@@ -305,6 +309,8 @@ export interface OrderLine {
 }
 
 export interface Order {
+  /** The manager's own fields (id → value), only the ones this person may see. */
+  custom?: Record<string, CustomValue>;
   id: number;
   /** A big order carried by more than one vehicle: the order of each vehicle load (a "shipment"). The shop sees
    *  this order; each shipment has its own label, PIN and invoice. */
@@ -814,6 +820,38 @@ export interface SiteCustom {
   profiles: Profile[];
   /** Advanced settings: apps (named sets of pages, opened from the app launcher). */
   apps: AppDef[];
+  /** Advanced settings: the manager's own fields on customers, items and orders (object manager). */
+  fields: CustomField[];
+}
+
+/** The records that can have the manager's own fields. */
+export type CustomObject = "customer" | "item" | "order";
+export type CustomType = "text" | "number" | "date" | "list" | "yesno";
+export type CustomValue = string | number | boolean;
+
+/**
+ * A field the manager added (like Salesforce's custom fields): it shows in the record's form, on its page,
+ * and in its table if wanted. Who sees it and who changes it are chosen by job (field-level security).
+ */
+export interface CustomField {
+  id: string;
+  object: CustomObject;
+  label: string;
+  label_en?: string;
+  type: CustomType;
+  /** For a list: the choices. */
+  options?: string[];
+  /** Can't be left empty when the record is saved. */
+  required?: boolean;
+  /** A short hint under the box. */
+  help?: string;
+  /** Also a column in the record's table. */
+  in_table?: boolean;
+  /** Jobs that see it (empty = everyone who sees the record). */
+  view_roles: Role[];
+  /** Jobs that change it (the manager always can). */
+  edit_roles: Role[];
+  active: boolean;
 }
 
 /**

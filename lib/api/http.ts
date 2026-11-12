@@ -67,6 +67,8 @@ import type {
   MyChat,
   Expense,
   NewExpense,
+  CustomObject,
+  CustomValue,
 } from "./types";
 
 export interface Lookups {
@@ -100,6 +102,8 @@ export const httpApi = {
   register: (input: RegisterInput) => post<Session>("/auth/register", input),
   logout: () => post<void>("/auth/logout"),
   me: () => get<User>("/me"),
+  /** The values of the manager's own fields on one record (only the ones this person may change). */
+  saveCustomValues: (object: CustomObject, id: number, values: Record<string, CustomValue | null>) => patch<Record<string, CustomValue>>(`/custom/${object}/${id}`, values),
   /** The manager puts someone in a permission profile of their job (null = the job's usual access). */
   setUserProfile: (id: number, profileId: string | null) => post<User>(`/users/${id}/profile`, { profile_id: profileId }),
   /** The manager deletes a login (not his own). Its name stays on its records. */

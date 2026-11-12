@@ -4,9 +4,9 @@
 // and the part chosen on the other side. ?s=home | profiles | profiles:<id> | apps
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppWindow, ChevronDown, History, Home, Palette, Search, ShieldCheck, Users } from "lucide-react";
+import { AppWindow, Boxes, ChevronDown, History, Home, Palette, Search, ShieldCheck, Users } from "lucide-react";
 import Link from "next/link";
-import { AppsSection, ProfilesSection, SetupHome } from "@/components/advanced";
+import { AppsSection, ObjectsSection, ProfilesSection, SetupHome } from "@/components/advanced";
 import { Card, LoadingRows, PageHeader } from "@/components/ui";
 import { useAppRouter } from "@/lib/app-path";
 import { useFmt } from "@/lib/i18n";
@@ -50,7 +50,10 @@ function Setup() {
     {
       ar: "أدوات المنصة",
       en: "Platform tools",
-      leaves: [{ key: "apps", ar: "مدير التطبيقات", en: "App manager", icon: AppWindow }],
+      leaves: [
+        { key: "apps", ar: "مدير التطبيقات", en: "App manager", icon: AppWindow },
+        { key: "objects", ar: "مدير الكائنات والحقول", en: "Objects and fields", icon: Boxes },
+      ],
     },
     {
       ar: "الموقع",
@@ -102,7 +105,7 @@ function Setup() {
           </nav>
         </Card>
         <div className="min-w-0">
-          {part === "profiles" ? <ProfilesSection openId={id} go={go} /> : part === "apps" ? <AppsSection /> : <SetupHome go={go} />}
+          {part === "profiles" ? <ProfilesSection openId={id} go={go} /> : part === "apps" ? <AppsSection /> : part === "objects" ? <ObjectsSection openObj={id} go={go} /> : <SetupHome go={go} />}
         </div>
       </div>
     </>

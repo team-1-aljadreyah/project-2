@@ -1,4 +1,5 @@
 "use client";
+import { useCustomColumns } from "@/components/custom-fields";
 
 import { useRef, useState } from "react";
 import { AlertTriangle, ImagePlus, Package, Plus } from "lucide-react";
@@ -40,6 +41,7 @@ export default function ItemsPage() {
   const rows = items.filter((i) => (f === "all" ? i.active : f === "low" ? i.active && low(i) : !i.active) && (!cat || i.category === cat) && matches(q, i.name, i.name_en, i.barcode, i.category));
   const seesCost = user.role !== "rep";
 
+  const extra = useCustomColumns<Item>("item");
   const columns: Column<Item>[] = [
     ...(editing ? [{ key: "ph", head: tr("الصورة", "Photo"), cell: (i: Item) => <PhotoCell item={i} onDone={reloadItems} /> }] : []),
     { key: "n", head: tr("المادة", "Item"), cell: (i) => <EditText value={name(i)} onSave={(v) => quick(i.id, lang === "ar" ? { name: v } : { name_en: v })} /> },
@@ -84,6 +86,7 @@ export default function ItemsPage() {
         return <span className={`num ${d <= 30 ? "text-warning font-medium" : "text-muted"}`}>{i.nearest_expiry}</span>;
       },
     },
+    ...extra,
   ];
 
   return (

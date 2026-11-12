@@ -1,4 +1,5 @@
 "use client";
+import { useCustomColumns } from "@/components/custom-fields";
 
 import { useState } from "react";
 import { ClipboardList, Clock, Plus, RotateCw, Trash2, WifiOff } from "lucide-react";
@@ -35,6 +36,7 @@ export default function OrdersPage() {
   const rows = all.filter((o) => pass(o, filter) && matches(q, o.number, cName(o.customer_id), rName(o.rep_id)));
   const canCreate = user.role === "rep" || user.role === "manager";
 
+  const extra = useCustomColumns<Order>("order");
   const columns: Column<Order>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (o) => <span className="num">{o.number}</span> },
     { key: "c", head: tr("الزبون", "Customer"), cell: (o) => <RefLink href={`/customers/${o.customer_id}`}>{cName(o.customer_id)}</RefLink> },
@@ -52,6 +54,7 @@ export default function OrdersPage() {
       ),
     },
     { key: "d", head: tr("الوقت", "Time"), cell: (o) => <span className="text-muted">{dateTime(o.created_at)}</span> },
+    ...extra,
   ];
 
   return (
