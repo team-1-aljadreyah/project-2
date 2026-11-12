@@ -20,6 +20,7 @@ export const DEFAULT_SITE: SiteCustom = {
   profiles: [],
   apps: [],
   fields: [],
+  rules: [],
 };
 
 /** Fill what is missing with the defaults (an older saved copy may not have every part). */
@@ -35,6 +36,7 @@ export function fullSite(s: Partial<SiteCustom> | null | undefined): SiteCustom 
     profiles: s?.profiles ?? [],
     apps: s?.apps ?? [],
     fields: s?.fields ?? [],
+    rules: s?.rules ?? [],
   };
 }
 

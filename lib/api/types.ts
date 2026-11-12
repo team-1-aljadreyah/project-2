@@ -334,7 +334,9 @@ export interface Order {
   rounding?: number;
   discount?: OrderDiscount;
   /** Why the order waits for the manager: over the debt limit, a discount above 3%, or both. */
-  approval_for?: ("debt" | "discount")[];
+  approval_for?: ("debt" | "discount" | "rule")[];
+  /** The automation rules that hold this order for the manager (their names). */
+  rule_note?: string;
   /** The shop owner changed it after sending (before it was confirmed). */
   edited_at?: string;
   /** Approved by the accountant / manager (the warehouse can prepare it). */
@@ -748,7 +750,8 @@ export type NotificationType =
   | "order_review"
   | "refund"
   | "supply_order"
-  | "expense";
+  | "expense"
+  | "rule";
 
 export interface AppNotification {
   id: number;
@@ -822,7 +825,96 @@ export interface SiteCustom {
   apps: AppDef[];
   /** Advanced settings: the manager's own fields on customers, items and orders (object manager). */
   fields: CustomField[];
+  /** Advanced settings: automation rules ("when this happens, if …, do that"). */
+  rules: AutoRule[];
 }
+
+/** What starts a rule. */
+export type RuleTrigger = "order_created" | "payment_created" | "expense_created" | "return_created";
+export type RuleOp = "gt" | "gte" | "lt" | "eq" | "neq";
+export interface RuleCondition {
+  field: string;
+  op: RuleOp;
+  value: number | string;
+}
+
+/**
+ * An automation rule the manager writes: when [something is made], if [every condition holds], then notify
+ * these jobs and/or hold it for the manager's OK (orders and expenses). Runs on the server, for everyone.
+ */
+export interface AutoRule {
+  id: string;
+  name: string;
+  active: boolean;
+  trigger: RuleTrigger;
+  conditions: RuleCondition[];
+  notify: Role[];
+  approval?: boolean;
+  /** The notification's text; {number} {amount} {customer} {by} are filled in. */
+  message?: string;
+}
+
+/** One time a rule ran (the rules' log). */
+export interface RuleRun {
+  id: number;
+  rule_id: string;
+  rule: string;
+  at: string;
+  record: string;
+  link?: string;
+  did: string;
+}
+
+/** The fields each trigger offers to the conditions. */
+export const RULE_FIELDS: Record<RuleTrigger, { key: string; ar: string; en: string; type: "number" | "text"; options?: { value: string; ar: string; en: string }[] }[]> = {
+  order_created: [
+    { key: "total", ar: "مبلغ الطلب", en: "Order total", type: "number" },
+    { key: "discount", ar: "نسبة الخصم %", en: "Discount %", type: "number" },
+    { key: "lines", ar: "عدد المواد", en: "Number of items", type: "number" },
+    {
+      key: "by_role",
+      ar: "من كتبه",
+      en: "Written by",
+      type: "text",
+      options: [
+        { value: "rep", ar: "مندوب", en: "Rep" },
+        { value: "shop", ar: "صاحب محل", en: "Shop owner" },
+        { value: "accountant", ar: "محاسب", en: "Accountant" },
+        { value: "manager", ar: "المدير", en: "Manager" },
+      ],
+    },
+    { key: "area", ar: "منطقة الزبون", en: "Customer's area", type: "text" },
+  ],
+  payment_created: [
+    { key: "amount", ar: "مبلغ التسديد", en: "Amount", type: "number" },
+    {
+      key: "method",
+      ar: "طريقة الدفع",
+      en: "Method",
+      type: "text",
+      options: [
+        { value: "cash", ar: "نقداً", en: "Cash" },
+        { value: "transfer", ar: "تحويل", en: "Transfer" },
+        { value: "online", ar: "أونلاين", en: "Online" },
+      ],
+    },
+  ],
+  expense_created: [
+    { key: "amount", ar: "مبلغ الصرف", en: "Amount", type: "number" },
+    { key: "category", ar: "البند", en: "Category", type: "text" },
+    {
+      key: "method",
+      ar: "طريقة الدفع",
+      en: "Method",
+      type: "text",
+      options: [
+        { value: "cash", ar: "نقداً", en: "Cash" },
+        { value: "transfer", ar: "تحويل", en: "Transfer" },
+      ],
+    },
+  ],
+  return_created: [{ key: "amount", ar: "مبلغ المرتجع", en: "Amount", type: "number" }],
+};
 
 /** The records that can have the manager's own fields. */
 export type CustomObject = "customer" | "item" | "order";

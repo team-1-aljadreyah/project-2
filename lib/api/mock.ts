@@ -38,7 +38,7 @@ import type {
   CustomObject,
   CustomValue,
 } from "./types";
-import { EXPENSE_APPROVAL_ABOVE, inHours, worksIn } from "./types";
+import { EXPENSE_APPROVAL_ABOVE, RULE_FIELDS, inHours, worksIn } from "./types";
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
 import {
   approveOrder,
@@ -116,6 +116,7 @@ import {
   decideExpense,
   cancelExpense,
   monthExpenses,
+  runRules,
   setMyPhoto,
   changeMyPassword,
   removeMyShop,
@@ -479,6 +480,22 @@ function checkAdvanced(s: SiteCustom) {
     if (x.pages.some((h) => typeof h !== "string" || !h.startsWith("/"))) fail(422, "VALIDATION", "صفحات غير صحيحة", "Wrong pages");
   }
   for (const p of s.profiles) if (p.default_app && !apps.has(p.default_app)) delete p.default_app;
+  const ruleIds = new Set<string>();
+  for (const r of s.rules) {
+    if (!r.id || ruleIds.has(r.id)) fail(422, "VALIDATION", "قاعدة مكررة", "Duplicate rule");
+    ruleIds.add(r.id);
+    if (!r.name?.trim()) fail(422, "VALIDATION", "اسم القاعدة مطلوب", "The rule needs a name");
+    const offered = RULE_FIELDS[r.trigger];
+    if (!offered) fail(422, "VALIDATION", "اختر متى تعمل القاعدة", "Choose when the rule runs");
+    for (const c of r.conditions) {
+      const f = offered.find((x) => x.key === c.field);
+      if (!f) fail(422, "VALIDATION", `شرط غير صحيح في «${r.name}»`, `A wrong condition in ${r.name}`);
+      if (!["gt", "gte", "lt", "eq", "neq"].includes(c.op)) fail(422, "VALIDATION", `شرط غير صحيح في «${r.name}»`, `A wrong condition in ${r.name}`);
+      if (f.type === "number" && !Number.isFinite(Number(c.value))) fail(422, "VALIDATION", `اكتب رقماً في شرط «${f.ar}»`, `Write a number in ${f.en}`);
+      if (f.type === "text" && !String(c.value).trim()) fail(422, "VALIDATION", `اكتب قيمة شرط «${f.ar}»`, `Write the value of ${f.en}`);
+    }
+    if (!r.notify.length && !r.approval) fail(422, "VALIDATION", `«${r.name}» لا تفعل شيئاً: اختر من يُبلَّغ أو اطلب الموافقة`, `${r.name} does nothing yet`);
+  }
   const fields = new Set<string>();
   for (const f of s.fields) {
     if (!f.id || fields.has(f.id)) fail(422, "VALIDATION", "حقل مكرر", "Duplicate field");
@@ -585,7 +602,14 @@ export const mockApi: Api = {
       need(a, ["accountant", "manager"]);
       return expensesOf(db).find((e) => e.id === id) ?? notFound();
     }),
-  createExpense: (input) => write((db, a, now) => createExpense(db, a, input, now)),
+  createExpense: (input) =>
+    write((db, a, now) => {
+      const e = createExpense(db, a, input, now);
+      const wait = runRules(db, "expense_created", { amount: e.amount, category: e.category, method: e.method }, { number: e.number, link: `/expenses/${e.id}`, by: a.name }, now);
+      // A rule asks for the manager's OK: an expense that would count at once waits for him first.
+      if (wait.length && e.status === "approved" && a.role !== "manager") e.status = "pending";
+      return e;
+    }),
   decideExpense: (id, ok, reason) => write((db, a, now) => decideExpense(db, a, id, ok, reason ?? "", now)),
   cancelExpense: (id, reason) => write((db, a, now) => cancelExpense(db, a, id, reason, now)),
 
@@ -594,6 +618,13 @@ export const mockApi: Api = {
   changeMyPassword: (current, next) => write((db, a) => changeMyPassword(db, a, current, next), { self: true }),
   removeMyShop: (customerId, password) => write((db, a, now) => strip(removeMyShop(db, a, customerId, password, now)), { self: true }),
   deleteMyAccount: (password) => write((db, a, now) => deleteMyAccount(db, a, password, now), { self: true }),
+
+  // Automation rules: what they did lately (the manager)
+  ruleRuns: () =>
+    read((db, a) => {
+      need(a, ["manager"]);
+      return [...(db.rule_runs ?? [])].reverse().slice(0, 100);
+    }),
 
   // Health and security (the manager)
   health: () =>
@@ -839,6 +870,7 @@ export const mockApi: Api = {
         "حقل",
         "field",
       );
+      diff(old.rules, next.rules, "قاعدة أتمتة", "rule");
       return next;
     }),
   createWarehouse: (input) =>
@@ -1502,7 +1534,19 @@ export const mockApi: Api = {
   createOrder: (input) =>
     write((db, a, now) => {
       if ((input.discount_percent ?? 0) > 0) mayDo(a, "discount");
-      return createOrder(db, a, input, now);
+      const o = createOrder(db, a, input, now);
+      // A new order (not the same one sent twice): the manager's automation rules run on it.
+      if (o.created_at !== now.toISOString()) return o;
+      const c = db.customers.find((x) => x.id === o.customer_id);
+      const wait = runRules(db, "order_created", { total: o.total, discount: o.discount?.percent ?? 0, lines: o.lines.length, by_role: a.role, area: c?.area ?? "" }, { number: o.number, link: `/orders/${o.id}`, by: a.name, customer: c?.name }, now);
+      const st = db.orders.find((x) => x.id === o.id);
+      if (wait.length && st && (st.status === "pending" || st.status === "needs_approval")) {
+        st.status = "needs_approval";
+        st.approval_for = [...new Set([...(st.approval_for ?? []), "rule" as const])];
+        st.rule_note = wait.join("، ");
+        return st;
+      }
+      return o;
     }),
   acceptOrder: (id) => write((db, a, now) => orderView(acceptOrder(db, a, id, now), a)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
@@ -1567,7 +1611,12 @@ export const mockApi: Api = {
   createPayment: (input) =>
     write((db, a, now): Payment => {
       mayDo(a, "payments");
-      return createPayment(db, a, input, now);
+      // The same payment sent twice (weak internet) comes back as the first one: the rules ran then.
+      const isNew = !db.payments.some((x) => x.client_ref === input.client_ref);
+      const p = createPayment(db, a, input, now);
+      if (isNew)
+        runRules(db, "payment_created", { amount: p.amount, method: p.method }, { number: p.number, link: `/payments/${p.id}`, by: a.name, customer: db.customers.find((c) => c.id === p.customer_id)?.name }, now);
+      return p;
     }),
 
   // Online payment (Qi Card, demo gateway)
@@ -1608,7 +1657,9 @@ export const mockApi: Api = {
   createReturn: (input) =>
     write((db, a, now) => {
       mayDo(a, "returns");
-      return returnView(createReturn(db, a, input, now));
+      const r = createReturn(db, a, input, now);
+      runRules(db, "return_created", { amount: r.amount }, { number: r.number, link: `/returns/${r.id}`, by: a.name, customer: db.customers.find((c) => c.id === r.customer_id)?.name }, now);
+      return returnView(r);
     }),
 
   // Commission
