@@ -1,29 +1,43 @@
 "use client";
 
 // Small pieces the landing page sections share.
-import { Fragment } from "react";
-import { motion } from "motion/react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 /** A heading whose words slide up one after another when it scrolls into view. */
 /** onLoad: animate as soon as the page opens (for a heading at the top, already on screen),
  *  instead of waiting for it to scroll into view. */
+// Plain CSS (globals.css: .word-rise): one watcher for the whole heading, not an animated piece per word —
+// light on a phone.
 export function WordReveal({ text, className, as: Tag = "h2", onLoad }: { text: string; className?: string; as?: "h1" | "h2" | "p"; onLoad?: boolean }) {
   const words = text.split(" ");
+  const ref = useRef<HTMLHeadingElement & HTMLParagraphElement>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    if (onLoad) return;
+    const el = ref.current;
+    if (!el || !("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setSeen(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "0px 0px -60px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onLoad]);
   return (
-    <Tag className={className}>
+    <Tag ref={ref} className={className} data-rise={onLoad ? "load" : seen ? "on" : "off"}>
       {words.map((w, i) => (
         <Fragment key={i}>
           {/* Each word sits in a box that hides what's outside it (overflow-hidden), so it looks like it rises out of a line. */}
           <span className="inline-block overflow-hidden pb-[0.12em] align-bottom">
-            <motion.span
-              className="inline-block"
-              initial={{ y: "110%" }}
-              {...(onLoad ? { animate: { y: 0 } } : { whileInView: { y: 0 }, viewport: { once: true, margin: "-60px" } })}
-              transition={{ duration: 0.6, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
-            >
+            <span className="word-rise inline-block" style={{ transitionDelay: `${i * 0.06}s`, animationDelay: `${i * 0.06}s` }}>
               {w}
-            </motion.span>
+            </span>
           </span>
           {/* The space is outside the boxes; inside a box at its end it would disappear. */}
           {i < words.length - 1 ? " " : null}

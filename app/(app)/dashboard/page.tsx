@@ -292,19 +292,30 @@ export default function DashboardPage() {
         </Link>
       )}
 
-      {x && x.needs_approval > 0 && user.role === "manager" && (
-        <Link href="/orders" className="mb-4 flex items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3 text-warning">
-          <ShieldAlert className="size-5 shrink-0" />
-          <span className="flex-1 text-sm font-medium">{tr(`${x.needs_approval} طلب يتجاوز سقف الدين وينتظر موافقتك`, `${x.needs_approval} order(s) over the debt limit wait for your approval`)}</span>
-          <span className="text-sm underline">{tr("عرض", "Show")}</span>
-        </Link>
-      )}
+      {/* The manager's approvals: always one line (also when nothing waits), and its place is kept while
+          loading, so the page doesn't jump when the numbers arrive. */}
+      {user.role === "manager" &&
+        (!x ? (
+          <div aria-hidden className="mb-4 h-[3.25rem] rounded-xl bg-card-2" />
+        ) : x.needs_approval > 0 ? (
+          <Link href="/orders" className="mb-4 flex h-[3.25rem] items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft px-3 text-warning">
+            <ShieldAlert className="size-5 shrink-0" />
+            <span className="flex-1 text-sm font-medium">{tr(`${x.needs_approval} طلب يتجاوز سقف الدين وينتظر موافقتك`, `${x.needs_approval} order(s) over the debt limit wait for your approval`)}</span>
+            <span className="text-sm underline">{tr("عرض", "Show")}</span>
+          </Link>
+        ) : (
+          <p className="mb-4 flex h-[3.25rem] items-center gap-3 rounded-xl border border-line bg-card px-3 text-sm text-muted">
+            <ShieldAlert className="size-5 shrink-0 text-success" />
+            {tr("لا شيء يتجاوز سقف الدين وينتظر موافقتك", "Nothing over the debt limit waits for you")}
+          </p>
+        ))}
 
       {x ? (
         area(stats, "grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0")
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {Array.from({ length: 8 }, (_, i) => (
+          {/* As many as the real tiles (the net-profit tile is there for whoever sees the profit). */}
+          {Array.from({ length: user.role === "manager" || user.role === "accountant" ? 9 : 8 }, (_, i) => (
             <Skeleton key={i} className="h-28" />
           ))}
         </div>

@@ -4,10 +4,10 @@
 // the customer picker, the colored invoice tiles, the purchases-vs-payments chart and the payments list.
 import Link from "next/link";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import { ArrowUpLeft, ArrowUpRight, Banknote, Check, ChevronDown, CreditCard, Landmark, Search, Undo2 } from "lucide-react";
 import { methodLabel } from "@/components/pay-method";
-import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Customer, Invoice, Payment } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn, matches, today } from "@/lib/utils";
@@ -94,7 +94,7 @@ export function InvoiceTiles({ invoices }: { invoices: Invoice[] }) {
             <Link href={`/invoices/${inv.id}`} className={cn("group flex h-full flex-col rounded-2xl border p-3 transition sm:p-4 hover:-translate-y-0.5 hover:shadow-lg", tileStyle[inv.status])}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className={cn("num text-[11px]", solid ? "opacity-70" : "text-muted")}>{date(inv.date)}</p>
+                  <p className={cn("num text-[11px]", solid ? "opacity-90" : "text-muted")}>{date(inv.date)}</p>
                   <p className="num mt-0.5 text-start text-xs font-bold break-all sm:text-sm" dir="ltr">
                     {inv.number}
                   </p>
@@ -164,11 +164,10 @@ export function monthRows(invoices: Invoice[], payments: Payment[], lang: "ar" |
   });
 }
 
-const short = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : String(n));
 
 /** Like the design's "income stage": two lines, and the chosen month stands out as a bar with a bubble. */
 export function MoneyChart({ rows, selected, onSelect }: { rows: MonthRow[]; selected: string; onSelect: (key: string) => void }) {
-  const { tr, money, lang } = useFmt();
+  const { tr, money } = useFmt();
   const data = rows.map((r) => ({ ...r, mark: r.key === selected ? Math.max(r.bought, r.paid) : 0 }));
   const sel = rows.find((r) => r.key === selected);
   return (
@@ -186,42 +185,7 @@ export function MoneyChart({ rows, selected, onSelect }: { rows: MonthRow[]; sel
           </span>
         )}
       </div>
-      <div className="h-56 w-full" dir="ltr">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={data}
-            margin={{ top: 10, right: 8, left: 0, bottom: 0 }}
-            onClick={(e) => {
-              // Empty when the mouse didn't hover a month first (e.g. a tap on a phone): then do nothing,
-              // because Number(null) would be 0 and wrongly pick the first month.
-              const raw = e?.activeTooltipIndex;
-              if (raw === null || raw === undefined) return;
-              const i = Number(raw);
-              if (Number.isFinite(i) && rows[i]) onSelect(rows[i].key);
-            }}
-          >
-            <defs>
-              <linearGradient id="acc-mark" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--success)" stopOpacity={0.9} />
-                <stop offset="100%" stopColor="var(--success)" stopOpacity={0.1} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} stroke="var(--line)" strokeDasharray="4 4" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 12 }} reversed={lang === "ar"} />
-            <YAxis tickFormatter={short} tickLine={false} axisLine={false} width={44} tick={{ fill: "var(--muted)", fontSize: 12 }} orientation={lang === "ar" ? "right" : "left"} />
-            <Tooltip
-              cursor={{ fill: "var(--card-2)" }}
-              contentStyle={{ background: "var(--card)", border: "1px solid var(--line)", borderRadius: 12, fontSize: 12, direction: lang === "ar" ? "rtl" : "ltr" }}
-              labelStyle={{ color: "var(--text)", fontWeight: 600 }}
-              formatter={(v, n) => [money(Number(v)), n === "bought" ? tr("المشتريات", "Bought") : n === "paid" ? tr("التسديدات", "Paid") : ""]}
-              filterNull
-            />
-            <Bar dataKey="mark" fill="url(#acc-mark)" radius={[10, 10, 0, 0]} maxBarSize={44} isAnimationActive tooltipType="none" />
-            <Line type="monotone" dataKey="bought" stroke="var(--warning)" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="paid" stroke="var(--success)" strokeWidth={2.5} dot={{ r: 3, fill: "var(--success)" }} activeDot={{ r: 6 }} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+      <MoneyPlot rows={rows} data={data} onSelect={onSelect} />
       {/* The months as buttons too: works with a tap on a phone and with the keyboard */}
       <div className="mt-2 flex flex-wrap justify-center gap-1.5">
         {rows.map((r) => (
@@ -239,6 +203,12 @@ export function MoneyChart({ rows, selected, onSelect }: { rows: MonthRow[]; sel
     </div>
   );
 }
+
+// The chart itself loads on its own (money-plot.tsx), with a same-size placeholder until then.
+const MoneyPlot = dynamic(() => import("./money-plot").then((m) => m.MoneyPlot), {
+  ssr: false,
+  loading: () => <div className="h-56 w-full animate-pulse rounded-xl bg-card-2" />,
+});
 
 // ---------- Payments list ----------
 

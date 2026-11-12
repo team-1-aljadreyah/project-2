@@ -4,11 +4,11 @@
 // - markers: shops, warehouses, the delivery rep (live), "me", or a pin to place.
 // - route: a glowing line through points (the part already driven turns grey).
 // - editable + onPick: tap the map to place the pin, or drag it.
-// MapLibre needs the browser (WebGL), so it is loaded only there, after the page is shown.
+// MapLibre needs the browser (WebGL), so it is loaded only there, after the page is shown (its styles too).
 import { useEffect, useRef, useState } from "react";
-import "maplibre-gl/dist/maplibre-gl.css";
 import type { GeoJSONSource, Map as MlMap, Marker } from "maplibre-gl";
 import { useTheme } from "@/lib/theme";
+import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ROUTE, mapStyle } from "./style";
 
@@ -49,7 +49,8 @@ function markerElement(m: MapMarker): HTMLElement {
   el.dataset.kind = m.kind;
   if (m.active) el.dataset.active = "1";
   if (m.done) el.dataset.done = "1";
-  el.setAttribute("aria-label", m.label ?? m.kind);
+  // With a label shown under it, the label's words name the button; without one, a spoken name.
+  if (!m.label) el.setAttribute("aria-label", m.kind === "me" ? "موقعي" : m.kind);
   const inner =
     m.kind === "pin"
       ? '<svg width="34" height="44" viewBox="0 0 34 44"><path d="M17 0C7.6 0 0 7.5 0 16.8 0 29.4 17 44 17 44s17-14.6 17-27.2C34 7.5 26.4 0 17 0z" fill="#e1692b"/><circle cx="17" cy="16.5" r="6.5" fill="#fff"/></svg>'
@@ -59,6 +60,33 @@ function markerElement(m: MapMarker): HTMLElement {
   el.innerHTML = inner + (m.label ? `<span class="map3d-label">${m.label.replace(/[<>&]/g, "")}</span>` : "");
   if (m.onClick) el.addEventListener("click", m.onClick);
   return el;
+}
+
+// The map is heavy for a phone (its code and 3D drawing keep it busy for seconds). It starts on the person's
+// first touch, click, wheel or key on the page (not a scroll: the site itself scrolls to the top when a page
+// opens), not while the page is still opening: the page shows at once,
+// and someone who never looks at the map never pays for it. A map opened by a tap (in a dialog) starts at once.
+let interacted = false;
+const waiting = new Set<() => void>();
+function onFirstInteraction(fn: () => void) {
+  if (interacted || typeof window === "undefined") {
+    fn();
+    return () => {};
+  }
+  waiting.add(fn);
+  return () => {
+    waiting.delete(fn);
+  };
+}
+if (typeof window !== "undefined") {
+  const go = () => {
+    if (interacted) return;
+    interacted = true;
+    for (const ev of ["pointerdown", "keydown", "wheel", "touchstart"]) window.removeEventListener(ev, go, true);
+    waiting.forEach((f) => f());
+    waiting.clear();
+  };
+  for (const ev of ["pointerdown", "keydown", "wheel", "touchstart"]) window.addEventListener(ev, go, { capture: true, passive: true });
 }
 
 export function CityMap({
@@ -102,18 +130,24 @@ export function CityMap({
   const pick = useRef(onPick);
   const edit = useRef(!!editable);
   const theme = useTheme();
+  const { tr } = useFmt();
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  // false until the person first touches the page (see onFirstInteraction above).
+  const [go, setGo] = useState(false);
+  useEffect(() => onFirstInteraction(() => setGo(true)), []);
   useEffect(() => {
     pick.current = onPick;
     edit.current = !!editable;
   }, [onPick, editable]);
 
-  // Make the map once.
+  // Make the map once (after the first touch on the page).
   useEffect(() => {
+    if (!go) return;
     let dead = false;
-    import("maplibre-gl")
-      .then((ml) => {
+    // The map's code and its styles come only with a map (not on every page of the site).
+    Promise.all([import("maplibre-gl"), import("maplibre-gl/dist/maplibre-gl.css")])
+      .then(([ml]) => {
         if (dead || !box.current || map.current) return;
         lib.current = ml;
         const start = center ?? markers[0] ?? KARBALA;
@@ -151,7 +185,7 @@ export function CityMap({
     };
     // Made once; the effects below follow the changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [go]);
 
   // Day / night.
   useEffect(() => {
@@ -258,7 +292,13 @@ export function CityMap({
   return (
     <div className={cn("map3d relative isolate overflow-hidden rounded-2xl border border-line bg-card-2", className)}>
       <div ref={box} className="size-full" />
-      {failed && <p className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted">تعذّر عرض الخريطة على هذا الجهاز</p>}
+      {/* Until the map starts: a light picture of a street grid, and a tap starts it too. */}
+      {!go && (
+        <button type="button" onClick={() => setGo(true)} className="map3d-wait absolute inset-0 flex items-end justify-center p-3 text-xs font-semibold text-muted">
+          <span className="rounded-full bg-card/90 px-3 py-1.5 shadow-sm">{tr("المس لعرض الخريطة", "Touch to show the map")}</span>
+        </button>
+      )}
+      {failed && <p className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted">{tr("تعذّر عرض الخريطة على هذا الجهاز", "The map can't show on this device")}</p>}
       {children}
     </div>
   );

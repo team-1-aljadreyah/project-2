@@ -54,7 +54,7 @@ export function UsdRateCard({ className }: { className?: string }) {
             ) : (
               <p className="font-bold text-action">{tr("لم يُثبَّت سعر اليوم بعد", "Today's rate isn't set yet")}</p>
             )}
-            <p className="text-[11px] text-faint">
+            <p className="min-h-4 text-[11px] text-faint">
               {setToday ? tr(`ثبّته ${last!.by.name} ${ago(last!.at)}`, `Set by ${last!.by.name} ${ago(last!.at)}`) : last ? tr(`آخر سعر: ${num(last.rate)} (${date(last.date)})`, `Last: ${num(last.rate)} (${date(last.date)})`) : ""}
             </p>
           </div>
@@ -70,7 +70,9 @@ export function UsdRateCard({ className }: { className?: string }) {
           </div>
         )}
       </div>
-      {(rates.data?.length ?? 0) > 1 && (
+      {/* The last days' rates. While they load, the row keeps its place (the page below doesn't jump). */}
+      {!rates.data && <div aria-hidden className="mt-3 h-[2.2rem] border-t border-line" />}
+      {(rates.data?.length ?? 0) > 0 && (
         <div className="mt-3 flex items-center gap-1.5 overflow-x-auto border-t border-line pt-3 text-xs [scrollbar-width:none]">
           <History className="size-3.5 shrink-0 text-faint" />
           {rates.data!.slice(0, 7).map((r) => (

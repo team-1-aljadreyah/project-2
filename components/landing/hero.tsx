@@ -32,27 +32,20 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
       <Stars count={50} />
 
       <div className="relative mx-auto max-w-4xl px-4 text-center">
-        <motion.h1
-          initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          className="text-4xl font-bold leading-[1.2] sm:text-6xl lg:text-7xl"
-        >
+        {/* The entrance is CSS (globals.css: hero-in): it starts with the first paint, before the page's code, and
+            the heading is never invisible, so the phone shows the page's main text at once. */}
+        <h1 className="hero-in text-4xl font-bold leading-[1.2] sm:text-6xl lg:text-7xl">
           {tr("جملة المواد الغذائية", "Food wholesale,")}
           <span className="mt-2 block bg-gradient-to-l from-[#ffffff] via-[#f5b48a] to-[#e1692b] bg-clip-text pb-2 text-transparent">
             {tr("بدون ضياع ولا دفاتر", "without losses or notebooks")}
           </span>
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg"
+        </h1>
+        <p style={{ animationDelay: "0.2s" }} className="rise-item mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg"
         >
           {tr("مخزون بالدفعات يخرج فيه الأقدم صلاحيةً أولاً، ومندوبو توصيل يطلبون من الجوال حتى بدون إنترنت، وديون وتسديدات واضحة لكل محل. شركة النهرين، كربلاء.", "Stock by batches with the oldest expiry first, delivery reps ordering from their phones even offline, and clear debts and payments for every shop. Al-Nahrain, Karbala.",
           )}
-        </motion.p>
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.35 }} className="mt-9 flex flex-wrap justify-center gap-3">
+        </p>
+        <div style={{ animationDelay: "0.35s" }} className="rise-item mt-9 flex flex-wrap justify-center gap-3">
           <Link href={enter} className="group flex h-12 items-center gap-2 rounded-full bg-action px-7 text-base font-bold text-on-action shadow-[0_0_40px_rgb(225_105_43/0.45)] transition hover:bg-action-hover">
             {enterLabel}
             <Forward className="size-5 transition group-hover:-translate-x-1 ltr:group-hover:translate-x-1" />
@@ -60,7 +53,7 @@ export function Hero({ enter, enterLabel }: { enter: string; enterLabel: string 
           <a href="#platform" className="flex h-12 items-center rounded-full border border-white/15 bg-white/5 px-7 text-base font-semibold backdrop-blur transition hover:bg-white/10">
             {tr("شاهد كيف يعمل", "See how it works")}
           </a>
-        </motion.div>
+        </div>
       </div>
 
       {/* The dashboard in 3D */}

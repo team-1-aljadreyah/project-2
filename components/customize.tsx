@@ -119,8 +119,10 @@ export function CustomizeToggle() {
       type="button"
       onClick={() => setCustomizing(!mode)}
       aria-pressed={mode}
+      aria-label={mode ? tr("تم", "Done") : tr("تخصيص", "Customize")}
+      title={mode ? tr("أنهِ التخصيص", "Finish customizing") : tr("خصّص الموقع", "Customize the site")}
       data-cz
-      className={cn("inline-flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-sm font-medium transition", mode ? "bg-action text-white" : "text-muted hover:bg-card-2 hover:text-text")}
+      className={cn("inline-flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-sm font-medium transition", mode ? "bg-action text-on-action" : "text-muted hover:bg-card-2 hover:text-text")}
     >
       {mode ? <Check className="size-[18px]" /> : <Paintbrush className="size-[18px]" />}
       <span className="hidden xl:inline">{mode ? tr("تم", "Done") : tr("تخصيص", "Customize")}</span>

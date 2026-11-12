@@ -8,27 +8,27 @@
 //   left face   = matrix(0.866 0.5 0 1)   (leans down to the right)
 //   floor (top) = matrix(0.866 0.5 -0.866 0.5)
 // 0.866 = cos 30°, 0.5 = sin 30°: the classic 30° isometric angles.
-import { motion, useReducedMotion } from "motion/react";
+// The floating and the blinking are plain CSS (globals.css: la-float, la-blink), and they stop by themselves
+// for people who asked for less motion: the login page needs no animation library.
 
 const RIGHT = "matrix(0.866 -0.5 0 1 0 0)";
 const LEFT = "matrix(0.866 0.5 0 1 0 0)";
 const FLOOR = "matrix(0.866 0.5 -0.866 0.5 0 0)";
 
 /** A gentle up-and-down float, each card with its own delay and height. */
-function Float({ children, delay = 0, dy = 8, still }: { children: React.ReactNode; delay?: number; dy?: number; still: boolean | null }) {
-  if (still) return <g>{children}</g>;
+function Float({ children, delay = 0, dy = 8 }: { children: React.ReactNode; delay?: number; dy?: number; still?: boolean | null }) {
   return (
-    <motion.g animate={{ y: [0, -dy, 0] }} transition={{ duration: 4, delay, repeat: Infinity, ease: "easeInOut" }}>
+    <g className="la-float" style={{ animationDelay: `${delay}s`, ["--la-dy" as string]: `${-dy}px` }}>
       {children}
-    </motion.g>
+    </g>
   );
 }
 
 export function LoginArt() {
-  const still = useReducedMotion();
+  const still = false;
   const rows = [0, 1, 2, 3];
   return (
-    <svg viewBox="0 0 520 440" className="h-auto w-full" role="img" aria-label="" style={{ direction: "ltr" }}>
+    <svg viewBox="0 0 520 440" className="h-auto w-full" aria-hidden="true" style={{ direction: "ltr" }}>
       <defs>
         <linearGradient id="la-screen" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#2b3038" />
@@ -73,7 +73,7 @@ export function LoginArt() {
               <rect x="28" y="8" width={60 - i * 6} height="5" rx="2.5" fill="#e6e8eb" opacity="0.85" />
               <rect x="28" y="17" width="36" height="4" rx="2" fill="#a3a9b2" opacity="0.6" />
               {!still && i === 3 && (
-                <motion.circle cx="14" cy="14" r="7" fill="#7cc47f" animate={{ opacity: [0, 1, 1, 0] }} transition={{ duration: 3, repeat: Infinity, times: [0, 0.2, 0.8, 1] }} />
+                <circle className="la-blink" cx="14" cy="14" r="7" fill="#7cc47f" />
               )}
             </g>
           ))}

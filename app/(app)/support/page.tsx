@@ -63,7 +63,7 @@ function Inbox() {
                   >
                     <span className={cn("relative flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold", t.waiting ? "bg-action text-on-action" : "bg-card-2 text-primary-ink")}>
                       {t.customer.trim()[0]}
-                      {t.unread > 0 && <span className="num absolute -end-1 -top-1 flex size-5 items-center justify-center rounded-full bg-danger text-[10px] text-white ring-2 ring-card">{t.unread}</span>}
+                      {t.unread > 0 && <span className="num absolute -end-1 -top-1 flex size-5 items-center justify-center rounded-full bg-danger text-[10px] text-on-danger ring-2 ring-card">{t.unread}</span>}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">

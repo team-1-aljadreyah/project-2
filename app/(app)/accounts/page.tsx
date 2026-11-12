@@ -179,7 +179,7 @@ export default function AccountsPage() {
             <motion.div variants={rise} key={`d${c.id}`}>
               <Card className="p-4">
                 <h3 className="mb-3 text-sm font-bold">{tr("التفاصيل", "Details")}</h3>
-                <dl className="space-y-1">
+                <div className="space-y-1">
                   <Detail icon={User} k={tr("صاحب المحل", "Owner")} v={c.owner_name} />
                   <Detail icon={Phone} k={tr("الهاتف", "Phone")} v={<span dir="ltr">{c.phone}</span>} href={`tel:${c.phone}`} />
                   <Detail icon={MapPin} k={tr("المنطقة", "Area")} v={c.area} />
@@ -187,7 +187,7 @@ export default function AccountsPage() {
                   <Detail icon={Truck} k={tr("المندوب", "Rep")} v={rep?.name ?? "—"} />
                   <Detail icon={Calendar} k={tr("زبون منذ", "Customer since")} v={firstInvoice ? date(firstInvoice.date) : "—"} />
                   <Detail icon={ReceiptText} k={tr("آخر طلب", "Last order")} v={c.last_order_at ? ago(c.last_order_at) : "—"} />
-                </dl>
+                </div>
               </Card>
             </motion.div>
           </div>
@@ -285,8 +285,8 @@ function Detail({ icon: Icon, k, v, href }: { icon: LucideIcon; k: string; v: Re
         <Icon className="size-4" />
       </span>
       <div className="min-w-0">
-        <dt className="text-[11px] text-faint">{k}</dt>
-        <dd className="truncate text-sm font-semibold">{v}</dd>
+        <p className="text-[11px] text-faint">{k}</p>
+        <p className="truncate text-sm font-semibold">{v}</p>
       </div>
     </>
   );

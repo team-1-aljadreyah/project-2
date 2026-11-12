@@ -58,7 +58,6 @@ export function ShopSwitcher({ user }: { user: User }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-label={tr("محلاتي", "My shops")}
         className="flex h-10 min-w-0 max-w-[11rem] items-center gap-1.5 rounded-xl border border-line px-2.5 text-sm font-semibold hover:bg-card-2 sm:max-w-[16rem]"
       >
         <Store className="size-4 shrink-0 text-action" />

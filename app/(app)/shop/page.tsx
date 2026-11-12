@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "motion/react";
 import { Check, Clock, PhoneCall, ShoppingCart, XCircle } from "lucide-react";
 import Link from "next/link";
 import { PinCard } from "@/components/delivery/status";
@@ -9,7 +8,7 @@ import { ShopStore } from "@/components/shop-store";
 import { useApp } from "@/components/shell";
 import { Button, Card, ErrorBox, LoadingRows, Notice } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { Customer } from "@/lib/api/types";
+import type { Customer, Order } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
@@ -24,9 +23,13 @@ export default function ShopOrderPage() {
   const { user } = useApp();
   const id = user.customer_id ?? 0;
   const c = useLoad(() => api.getCustomer(id), [id]);
+  // His orders, loaded once for the whole page (the shipments on the way and «order like last time»): the page
+  // shows when both are here, all at once, so nothing jumps down while the shop owner looks at it.
+  const orders = useLoad(() => api.listOrders(), [id]);
+  useRealtime(["orders"], () => orders.reload());
 
   if (!user.customer_id) return <Notice tone="danger">{tr("حسابك غير مرتبط بمحل، راجع الشركة", "Your account isn't linked to a shop. Contact the company")}</Notice>;
-  if (c.state.status === "loading") return <LoadingRows />;
+  if (c.state.status === "loading" || orders.state.status === "loading") return <LoadingRows />;
   if (c.state.status === "error" || !c.data) return <ErrorBox error={c.state.status === "error" ? c.state.error : null} onRetry={c.reload} />;
   if (c.data.pending) return <PendingAccount customer={c.data} />;
   if (!c.data.active) {
@@ -40,8 +43,8 @@ export default function ShopOrderPage() {
   }
   return (
     <>
-      <MyShipments customer={c.data} />
-      <ShopStore key={c.data.id} customer={c.data} />
+      <MyShipments customer={c.data} orders={orders.data ?? []} />
+      <ShopStore key={c.data.id} customer={c.data} orders={orders.data ?? []} />
     </>
   );
 }
@@ -59,14 +62,9 @@ function PendingAccount({ customer }: { customer: Customer }) {
     <div className="mx-auto max-w-xl py-6">
       <Card className="relative overflow-hidden p-6 sm:p-8">
         <div className="hazard absolute inset-x-0 top-0 h-1.5" aria-hidden />
-        <motion.div
-          initial={{ scale: 0.6, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 18 }}
-          className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-warning-soft text-warning"
-        >
+        <div className="anim-pop-spin mx-auto flex size-16 items-center justify-center rounded-2xl bg-warning-soft text-warning">
           <Clock className="size-8" />
-        </motion.div>
+        </div>
         <h1 className="mt-4 text-center text-2xl font-bold">{tr("حسابك قيد المراجعة", "Your account is being checked")}</h1>
         <p className="mx-auto mt-2 max-w-md text-center text-sm text-muted">
           {tr(
@@ -77,7 +75,7 @@ function PendingAccount({ customer }: { customer: Customer }) {
 
         <ol className="mt-8 space-y-0">
           {steps.map((s, i) => (
-            <motion.li key={s.t} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 + i * 0.12 }} className="relative flex gap-4 pb-6 last:pb-0">
+            <li key={s.t} style={{ animationDelay: `${0.2 + i * 0.12}s` }} className="rise-item relative flex gap-4 pb-6 last:pb-0">
               {i < steps.length - 1 && <span className={cn("absolute start-[17px] top-9 h-[calc(100%-36px)] w-0.5", s.done ? "bg-success" : "bg-line")} aria-hidden />}
               <span
                 className={cn(
@@ -91,7 +89,7 @@ function PendingAccount({ customer }: { customer: Customer }) {
                 <p className={cn("font-semibold", !s.done && !s.now && "text-muted")}>{s.t}</p>
                 <p className="text-xs text-muted">{s.b}</p>
               </div>
-            </motion.li>
+            </li>
           ))}
         </ol>
 
@@ -111,18 +109,16 @@ function PendingAccount({ customer }: { customer: Customer }) {
 }
 
 /** Shipments on their way to this shop, each with its delivery PIN (only the shop owner ever sees it). */
-function MyShipments({ customer }: { customer: Customer }) {
+function MyShipments({ customer, orders }: { customer: Customer; orders: Order[] }) {
   const { tr } = useFmt();
   const { lookups } = useApp();
-  const orders = useLoad(() => api.listOrders(), []);
   const locations = useRepLocations();
-  useRealtime(["orders"], () => orders.reload());
-  const coming = (orders.data ?? []).filter((o) => o.delivery && o.delivery.status !== "delivered" && o.delivery.pin);
+  const coming = orders.filter((o) => o.delivery && o.delivery.status !== "delivered" && o.delivery.pin);
   if (!coming.length) return null;
   return (
     <div className="mx-auto mb-4 max-w-5xl space-y-2">
       {coming.map((o) => (
-        <motion.div key={o.id} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="grid items-center gap-3 rounded-3xl border border-line bg-card p-4 sm:grid-cols-[1fr_auto]">
+        <div key={o.id} className="anim-drop-in grid items-center gap-3 rounded-3xl border border-line bg-card p-4 sm:grid-cols-[1fr_auto]">
           <div className="box-row -m-2 rounded-2xl p-2">
             <p className="font-bold">{o.delivery!.status === "out" ? tr("طلبك في الطريق إليك", "Your order is on its way") : tr("طلبك يُجهَّز للشحن", "Your order is being packed")}</p>
             <p className="text-sm text-muted">
@@ -139,7 +135,7 @@ function MyShipments({ customer }: { customer: Customer }) {
           <div className="sm:col-span-2">
             <ShipmentTracker order={o} shop={customer} warehouse={lookups.warehouses.find((w) => w.id === o.warehouse_id)} live={locations[o.delivery!.rep?.id ?? o.rep_id]} />
           </div>
-        </motion.div>
+        </div>
       ))}
     </div>
   );

@@ -291,7 +291,7 @@ export function SiteScene({ warehouses, myWarehouseId, onEnter }: { warehouses: 
             >
               {Math.round(w.fill * 100)}%{/* The alerts count sits on the circle's edge (it used to sit on the edge of the whole label, far away) */}
               {w.alerts > 0 && (
-                <span className="num absolute -end-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white ring-2 ring-card">
+                <span className="num absolute -end-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-on-danger ring-2 ring-card">
                   {w.alerts}
                 </span>
               )}
