@@ -1,7 +1,7 @@
 "use client";
 
 // One zone up close: a card per item (like the design's aisle cards), and a dashed picking path that
-// joins the items the waiting orders need, with the reps' cursors next to the items they asked for.
+// joins the items the waiting orders need. (No moving cursors: they distracted from the numbers, as on the site map.)
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
@@ -9,7 +9,6 @@ import { AlertTriangle, ArrowLeftRight, Boxes, CheckCircle2, Clock, Eye, Package
 import { useApp } from "@/components/shell";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { NamedCursor } from "./cursor";
 import type { MapCell, MapWarehouse, MapZone } from "./data";
 import { statusLabel, statusStyle } from "./zones";
 
@@ -52,14 +51,6 @@ export function ZoneDetail({ view, zone, showPath, other }: { view: MapWarehouse
   const xs = rects.map((r) => r.x + r.w / 2);
   const minX = xs.length ? Math.min(...xs) - (xs.length === 1 ? 60 : 0) : 0;
   const maxX = xs.length ? Math.max(...xs) + (xs.length === 1 ? 60 : 0) : 0;
-
-  // A cursor for each rep, next to the first item they are waiting for.
-  const seen = new Set<string>();
-  const cursors = picks.flatMap((c) =>
-    c.neededBy
-      .filter((n) => !seen.has(n) && seen.add(n))
-      .map((n) => ({ name: n, rect: geo?.cards[c.item.id] })),
-  );
 
   return (
     <div ref={wrap} className="relative px-2 pb-24 pt-10 sm:px-6">
@@ -119,23 +110,6 @@ export function ZoneDetail({ view, zone, showPath, other }: { view: MapWarehouse
         </p>
       )}
 
-      {cursors.map((c, i) =>
-        c.rect ? (
-          <NamedCursor
-            key={c.name}
-            unit="px"
-            name={c.name.split(" ")[0]}
-            tone={i % 2 === 0 ? "orange" : "green"}
-            // On the top edge of the card, so it doesn't cover the item's name.
-            path={[
-              { x: c.rect.x + c.rect.w * 0.4, y: c.rect.y - 26 },
-              { x: c.rect.x + c.rect.w * 0.55, y: c.rect.y - 22 },
-              { x: c.rect.x + c.rect.w * 0.46, y: c.rect.y - 28 },
-            ]}
-            duration={5 + i}
-          />
-        ) : null,
-      )}
     </div>
   );
 }
