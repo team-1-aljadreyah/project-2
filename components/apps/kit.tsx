@@ -15,6 +15,7 @@ import { LanguageSwitch } from "@/components/switches";
 import { homeOf, rememberNext, useSession } from "@/lib/auth";
 import { inApp } from "@/lib/app-path";
 import { useFmt } from "@/lib/i18n";
+import { useToast } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 export type AppKind = "client" | "driver";
@@ -307,6 +308,25 @@ if (typeof window !== "undefined") {
 type Device = "ios" | "android" | "desktop";
 const deviceOf = (): Device => (/iphone|ipad|ipod/i.test(navigator.userAgent) ? "ios" : /android/i.test(navigator.userAgent) ? "android" : "desktop");
 const standalone = () => window.matchMedia("(display-mode: standalone)").matches || installed;
+
+// Which installed app this window is: an app is launched at its own landing with "?app=1" (its start_url),
+// so that page writes it down for the window. Later, if this window shows the OTHER app's page (an older
+// install of the shops' app covered the whole site), the page knows it is in the wrong window.
+const WINDOW_KEY = "nahrain.window";
+if (typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches) {
+  try {
+    const first = window.location.pathname.split("/")[1];
+    if (new URLSearchParams(window.location.search).get("app") === "1" && (first === "client" || first === "driver")) sessionStorage.setItem(WINDOW_KEY, first);
+  } catch {}
+}
+const windowApp = (): AppKind | null => {
+  try {
+    const v = sessionStorage.getItem(WINDOW_KEY);
+    return v === "client" || v === "driver" ? v : null;
+  } catch {
+    return null;
+  }
+};
 const subInstall = (fn: () => void) => {
   installSubs.add(fn);
   return () => {
@@ -319,7 +339,8 @@ function useInstall() {
   const canPrompt = useSyncExternalStore(subInstall, () => !!offer, () => false);
   const isApp = useSyncExternalStore(subInstall, standalone, () => false);
   const device = useSyncExternalStore(subInstall, deviceOf, () => "desktop" as Device);
-  return { canPrompt, isApp, device };
+  const inApp = useSyncExternalStore(subInstall, windowApp, () => null);
+  return { canPrompt, isApp, device, inApp };
 }
 
 /**
@@ -329,10 +350,33 @@ function useInstall() {
  */
 export function InstallButton({ app, variant = "solid", className, label }: { app: AppKind; variant?: "solid" | "ghost" | "icon"; className?: string; label?: string }) {
   const { tr } = useFmt();
-  const { canPrompt, isApp } = useInstall();
+  const { canPrompt, isApp, inApp } = useInstall();
   const [sheet, setSheet] = useState(false);
   const { main } = IDENTITY[app];
   const text = label ?? tr("حمّل التطبيق", "Download the app");
+  // This page is open inside the OTHER installed app's window: it can't be installed from here.
+  // (Unknown: a window opened before this check existed; it may be the other app's, so say how to check.)
+  const wrongWindow = isApp && inApp !== app;
+  if (wrongWindow)
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setSheet(true)}
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center gap-2 font-bold transition active:scale-[0.97]",
+            variant === "icon" ? "size-10 rounded-full border border-white/15 bg-white/10 hover:bg-white/20" : "h-13 rounded-2xl border border-warning/50 bg-warning/10 px-5 text-sm text-white",
+            className,
+          )}
+          style={variant === "icon" ? { color: main } : undefined}
+          aria-label={tr("كيف أحمّله؟", "How do I get it?")}
+        >
+          <Download className="size-5" />
+          {variant !== "icon" && (inApp ? tr("أنت داخل تطبيق آخر: كيف أحمّله؟", "You're in the other app: how do I get it?") : tr("مفتوح داخل تطبيق مثبّت: كيف أحمّل هذا؟", "Open inside an installed app: how do I get this one?"))}
+        </button>
+        <AnimatePresence>{sheet && <WrongWindowSheet app={app} inside={inApp ?? (app === "client" ? "driver" : "client")} onClose={() => setSheet(false)} />}</AnimatePresence>
+      </>
+    );
   if (isApp) return variant === "icon" ? null : <span className={cn("inline-flex h-13 items-center gap-2 rounded-2xl border border-white/15 px-5 text-sm font-bold text-white/70", className)}>{tr("التطبيق مثبّت على جهازك", "Installed on this device")}</span>;
   const press = async () => {
     if (canPrompt && offer) {
@@ -460,6 +504,74 @@ function InstallSheet({ app, onClose }: { app: AppKind; onClose: () => void }) {
           </div>
         )}
         <p className="mt-4 text-center text-xs text-white/45">{tr("لا متجر ولا تحميل كبير: يعمل من المتصفح نفسه.", "No store and no big download: it runs from the browser itself.")}</p>
+      </motion.div>
+    </motion.div>,
+    document.body,
+  );
+}
+
+/**
+ * Opened inside the other installed app's window (an older install of the shops' app covered the whole site):
+ * how to get this app. Remove the old app once, then install both again from the browser.
+ */
+function WrongWindowSheet({ app, inside, onClose }: { app: AppKind; inside: AppKind; onClose: () => void }) {
+  const { tr } = useFmt();
+  const toast = useToast();
+  const { main } = IDENTITY[app];
+  const other = inside === "client" ? tr("تطبيق المحلات", "the shops' app") : tr("تطبيق المندوبين", "the reps' app");
+  const mineName = app === "client" ? tr("تطبيق المحلات", "the shops' app") : tr("تطبيق المندوبين", "the reps' app");
+  const link = typeof window === "undefined" ? `/${app}` : `${window.location.origin}/${app}`;
+  const steps = [
+    tr(`في نافذة ${other} هذه افتح القائمة ⋮ أعلى اليمين، واختر «إلغاء التثبيت» (نسخته القديمة كانت تغطي الموقع كله).`, `In this window of ${other}, open the ⋮ menu at the top and choose “Uninstall” (its old version covered the whole site).`),
+    tr("افتح Chrome العادي، وادخل إلى صفحة كل تطبيق، واضغط «حمّل التطبيق».", "Open Chrome itself, go to each app's page, and press “Download the app”."),
+    tr(`هكذا يصير لكل تطبيق نافذته وأيقونته: ${mineName} و${other}.`, `Then each app has its own window and icon: ${mineName} and ${other}.`),
+  ];
+  return createPortal(
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="dark fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <motion.div
+        role="dialog"
+        aria-modal
+        aria-label={tr("أنت داخل تطبيق آخر", "You're in the other app")}
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }}
+        className="w-full max-w-md rounded-t-[28px] border border-white/10 bg-[#111317] p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] text-white shadow-2xl sm:rounded-[28px]"
+      >
+        <div className="flex items-start gap-3">
+          <p className="flex-1 text-lg font-bold">{tr(`أنت الآن داخل ${other}`, `You are inside ${other}`)}</p>
+          <button type="button" onClick={onClose} aria-label={tr("إغلاق", "Close")} className="flex size-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
+            <X className="size-4" />
+          </button>
+        </div>
+        <p className="mt-2 text-sm text-white/65">{tr(`لهذا لا يمكن تثبيت ${mineName} من هنا. مرة واحدة فقط:`, `So ${mineName} can't be installed from here. Once only:`)}</p>
+        <ol className="mt-4 space-y-3">
+          {steps.map((t, i) => (
+            <li key={i} className="flex gap-3 rounded-2xl bg-white/[0.05] p-3 text-sm">
+              <span className="num flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-[#0b0c0e]" style={{ background: main }}>
+                {i + 1}
+              </span>
+              {t}
+            </li>
+          ))}
+        </ol>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(link);
+              toast("success", tr("نُسخ الرابط: الصقه في Chrome", "Link copied: paste it in Chrome"));
+            } catch {
+              toast("danger", link);
+            }
+          }}
+          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl font-bold text-[#0b0c0e]"
+          style={{ background: main }}
+        >
+          {tr("انسخ رابط هذا التطبيق", "Copy this app's link")}
+        </button>
+        <p className="mt-2 text-center text-xs text-white/45" dir="ltr">
+          {link}
+        </p>
       </motion.div>
     </motion.div>,
     document.body,
