@@ -1,5 +1,7 @@
 "use client";
 
+import { BarcodeScanner, ScanButton } from "@/components/barcode-scanner";
+
 import { useRemembered } from "@/lib/remember";
 import { useCustomColumns } from "@/components/custom-fields";
 
@@ -32,6 +34,8 @@ export default function ItemsPage() {
       })
       .catch((e) => toast("danger", errorText(e, tr)));
   const [q, setQ] = useRemembered("items:q", "");
+  // A scanned barcode goes into the search (it matches the barcode).
+  const [scanning, setScanning] = useState(false);
   const [cat, setCat] = useRemembered("items:cat", "");
   const [f, setF] = useState<"all" | "low" | "inactive">("all");
   const [add, setAdd] = useState(false);
@@ -118,7 +122,7 @@ export default function ItemsPage() {
               ...(user.role === "manager" ? [{ value: "inactive" as const, label: tr("الموقوفة", "Inactive"), count: items.filter((i) => !i.active).length }] : []),
             ]}
           />
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Select value={cat} onChange={(e) => setCat(e.target.value)} className="sm:w-40" aria-label={tr("الفئة", "Category")}>
               <option value="">{tr("كل الأصناف", "All categories")}</option>
               {lookups.categories.map((c) => (
@@ -132,7 +136,11 @@ export default function ItemsPage() {
                 </option>
               ))}
             </Select>
-            <SearchBox value={q} onChange={setQ} placeholder={tr("الاسم أو الباركود", "Name or barcode")} className="sm:w-64" />
+            {/* The search takes what room is left, or a line of its own on a tablet (tight with the scan button). */}
+            <div className="flex min-w-0 gap-2 sm:min-w-[18rem] sm:flex-1 xl:flex-none">
+              <SearchBox value={q} onChange={setQ} placeholder={tr("الاسم أو الباركود", "Name or barcode")} className="min-w-0 flex-1 xl:w-64" />
+              <ScanButton onClick={() => setScanning(true)} />
+            </div>
           </div>
         </div>
         <DataTable
@@ -162,6 +170,15 @@ export default function ItemsPage() {
         />
       </Card>
       {add && <ItemForm open onClose={() => setAdd(false)} />}
+      {scanning && (
+        <BarcodeScanner
+          onClose={() => setScanning(false)}
+          onCode={(code) => {
+            setQ(code);
+            setScanning(false);
+          }}
+        />
+      )}
     </>
   );
 }

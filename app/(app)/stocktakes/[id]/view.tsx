@@ -1,5 +1,7 @@
 "use client";
 
+import { BarcodeScanner, ScanButton } from "@/components/barcode-scanner";
+
 import { useState } from "react";
 import { CheckCircle2, Save } from "lucide-react";
 import { useApp } from "@/components/shell";
@@ -18,6 +20,7 @@ export default function StocktakeView() {
   const st = useLoad(() => api.getStocktake(id), [id]);
   const [edits, setEdits] = useState<StocktakeLine[] | null>(null);
   const [q, setQ] = useState("");
+  const [scanning, setScanning] = useState(false);
   const [f, setF] = useState<"all" | "todo" | "diff">("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<Record<string, string>>({});
@@ -109,7 +112,21 @@ export default function StocktakeView() {
               { value: "diff", label: tr("فيها فرق", "Differences"), count: lines.filter((l) => diff(l) !== 0).length },
             ]}
           />
-          <SearchBox value={q} onChange={setQ} placeholder={tr("ابحث عن مادة", "Search item")} className="lg:w-64" />
+          <div className="flex gap-2">
+            <SearchBox value={q} onChange={setQ} placeholder={tr("ابحث عن مادة أو امسح الباركود", "Search an item or scan")} className="lg:w-64" />
+            <ScanButton onClick={() => setScanning(true)} />
+          </div>
+          {scanning && (
+            <BarcodeScanner
+              onClose={() => setScanning(false)}
+              onCode={(code) => {
+                // The scanned item alone in the list, and its count box ready to type in.
+                setQ(code);
+                setScanning(false);
+                setTimeout(() => document.querySelector<HTMLInputElement>("[data-count]")?.focus(), 200);
+              }}
+            />
+          )}
         </div>
         <div className="h-1.5 bg-line">
           <div className="h-full bg-success transition-all" style={{ width: `${(done / Math.max(1, lines.length)) * 100}%` }} />
@@ -131,6 +148,7 @@ export default function StocktakeView() {
                 <div>
                   <label className="text-xs text-muted">{tr("الموجود على الرف (قطعة)", "On the shelf (pieces)")}</label>
                   <Input
+                    data-count
                     inputMode="numeric"
                     dir="ltr"
                     disabled={!open}

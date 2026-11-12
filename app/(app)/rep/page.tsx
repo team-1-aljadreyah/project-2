@@ -11,6 +11,7 @@ import { motion } from "motion/react";
 import { Percent, Route, Search, ShoppingCart, Truck, Wallet, WifiOff } from "lucide-react";
 import { useNow } from "@/components/hall/live";
 import { CustomerSheet, NextStopCard, RouteMap, buildStops, useVisits } from "@/components/rep-route";
+import { MyTarget } from "@/components/rep-targets";
 import Link from "next/link";
 import { useApp } from "@/components/shell";
 import { repDoes } from "@/lib/api/types";
@@ -128,6 +129,9 @@ export default function RepHome() {
         </div>
         <div className="hazard absolute inset-x-0 bottom-0 h-1.5" aria-hidden />
       </motion.div>
+
+      {/* His month against the target the manager set (only when there is one). */}
+      {repDoes(user, "sales") && <MyTarget />}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         {/* Today's route (the design's tracking screen) */}

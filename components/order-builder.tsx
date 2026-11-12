@@ -1,5 +1,7 @@
 "use client";
 
+import { BarcodeScanner, ScanButton, itemByBarcode } from "@/components/barcode-scanner";
+
 // The order screen. Built for the rep's phone: big buttons, search, carton/piece switch, live stock,
 // the customer's own prices, a debt-limit warning, a saved draft, and it keeps working without internet.
 import { useAppRouter } from "@/lib/app-path";
@@ -57,6 +59,8 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
   const [draft, setDraft] = useState<Draft>(() => readDraft(user.id, lookups.warehouses[0].id, fixedCustomerId ?? preselectCustomerId ?? null));
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
+  // Scanning an item's barcode adds it to the order (one carton, or one more if it's already there).
+  const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pickCustomer, setPickCustomer] = useState(false);
@@ -73,6 +77,17 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
   const tierId = customer?.tier_id;
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
 
+  function onScan(code: string) {
+    setScanning(false);
+    const it = itemByBarcode(items, code);
+    if (!it) {
+      toast("danger", tr(`لا مادة بالباركود ${code}`, `No item with barcode ${code}`));
+      return;
+    }
+    const l = draft.lines.find((x) => x.item_id === it.id);
+    setLine(it.id, l ? { qty: l.qty + 1 } : {});
+    toast("success", tr(`أُضيفت: ${name(it)}`, `Added: ${name(it)}`));
+  }
   const lineOf = (itemId: number) => draft.lines.find((l) => l.item_id === itemId);
   const setLine = (itemId: number, patch: Partial<Line> | null) => {
     setErrors({});
@@ -297,7 +312,13 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
 
         {/* Search and categories */}
         <div className="sticky top-14 z-20 -mx-3 space-y-2 bg-bg/95 px-3 py-2 backdrop-blur sm:top-16 sm:-mx-5 sm:px-5">
-          <SearchBox value={q} onChange={setQ} placeholder={tr("ابحث عن مادة بالاسم أو الباركود", "Search by name or barcode")} />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <SearchBox value={q} onChange={setQ} placeholder={tr("ابحث عن مادة بالاسم أو الباركود", "Search by name or barcode")} />
+            </div>
+            <ScanButton onClick={() => setScanning(true)} />
+          </div>
+          {scanning && <BarcodeScanner onClose={() => setScanning(false)} onCode={onScan} />}
           <div className="flex gap-1.5 overflow-x-auto pb-1">
             {["all", ...categories].map((c) => (
               <button

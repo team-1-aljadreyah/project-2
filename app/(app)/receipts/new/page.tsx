@@ -1,5 +1,7 @@
 "use client";
 
+import { BarcodeScanner, ScanButton, itemByBarcode } from "@/components/barcode-scanner";
+
 import { useUnsaved } from "@/lib/unsaved";
 
 import { useRouter, useSearchParams } from "next/navigation";
@@ -70,6 +72,25 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (key: number, p: Partial<Row>) => setRows((r) => r.map((x) => (x.key === key ? { ...x, ...p } : x)));
+  // A scanned item: its line if it has one (the quantity box gets the cursor), or a new line for it.
+  const [scanning, setScanning] = useState(false);
+  function onScan(code: string) {
+    setScanning(false);
+    const it = itemByBarcode(items, code);
+    if (!it) {
+      toast("danger", tr(`لا مادة بالباركود ${code}`, `No item with barcode ${code}`));
+      return;
+    }
+    const existing = rows.find((r) => r.item_id === it.id);
+    const key = existing?.key ?? ++k;
+    if (!existing) {
+      // An empty line (nothing chosen yet) is replaced; otherwise the item comes as a new line.
+      const line: Row = { ...blank(), key, item_id: it.id, price: it.avg_cost ? it.avg_cost * it.pieces_per_carton : "" };
+      setRows((r) => [...r.filter((x) => x.item_id !== "" || x.qty !== "" || x.ordered), line]);
+    }
+    toast("success", existing ? tr(`${name(it)}: اكتب الكمية`, `${name(it)}: write the quantity`) : tr(`أُضيف سطر: ${name(it)}`, `Line added: ${name(it)}`));
+    setTimeout(() => document.querySelector<HTMLInputElement>(`[data-row="${key}"] input[inputmode]`)?.focus(), 150);
+  }
 
   // Sent: every chosen item, except the order's lines that didn't come (0 or not written).
   const filled = rows.filter((r) => r.item_id && (!r.ordered || (typeof r.qty === "number" && r.qty > 0)));
@@ -155,7 +176,7 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
           const idx = filled.indexOf(r);
           const e = (f: string) => (idx >= 0 ? err[`lines.${idx}.${f}`] : undefined);
           return (
-            <Card key={r.key} className={cn("p-4", idx >= 0 && Object.keys(err).some((x) => x.startsWith(`lines.${idx}.`)) && "border-danger")}>
+            <Card key={r.key} data-row={r.key} className={cn("p-4", idx >= 0 && Object.keys(err).some((x) => x.startsWith(`lines.${idx}.`)) && "border-danger")}>
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-sm font-semibold text-muted">
                   {tr("سطر", "Line")} {i + 1}
@@ -216,9 +237,13 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
           );
         })}
       </div>
-      <Button className="mt-3" onClick={() => setRows((r) => [...r, blank()])}>
-        <Plus className="size-4" /> {tr("أضف سطر", "Add line")}
-      </Button>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button onClick={() => setRows((r) => [...r, blank()])}>
+          <Plus className="size-4" /> {tr("أضف سطر", "Add line")}
+        </Button>
+        <ScanButton onClick={() => setScanning(true)} label={tr("امسح باركود مادة", "Scan an item")} />
+      </div>
+      {scanning && <BarcodeScanner onClose={() => setScanning(false)} onCode={onScan} />}
 
       {supply && (
         <Card className="mt-4 p-4">

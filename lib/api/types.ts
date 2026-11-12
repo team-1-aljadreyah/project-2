@@ -31,6 +31,8 @@ export interface User {
   deleted?: boolean;
   /** The manager's permission profile for this person (advanced settings). None = the job's usual access. */
   profile_id?: string;
+  /** Marketing rep: his monthly sales target in IQD (set by the manager). None = no target. */
+  sales_target?: number;
   active: boolean;
 }
 
@@ -713,6 +715,24 @@ export interface CommissionRow {
   closed: boolean;
 }
 
+/** A marketing rep's month against his target: what he sold (invoices less returns), and his place among the reps. */
+export interface RepTarget {
+  rep: Person;
+  month: string;
+  /** IQD; 0 = the manager set none. */
+  target: number;
+  sales: number;
+  returns: number;
+  /** sales - returns: what counts toward the target. */
+  net: number;
+  invoices: number;
+  /** net / target, in percent (0 when there is no target). */
+  pct: number;
+  /** His place (1 = first): reps with a target first, by pct, then by net. */
+  rank: number;
+  of: number;
+}
+
 export type AuditAction = "create" | "update" | "cancel" | "reverse" | "transfer" | "price_change" | "approve" | "confirm" | "close" | "login";
 
 export type AuditEntity = "item" | "batch" | "receipt" | "order" | "invoice" | "payment" | "return" | "transfer" | "stocktake" | "customer" | "user" | "commission" | "settings" | "expense";
@@ -1243,6 +1263,8 @@ export interface UserInput {
   password?: string;
   /** A permission profile of the same job (advanced settings); none = the job's usual access. */
   profile_id?: string | null;
+  /** Marketing rep: the monthly sales target in IQD; null or 0 = none. */
+  sales_target?: number | null;
 }
 
 // ---------- Support chat (shop owner ↔ warehouse staff / manager) ----------

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { RankBars } from "@/components/charts";
+import { DebtAgeing } from "@/components/debt-ageing";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
@@ -16,7 +17,7 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { downloadCsv, today } from "@/lib/utils";
 
-type Tab = "daily" | "sales" | "slow" | "expiry" | "debts";
+type Tab = "daily" | "sales" | "slow" | "expiry" | "debts" | "ageing";
 
 export default function ReportsPage() {
   const { tr } = useFmt();
@@ -29,6 +30,7 @@ export default function ReportsPage() {
           { value: "daily" as Tab, label: tr("المبيعات اليومية", "Daily sales") },
           { value: "sales" as Tab, label: tr("المبيعات والأرباح", "Sales and profit") },
           { value: "debts" as Tab, label: tr("الديون", "Debts") },
+          { value: "ageing" as Tab, label: tr("أعمار الديون", "Debt ageing") },
         ]
       : []),
     { value: "slow", label: tr("المواد الراكدة", "Slow-moving") },
@@ -43,6 +45,7 @@ export default function ReportsPage() {
       {tab === "slow" && <Slow />}
       {tab === "expiry" && <Expiry />}
       {tab === "debts" && <Debts />}
+      {tab === "ageing" && <DebtAgeing />}
     </>
   );
 }

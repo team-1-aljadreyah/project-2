@@ -42,7 +42,9 @@ The server must filter and hide, not only the pages:
 - **Purchase cost and profit** (`avg_cost`, `purchase_price`, `cost`, `profit`, `month_profit`): manager and accountant only.
 - **Debts** (`balance`, `debt_limit`, collected money on the dashboard): not for `warehouse` and `staff`.
 - **A rep** sees only his customers (`customer.rep_id`), their orders, invoices and payments; and only the item
-  categories the manager gave him (`rep_categories`, empty = all).
+  categories the manager gave him (`rep_categories`, empty = all). His monthly target (`sales_target`, set by
+  the manager on the user) is counted by `GET /reps/targets`: the month's invoices with his `rep_id` less the
+  returns on them; he gets only his own row (with his rank), the manager and accountant get every marketing rep.
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -178,10 +180,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 131 endpoints, generated from lib/api/http.ts -->
+<!-- 132 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -373,4 +375,10 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `listNotifications` | GET | `/notifications` |  | `AppNotification[]` |  |
 | `markRead` | POST | `/notifications/:id/read` | `id: number` | `null` |  |
 | `markAllRead` | POST | `/notifications/read-all` |  | `null` |  |
+
+### Other
+
+| Call | Method | Path | Takes | Returns | Notes |
+|---|---|---|---|---|---|
+| `repTargets` | GET | `/reps/targets` | `month: string` | `RepTarget[]` | Each marketing rep's month against his monthly target, ranked (a rep gets only his own row). |
 
