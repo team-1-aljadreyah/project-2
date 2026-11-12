@@ -284,7 +284,7 @@ export default function DeliveriesPage() {
 
       {/* While picking: how many shops, start / cancel (above the phone's bottom bar) */}
       {picking && (
-        <div className="fixed inset-x-0 bottom-16 z-40 px-4 md:bottom-4 md:start-64">
+        <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 px-4">
           <div className="mx-auto flex max-w-xl items-center gap-2 rounded-2xl border border-line bg-card p-2 shadow-2xl">
             <p className="flex-1 px-2 text-sm font-semibold">{tr(`${num(picking.length)} محلات في الجولة`, `${num(picking.length)} shops in the trip`)}</p>
             <Button variant="ghost" onClick={() => setPicking(null)}>
@@ -374,9 +374,7 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center gap-2 py-8 text-center">
           <CheckCircle2 className="size-14 text-success" />
           <p className="text-lg font-bold">{tr("تم التسليم", "Delivered")}</p>
-          <p className="text-sm text-muted">
-            {tr("سُجّل الرمز والصورة والوقت، وصدرت الفاتورة على ما استُلم.", "The PIN, the photo and the time are recorded; the invoice is made for what was taken.")}
-          </p>
+          <p className="text-sm text-muted">{tr("سُجّل الرمز والصورة والوقت، وصدرت الفاتورة على ما استُلم.", "The PIN, the photo and the time are recorded; the invoice is made for what was taken.")}</p>
         </motion.div>
       ) : (
         <div className="space-y-5">

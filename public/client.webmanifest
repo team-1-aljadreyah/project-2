@@ -1,0 +1,20 @@
+{
+  "id": "/client",
+  "name": "النهرين · طلبات المحلات",
+  "short_name": "النهرين للمحلات",
+  "description": "اطلب بضاعة محلك بالجملة، وتابع شحنتك وكشف حسابك من جوالك.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/client?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f5f2",
+  "theme_color": "#e1692b",
+  "icons": [
+    { "src": "/apps/client-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/apps/client-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/apps/client-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/apps/client-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

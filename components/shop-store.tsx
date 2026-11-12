@@ -388,7 +388,7 @@ export function ShopStore({ customer }: { customer: Customer }) {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             onClick={() => setBagOpen(true)}
-            className="fixed inset-x-4 bottom-20 z-30 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-primary px-4 py-3 text-on-primary shadow-2xl lg:bottom-6"
+            className="fixed inset-x-4 bottom-[calc(76px+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-primary px-4 py-3 text-on-primary shadow-2xl"
           >
             <span className="relative">
               <ShoppingBag className="size-6" />

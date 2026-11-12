@@ -11,6 +11,7 @@ import { useFmt } from "@/lib/i18n";
 import { enqueue, isNetworkError, newClientRef, useOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
 import { cn, matches, piecesOf, priceOf as tierPrice } from "@/lib/utils";
+import { isPhoneApp } from "./nav";
 import { useApp } from "./shell";
 import { DiscountPicker, canDiscount } from "./discount";
 import { Badge, Button, Card, Dialog, Empty, LimitBar, Money, Notice, SearchBox, Segmented, Select, Stepper, Textarea, errorText, useToast, Pager, usePages } from "./ui";
@@ -364,7 +365,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
         </Card>
       </div>
       {draft.lines.length > 0 && (
-        <div className="fixed inset-x-0 bottom-16 z-30 border-t border-line bg-card p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] md:bottom-0 lg:hidden">
+        <div className={cn("fixed inset-x-0 z-30 border-t border-line bg-card p-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] lg:hidden", isPhoneApp(user.role) ? "bottom-[calc(68px+env(safe-area-inset-bottom))]" : "bottom-16 pb-[calc(env(safe-area-inset-bottom)+12px)] md:bottom-0")}>
           <div className="mx-auto flex max-w-lg items-center gap-3">
             <button type="button" onClick={() => setCartOpen(true)} className="flex min-w-0 flex-1 items-center gap-2 text-start">
               <span className="relative flex size-11 items-center justify-center rounded-xl bg-primary-soft text-primary-ink">

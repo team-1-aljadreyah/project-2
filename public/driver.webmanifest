@@ -1,0 +1,20 @@
+{
+  "id": "/driver",
+  "name": "النهرين · المندوبين",
+  "short_name": "النهرين للمندوب",
+  "description": "جولة التوصيل، مسح الشحنات، والتسليم برمز صاحب المحل.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/driver?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e1013",
+  "theme_color": "#1d2127",
+  "icons": [
+    { "src": "/apps/driver-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/apps/driver-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/apps/driver-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/apps/driver-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
