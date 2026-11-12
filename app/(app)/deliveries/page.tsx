@@ -26,6 +26,7 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
 import { DeliveriesOverview, RepTripMap, useRepLocations, useShareLocation, type Stop as MapStop } from "@/components/delivery/live-map";
+import { OpenInMaps } from "@/components/open-in-maps";
 import { cn, dayOfIso, today } from "@/lib/utils";
 
 type Tab = "ready" | "out" | "delivered";
@@ -235,15 +236,10 @@ export default function DeliveriesPage() {
                         {o.delivery?.vehicle && <> · {o.delivery.vehicle.name}</>}
                       </p>
                       {c?.address_info?.lat !== undefined && (
-                        <a
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${c.address_info.lat},${c.address_info.lng}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-1 inline-flex items-center gap-1 rounded-full bg-action/10 px-2 py-0.5 text-[11px] font-semibold text-action"
-                        >
-                          <MapPin className="size-3" /> {tr("الموقع", "Location")}
-                          {c.address_info.landmark ? ` · ${c.address_info.landmark}` : ""}
-                        </a>
+                        <div className="relative z-10 mt-1.5 flex flex-wrap items-center gap-2">
+                          <OpenInMaps variant="soft" text={tr("الطريق", "Directions")} to={{ lat: c.address_info.lat, lng: c.address_info.lng!, label: c.name }} />
+                          {c.address_info.landmark && <span className="text-[11px] text-muted">{c.address_info.landmark}</span>}
+                        </div>
                       )}
                     </div>
                     <DeliveryChip d={d} tr={tr} />

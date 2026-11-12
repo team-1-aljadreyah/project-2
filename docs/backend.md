@@ -45,6 +45,12 @@ The server must filter and hide, not only the pages:
   categories the manager gave him (`rep_categories`, empty = all). His monthly target (`sales_target`, set by
   the manager on the user) is counted by `GET /reps/targets`: the month's invoices with his `rep_id` less the
   returns on them; he gets only his own row (with his rank), the manager and accountant get every marketing rep.
+- **Road routes** (`lib/road.ts`): the maps draw the trip along the real streets with its km and minutes from
+  an OSRM server. The demo calls the free public `router.project-osrm.org` straight from the browser; it has no
+  guarantee and sends the shops' points to a third party, so before launch host OSRM (Iraq extract of
+  OpenStreetMap) or add `GET /route?points=lng,lat;lng,lat…` that forwards to a paid router, and change `ROUTER`.
+  Same answer shape as OSRM (`routes[0].geometry.coordinates`, `distance` m, `duration` s); cache it per point list.
+  The «افتح في» buttons (Google Maps / Waze / Apple Maps / Android's geo: chooser) need nothing from the server.
 - **Item units** (`pack_name`, `piece_name`, `sells` on the item; none = كارتون / قطعة, both sold): the two levels
   stay `carton` (the big pack) and `piece` (the single) everywhere. Save: names up to 20 letters and different
   from each other; `pieces_per_carton` 1 means the single only; a price is required only for a unit that is

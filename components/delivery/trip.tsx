@@ -7,6 +7,8 @@ import { useSyncExternalStore } from "react";
 import { motion } from "motion/react";
 import { AlertTriangle, Check, MapPin, PackageCheck, Phone, Route, X } from "lucide-react";
 import { Button } from "@/components/ui";
+import { OpenInMaps } from "@/components/open-in-maps";
+import { shopPlace } from "@/components/delivery/live-map";
 import type { Customer, Order } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -116,6 +118,7 @@ export function TripPanel({ stops, onDeliver, onProblem, onEnd }: { stops: TripS
               </div>
               {!done && s.open.length > 0 && (
                 <div className="flex shrink-0 items-center gap-1">
+                  {shopPlace(s.customer) && <OpenInMaps compact text={tr(`الطريق إلى ${s.customer.name}`, `The way to ${s.customer.name}`)} to={{ ...shopPlace(s.customer)!, label: s.customer.name }} />}
                   <a href={`tel:${s.customer.phone}`} aria-label={tr(`اتصل بـ ${s.customer.name}`, `Call ${s.customer.name}`)} className="flex size-9 items-center justify-center rounded-lg border border-line hover:bg-card-2">
                     <Phone className="size-4" />
                   </a>

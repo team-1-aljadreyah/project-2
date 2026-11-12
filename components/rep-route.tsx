@@ -8,6 +8,8 @@ import { motion } from "motion/react";
 import { Check, CheckCircle2, MessageCircle, Phone, ShoppingCart, Store, Wallet } from "lucide-react";
 import { Button, Dialog, LimitBar } from "@/components/ui";
 import { curve, shopPlace, warehousePlace } from "@/components/delivery/live-map";
+import { OpenInMaps } from "@/components/open-in-maps";
+import { useRoadRoute } from "@/lib/road";
 import { CityMap, type LatLng, type MapMarker } from "@/components/map3d/city-map";
 import { useApp } from "@/components/shell";
 import type { Customer } from "@/lib/api/types";
@@ -139,13 +141,16 @@ export function RouteMap({ stops, visited, onPick }: { stops: Stop[]; visited: n
     })),
   ];
   const pts = [...(start ? [start] : []), ...places.map((x) => x.p)];
-  const route = pts.slice(1).flatMap((p, i) => curve(pts[i], p, 16).slice(i ? 1 : 0));
+  // Along the streets once the road is known (a gentle curve per leg until then).
+  const road = useRoadRoute(pts.length > 1 ? pts : null);
+  const route = road?.path ?? pts.slice(1).flatMap((p, i) => curve(pts[i], p, 16).slice(i ? 1 : 0));
   const done = places.length ? places.filter((x) => visited.includes(x.s.customer.id)).length / places.length : 0;
   if (!places.length) return <p className="py-10 text-center text-sm text-muted">{tr("لا توجد محلات بموقع على الخريطة اليوم", "No shops with a map location today")}</p>;
   return (
     <CityMap markers={markers} route={route} routeDone={done} className="h-80">
       <span className="pointer-events-none absolute start-3 top-3 z-10 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
         {tr(`${num(places.length)} محلات اليوم`, `${num(places.length)} shops today`)}
+        {road && tr(` · ${num(Math.round(road.km * 10) / 10)} كم · ${num(road.min)} دقيقة`, ` · ${num(Math.round(road.km * 10) / 10)} km · ${num(road.min)} min`)}
       </span>
     </CityMap>
   );
@@ -179,6 +184,7 @@ export function NextStopCard({ stop, index, total, done, userId, onOpen }: { sto
             </span>
           </span>
         </button>
+        {shopPlace(c) && <OpenInMaps compact variant="action" className="size-10 rounded-full" text={tr(`الطريق إلى ${c.name}`, `The way to ${c.name}`)} to={{ ...shopPlace(c)!, label: c.name }} />}
         <a href={`tel:${c.phone}`} aria-label={tr("اتصال", "Call")} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card-2 text-primary-ink hover:bg-line">
           <Phone className="size-4" />
         </a>
@@ -265,6 +271,7 @@ export function CustomerSheet({ customer, stop, onClose, visited, userId }: { cu
           <Check className="size-4" /> {visited ? tr("زرته اليوم", "Visited today") : tr("تمت الزيارة", "Mark visited")}
         </button>
       </div>
+      {shopPlace(customer) && <OpenInMaps className="mt-2 w-full" size="md" text={tr("الطريق إلى المحل", "The way to the shop")} to={{ ...shopPlace(customer)!, label: customer.name }} />}
       <Button variant="ghost" size="sm" href={`/customers/${customer.id}`} className="mt-2 w-full">
         <Store className="size-4" /> {tr("ملف الزبون الكامل", "Full customer file")}
       </Button>

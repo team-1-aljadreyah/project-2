@@ -1,7 +1,7 @@
 "use client";
 import { CustomFieldsCard } from "@/components/custom-fields";
 
-import { MapPinned, Pencil, Phone, ShoppingCart, Wallet } from "lucide-react";
+import { Pencil, Phone, ShoppingCart, Wallet } from "lucide-react";
 import { useState } from "react";
 import { CustomerForm } from "@/components/customer-form";
 import { useApp } from "@/components/shell";
@@ -9,6 +9,7 @@ import { OrderStatusBadge } from "@/components/status";
 import { StatementView } from "@/components/statement-view";
 import { SpecialPrices } from "@/components/special-prices";
 import { MapPin } from "@/components/map-pin";
+import { OpenInMaps } from "@/components/open-in-maps";
 import { RefundButton } from "@/components/refund";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, Textarea, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -151,14 +152,7 @@ export default function CustomerView() {
               {x.address_info.lat !== undefined && (
                 <>
                   <MapPin lat={x.address_info.lat} lng={x.address_info.lng} className="h-36" />
-                  <a
-                    href={`https://www.google.com/maps?q=${x.address_info.lat},${x.address_info.lng}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line-strong text-xs font-semibold text-text transition hover:bg-card-2 active:scale-[0.98]"
-                  >
-                    <MapPinned className="size-4" /> {tr("افتح الموقع في الخرائط", "Open in Maps")}
-                  </a>
+                  <OpenInMaps className="w-full" text={tr("افتح الموقع في الخرائط", "Open in Maps")} to={{ lat: x.address_info.lat, lng: x.address_info.lng!, label: x.name }} />
                 </>
               )}
             </div>

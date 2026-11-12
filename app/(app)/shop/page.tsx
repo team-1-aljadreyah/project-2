@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, Clock, PhoneCall, ShoppingCart, XCircle } from "lucide-react";
+import { Check, Clock, PhoneCall, ShoppingCart, Warehouse, XCircle } from "lucide-react";
 import Link from "next/link";
 import { PinCard } from "@/components/delivery/status";
 import { ShipmentTracker, useRepLocations } from "@/components/delivery/live-map";
+import { OpenInMaps } from "@/components/open-in-maps";
 import { ShopStore } from "@/components/shop-store";
 import { useApp } from "@/components/shell";
 import { Button, Card, ErrorBox, LoadingRows, Notice } from "@/components/ui";
@@ -45,6 +46,7 @@ export default function ShopOrderPage() {
     <>
       <MyShipments customer={c.data} orders={orders.data ?? []} />
       <ShopStore key={c.data.id} customer={c.data} orders={orders.data ?? []} />
+      <OurWarehouses />
     </>
   );
 }
@@ -138,5 +140,29 @@ function MyShipments({ customer, orders }: { customer: Customer; orders: Order[]
         </div>
       ))}
     </div>
+  );
+}
+
+/** Our warehouses, for a shop owner who comes to buy at the counter: the way there in his maps app. */
+function OurWarehouses() {
+  const { tr, name } = useFmt();
+  const { lookups } = useApp();
+  const list = lookups.warehouses.filter((w) => w.lat !== undefined && w.lng !== undefined);
+  if (!list.length) return null;
+  return (
+    <section className="mt-6 mb-24 rounded-3xl border border-line bg-card p-4 sm:mb-6">
+      <h2 className="flex items-center gap-1.5 font-bold">
+        <Warehouse className="size-4 text-action" /> {tr("تعال إلى مخازننا", "Come to our warehouses")}
+      </h2>
+      <p className="mt-0.5 text-sm text-muted">{tr("تشتري وتدفع في المخزن وتأخذ البضاعة في الحال.", "Buy and pay at the warehouse and take the goods at once.")}</p>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {list.map((w) => (
+          <li key={w.id} className="flex items-center justify-between gap-2 rounded-2xl bg-card-2 p-3">
+            <span className="min-w-0 truncate font-semibold">{name(w)}</span>
+            <OpenInMaps variant="action" text={tr("الطريق", "Directions")} to={{ lat: w.lat!, lng: w.lng!, label: name(w) }} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
