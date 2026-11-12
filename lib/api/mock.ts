@@ -103,6 +103,11 @@ import {
   saveStocktake,
   sellableQty,
   sweep,
+  expensesOf,
+  createExpense,
+  decideExpense,
+  cancelExpense,
+  monthExpenses,
   setMyPhoto,
   changeMyPassword,
   removeMyShop,
@@ -434,6 +439,21 @@ export const mockApi: Api = {
       return commissionLines(db, month, a.role === "rep" ? a.id : undefined);
     }),
 
+  // Expenses (صرفيات): the accountant and the manager
+  listExpenses: () =>
+    read((db, a) => {
+      need(a, ["accountant", "manager"]);
+      return [...expensesOf(db)].sort((x, y) => y.date.localeCompare(x.date) || y.id - x.id);
+    }),
+  getExpense: (id) =>
+    read((db, a) => {
+      need(a, ["accountant", "manager"]);
+      return expensesOf(db).find((e) => e.id === id) ?? notFound();
+    }),
+  createExpense: (input) => write((db, a, now) => createExpense(db, a, input, now)),
+  decideExpense: (id, ok, reason) => write((db, a, now) => decideExpense(db, a, id, ok, reason ?? "", now)),
+  cancelExpense: (id, reason) => write((db, a, now) => cancelExpense(db, a, id, reason, now)),
+
   // Your own account
   setMyPhoto: (photo) => write((db, a) => strip(setMyPhoto(db, a, photo))),
   changeMyPassword: (current, next) => write((db, a) => changeMyPassword(db, a, current, next)),
@@ -505,6 +525,7 @@ export const mockApi: Api = {
     write((db, a, now) => {
       need(a, ["manager"]);
       if (!(s.reservation_hours >= 1 && s.reservation_hours <= 72)) fail(422, "VALIDATION", "مدة الحجز بين 1 و 72 ساعة", "Reservation must be 1 to 72 hours", { reservation_hours: "1-72" });
+      if (s.expense_approval_above !== undefined && !(s.expense_approval_above >= 0)) fail(422, "VALIDATION", "حد موافقة الصرفيات غير صحيح", "The expense limit is wrong", { expense_approval_above: "≥ 0" });
       db.settings = s;
       audit(
         db,
@@ -1305,6 +1326,9 @@ export const mockApi: Api = {
       };
       if (seesProfit(a)) {
         base.month_profit = monthInv.reduce((s, i) => s + i.total - i.cost, 0) - monthRet.reduce((s, r) => s + r.amount - r.cost, 0);
+        // What is left after this month's expenses (rent, salaries, fuel…): the real profit.
+        base.month_expenses = monthExpenses(db, today.slice(0, 7), wh || undefined);
+        base.month_net = base.month_profit - base.month_expenses;
       }
       if (!seesDebt(a)) {
         base.total_debt = 0;

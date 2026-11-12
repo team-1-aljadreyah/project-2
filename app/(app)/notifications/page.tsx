@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Truck,
   UserPlus,
+  Banknote,
 } from "lucide-react";
 import { Button, Card, Empty, ErrorBox, LoadingRows, PageHeader, Pager, usePages } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -55,6 +56,8 @@ const icon = (t: NotificationType) => {
       return <Headset className="size-5 text-action" />;
     case "supply_order":
       return <Truck className="size-5 text-action" />;
+    case "expense":
+      return <Banknote className="size-5 text-warning" />;
     case "refund":
       return <RotateCcw className="size-5 text-success" />;
     case "commission_earned":

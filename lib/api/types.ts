@@ -705,7 +705,7 @@ export interface CommissionRow {
 
 export type AuditAction = "create" | "update" | "cancel" | "reverse" | "transfer" | "price_change" | "approve" | "confirm" | "close" | "login";
 
-export type AuditEntity = "item" | "batch" | "receipt" | "order" | "invoice" | "payment" | "return" | "transfer" | "stocktake" | "customer" | "user" | "commission" | "settings";
+export type AuditEntity = "item" | "batch" | "receipt" | "order" | "invoice" | "payment" | "return" | "transfer" | "stocktake" | "customer" | "user" | "commission" | "settings" | "expense";
 
 export interface AuditEntry {
   id: number;
@@ -739,7 +739,8 @@ export type NotificationType =
   | "order_rejected"
   | "order_review"
   | "refund"
-  | "supply_order";
+  | "supply_order"
+  | "expense";
 
 export interface AppNotification {
   id: number;
@@ -760,6 +761,8 @@ export interface Settings {
   near_expiry_days: number;
   slow_moving_days: number;
   auto_confirm_rep_orders: boolean;
+  /** An expense above this (IQD) waits for the manager's OK. None = EXPENSE_APPROVAL_ABOVE. */
+  expense_approval_above?: number;
 }
 
 /** A name in the two languages (only the ones the manager changed). */
@@ -829,6 +832,9 @@ export interface Dashboard {
   today_collected: number;
   month_sales: number;
   month_profit?: number;
+  /** This month's approved expenses (صرفيات), and the profit after them (who sees the profit only). */
+  month_expenses?: number;
+  month_net?: number;
   total_debt: number;
   over_limit_customers: number;
   pending_orders: number;
@@ -1075,3 +1081,72 @@ export interface MyChat {
   /** Answers from the company he hasn't seen yet (the red dot on the chat circle). */
   unread: number;
 }
+
+// ---------- Expenses (صرفيات): money paid out that isn't for goods (rent, salaries, fuel, generator…) ----------
+
+/** approved: counted. pending: above the limit, waits for the manager. rejected / cancelled: not counted, kept. */
+export type ExpenseStatus = "approved" | "pending" | "rejected" | "cancelled";
+
+/** One payment voucher (سند صرف). Never deleted: cancelled with a reason, so the cash box always adds up. */
+export interface Expense {
+  id: number;
+  number: string;
+  /** The day it was paid (YYYY-MM-DD). */
+  date: string;
+  /** Rent, salaries, fuel… (one of EXPENSE_CATEGORIES, or a new one the accountant wrote). */
+  category: string;
+  amount: number;
+  /** Paid from the cash box (cash) or from the bank / Zain Cash (transfer). */
+  method: "cash" | "transfer";
+  /** Who got the money: a person, a company, "the generator owner"… */
+  paid_to: string;
+  note?: string;
+  /** The warehouse it was for (its rent, its generator…). None = the whole company. */
+  warehouse_id?: number;
+  /** The vehicle it was for (fuel, repair). */
+  vehicle_id?: number;
+  /** A picture of the bill or receipt (a small JPEG data URL). */
+  photo?: string;
+  status: ExpenseStatus;
+  created_by: Person & { role: Role };
+  created_at: string;
+  /** The manager's answer to one above the limit. */
+  decided_by?: Person;
+  decided_at?: string;
+  reject_reason?: string;
+  cancelled_by?: Person;
+  cancelled_at?: string;
+  cancel_reason?: string;
+}
+
+export interface NewExpense {
+  date: string;
+  category: string;
+  amount: number;
+  method: "cash" | "transfer";
+  paid_to: string;
+  note?: string;
+  warehouse_id?: number;
+  vehicle_id?: number;
+  photo?: string;
+}
+
+/** The usual kinds of expense of a food wholesaler in Iraq (the accountant can write a new one too). */
+export const EXPENSE_CATEGORIES: { ar: string; en: string }[] = [
+  { ar: "رواتب وأجور", en: "Salaries and wages" },
+  { ar: "إيجار", en: "Rent" },
+  { ar: "كهرباء ومولدة", en: "Electricity and generator" },
+  { ar: "وقود السيارات", en: "Vehicle fuel" },
+  { ar: "صيانة السيارات", en: "Vehicle repairs" },
+  { ar: "أجور تحميل وتنزيل", en: "Loading labour" },
+  { ar: "نقل وشحن", en: "Transport" },
+  { ar: "صيانة المخازن", en: "Warehouse upkeep" },
+  { ar: "إنترنت واتصالات", en: "Internet and phones" },
+  { ar: "قرطاسية ومطبوعات", en: "Stationery and printing" },
+  { ar: "ضيافة", en: "Hospitality" },
+  { ar: "رسوم حكومية وضرائب", en: "Government fees and taxes" },
+  { ar: "أخرى", en: "Other" },
+];
+
+/** The default limit: an expense above it waits for the manager (IQD). */
+export const EXPENSE_APPROVAL_ABOVE = 1_000_000;

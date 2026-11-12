@@ -10,6 +10,7 @@ import { useApp } from "@/components/shell";
 import { Button, Card, CardHeader, Field, Input, NumberInput, errorText, useToast, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Settings, Warehouse } from "@/lib/api/types";
+import { EXPENSE_APPROVAL_ABOVE } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { saveSite, setCustomizing, useBrand } from "@/lib/site";
 
@@ -140,6 +141,9 @@ export default function SettingsPage() {
             </Field>
             <Field label={tr("تُعدّ المادة راكدة إذا لم تُبع خلال (يوم)", "An item is slow if not sold in (days)")}>
               <NumberInput value={s.slow_moving_days} onChange={(v) => setS({ ...s, slow_moving_days: v === "" ? 0 : v })} />
+            </Field>
+            <Field label={tr("الصرفيات: يحتاج موافقتك ما يزيد على (د.ع)", "Expenses: above this needs your OK (IQD)")} hint={tr("صرفيات المحاسب الأكبر من هذا المبلغ تنتظر موافقتك", "The accountant's bigger expenses wait for you")}>
+              <NumberInput value={s.expense_approval_above ?? EXPENSE_APPROVAL_ABOVE} onChange={(v) => setS({ ...s, expense_approval_above: v === "" ? 0 : v })} suffix={tr("د.ع", "IQD")} />
             </Field>
             <Button
               variant="primary"
