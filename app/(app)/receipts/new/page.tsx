@@ -48,7 +48,7 @@ function FromSupply() {
 }
 
 function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
-  const { tr, name, money, num } = useFmt();
+  const { tr, name, money, num, unit: un } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useRouter();
   const toast = useToast();
@@ -206,8 +206,8 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
                     value={r.unit}
                     onChange={(u) => set(r.key, { unit: u })}
                     options={[
-                      { value: "carton", label: tr("كارتون", "Carton") },
-                      { value: "piece", label: tr("قطعة", "Piece") },
+                      { value: "carton", label: un(itemById.get(Number(r.item_id)), "carton") },
+                      { value: "piece", label: un(itemById.get(Number(r.item_id)), "piece") },
                     ]}
                   />
                 </Field>
@@ -226,7 +226,7 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
                 <Field label={tr("تاريخ الصلاحية", "Expiry date")} error={e("expiry_date")}>
                   <Input type="date" min={today(1)} value={r.expiry_date} onChange={(ev) => set(r.key, { expiry_date: ev.target.value })} invalid={!!e("expiry_date")} />
                 </Field>
-                <Field label={r.unit === "carton" ? tr("سعر شراء الكارتون", "Cost per carton") : tr("سعر شراء القطعة", "Cost per piece")} error={e("purchase_price")} hint={it && r.unit === "carton" && r.price ? `${money(perPiece(r))} / ${tr("قطعة", "pc")}` : undefined}>
+                <Field label={tr(`سعر شراء ال${un(itemById.get(Number(r.item_id)), r.unit)}`, `Cost per ${un(itemById.get(Number(r.item_id)), r.unit)}`)} error={e("purchase_price")} hint={it && r.unit === "carton" && r.price ? `${money(perPiece(r))} / ${tr("قطعة", "pc")}` : undefined}>
                   <NumberInput value={r.price} onChange={(v) => set(r.key, { price: v })} suffix={tr("د.ع", "IQD")} invalid={!!e("purchase_price")} />
                 </Field>
               </div>
@@ -261,7 +261,7 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
                     {tr("طُلب", "Ordered")} <span className="num font-semibold text-text">{num(r.ordered!.qty)}</span> · {tr("وصل", "Arrived")}{" "}
                     <span className="num font-semibold text-text">{r.qty === "" ? "؟" : num(arrivedOf(r))}</span>
                   </span>
-                  <DiffBadge diff={r.qty === "" ? null : d} unit={r.ordered!.unit} />
+                  <DiffBadge diff={r.qty === "" ? null : d} unit={r.ordered!.unit} itemId={Number(r.item_id)} />
                 </li>
               );
             })}
@@ -325,9 +325,9 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
 }
 
 /** The difference of one order line: short (red), over (amber) or as ordered (green). */
-function DiffBadge({ diff, unit }: { diff: number | null; unit: Unit }) {
-  const { tr, num } = useFmt();
-  const u = unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc");
+function DiffBadge({ diff, unit, itemId }: { diff: number | null; unit: Unit; itemId: number }) {
+  const { tr, num, unit: un } = useFmt();
+  const u = un(useApp().itemById.get(itemId), unit, true);
   if (diff === null) return <span className="rounded-md bg-card-2 px-1.5 py-0.5 text-[11px] font-bold text-muted">{tr("لم يُعدّ", "Not counted")}</span>;
   if (diff === 0) return <span className="rounded-md bg-success-soft px-1.5 py-0.5 text-[11px] font-bold text-success">{tr("مطابق", "Matches")}</span>;
   return (
@@ -339,14 +339,14 @@ function DiffBadge({ diff, unit }: { diff: number | null; unit: Unit }) {
 
 /** On an order line: "ordered N" and, once counted, the difference. */
 function OrderedChip({ row, diff }: { row: Row; diff: number }) {
-  const { tr, num } = useFmt();
-  const u = row.ordered!.unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc");
+  const { tr, num, unit: un } = useFmt();
+  const u = un(useApp().itemById.get(Number(row.item_id)), row.ordered!.unit, true);
   return (
     <span className="flex items-center gap-1.5 text-xs">
       <span className="text-muted">
         {tr("المطلوب", "Ordered")}: <span className="num font-semibold text-text">{num(row.ordered!.qty)}</span> {u}
       </span>
-      <DiffBadge diff={row.qty === "" ? null : diff} unit={row.ordered!.unit} />
+      <DiffBadge diff={row.qty === "" ? null : diff} unit={row.ordered!.unit} itemId={Number(row.item_id)} />
     </span>
   );
 }

@@ -257,7 +257,7 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
                         )}
                       </span>
                     </span>
-                    <span className="num shrink-0 text-xs font-bold">{qty(l.pieces, l.item.pieces_per_carton)}</span>
+                    <span className="num shrink-0 text-xs font-bold">{qty(l.pieces, l.item.pieces_per_carton, l.item)}</span>
                     <span className="sr-only">{n + 1}</span>
                   </label>
                 );

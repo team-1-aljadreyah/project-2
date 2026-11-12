@@ -15,6 +15,7 @@ import { api, ApiError } from "@/lib/api";
 import type { Order, ShipmentLoad, Unit, Vehicle, VehicleInput } from "@/lib/api/types";
 import { linesWeight, suggestLoads, vehicleLoad } from "@/lib/api/vehicles";
 import { useFmt } from "@/lib/i18n";
+import { unitName } from "@/lib/units";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 
@@ -174,7 +175,7 @@ export function useOverweight(order: Order) {
 }
 
 export function LoadPlanner({ order, onClose, onDone }: { order: Order; onClose: () => void; onDone: () => void }) {
-  const { tr, name, num } = useFmt();
+  const { tr, name, num, lang } = useFmt();
   const { lookups, itemById } = useApp();
   const toast = useToast();
   const itemOf = (id: number) => itemById.get(id);
@@ -286,7 +287,7 @@ export function LoadPlanner({ order, onClose, onDone }: { order: Order; onClose:
                   return (
                     <li key={key(l)} className="flex items-center gap-2 px-3 py-2 text-sm">
                       <span className="min-w-0 flex-1 truncate">{name(it)}</span>
-                      <span className="text-xs text-muted">{l.unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc")}</span>
+                      <span className="text-xs text-muted">{unitName(it, l.unit, lang, true)}</span>
                       <NumberInput
                         value={d.qty[key(l)] ?? 0}
                         onChange={(n) => setLoads((x) => x.map((y, j) => (j === i ? { ...y, qty: { ...y.qty, [key(l)]: Math.max(0, Math.min(l.qty, n === "" ? 0 : n)) } } : y)))}

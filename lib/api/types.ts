@@ -167,7 +167,15 @@ export interface ItemPrice {
   piece_price: number;
 }
 
-export interface Item {
+/** An item's own units: what its big pack and its single are called, and which are sold (none = كارتون and
+ *  قطعة, both sold). "carton" / "piece" in orders, prices and stock are these two levels. */
+export interface ItemUnits {
+  pack_name?: string;
+  piece_name?: string;
+  sells?: "both" | "pack" | "piece";
+}
+
+export interface Item extends ItemUnits {
   /** The manager's own fields (id → value), only the ones this person may see. */
   custom?: Record<string, CustomValue>;
   id: number;
@@ -182,6 +190,8 @@ export interface Item {
   commission_percent: number;
   prices: ItemPrice[];
   active: boolean;
+  /** Deleted by the manager after it had been used: hidden everywhere, its name kept on the old records. */
+  deleted?: boolean;
   /** Sellable pieces: not expired and not reserved by other orders. */
   stock: { total: number; by_warehouse: { warehouse_id: number; qty: number }[] };
   nearest_expiry?: string;
@@ -766,7 +776,7 @@ export interface RepTarget {
   of: number;
 }
 
-export type AuditAction = "create" | "update" | "cancel" | "reverse" | "transfer" | "price_change" | "approve" | "confirm" | "close" | "login";
+export type AuditAction = "create" | "update" | "delete" | "cancel" | "reverse" | "transfer" | "price_change" | "approve" | "confirm" | "close" | "login";
 
 export type AuditEntity = "item" | "batch" | "receipt" | "order" | "invoice" | "payment" | "return" | "transfer" | "stocktake" | "customer" | "user" | "commission" | "settings" | "expense";
 
@@ -1246,7 +1256,7 @@ export interface NewTransfer {
   note?: string;
 }
 
-export interface ItemInput {
+export interface ItemInput extends ItemUnits {
   weight_kg?: number;
   name: string;
   name_en: string;

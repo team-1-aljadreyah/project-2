@@ -6,6 +6,8 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { LOCALE_KEY } from "./boot";
 import { currencyVersion, subscribeCurrency, usdDivisor } from "./currency";
 import { subscribeTexts, textsVersion, translate } from "./texts";
+import { qtyIn, unitName } from "./units";
+import type { Unit } from "./api/types";
 
 export type Lang = "ar" | "en";
 
@@ -41,8 +43,10 @@ export interface Fmt {
   /** 1250000 -> "1,250,000 د.ع" */
   money: (n: number | undefined | null, opts?: { sign?: boolean; bare?: boolean }) => string;
   num: (n: number | undefined | null) => string;
-  /** pieces -> "3 كارتون + 4 قطعة" */
-  qty: (pieces: number, perCarton: number) => string;
+  /** pieces -> "3 كارتون + 4 قطعة" (with the item: in its own names, "2 شوال + 3 كيس") */
+  qty: (pieces: number, perCarton: number, item?: Parameters<typeof qtyIn>[0]) => string;
+  /** The item's name for a unit: "كيس", "شوال" (default كارتون / قطعة). */
+  unit: (item: Parameters<typeof unitName>[0], unit: Unit, short?: boolean) => string;
   date: (iso: string | undefined) => string;
   dateTime: (iso: string | undefined) => string;
   time: (iso: string | undefined) => string;
@@ -80,7 +84,9 @@ export function makeFmt(lang: Lang, usd = 0): Fmt {
       if (opts?.bare) return `${sign}${v}`;
       return lang === "ar" ? `${sign}${v} د.ع` : `${sign}${v} IQD`;
     },
-    qty: (pieces, perCarton) => {
+    unit: (it, u, short) => unitName(it, u, lang, short),
+    qty: (pieces, perCarton, it) => {
+      if (it) return qtyIn(it, pieces, lang);
       const neg = pieces < 0;
       const p = Math.abs(pieces);
       if (perCarton <= 1) return `${neg ? "-" : ""}${nf.format(p)} ${tr("قطعة", "pcs")}`;

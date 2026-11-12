@@ -121,7 +121,8 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
     return {
       user,
       lookups: lookups.data,
-      items: items.data,
+      // A deleted item is in no list or picker; its name stays readable on the old records (itemById).
+      items: items.data.filter((i) => !i.deleted),
       itemById: new Map(items.data.map((i) => [i.id, i])),
       reloadItems: items.reload,
       reloadLookups: lookups.reload,

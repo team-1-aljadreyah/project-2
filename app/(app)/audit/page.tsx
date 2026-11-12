@@ -17,6 +17,7 @@ const actionLabel = (a: AuditAction, tr: Tr) =>
   ({
     create: tr("إضافة", "Create"),
     update: tr("تعديل", "Edit"),
+    delete: tr("حذف", "Delete"),
     cancel: tr("إلغاء", "Cancel"),
     reverse: tr("عكس", "Reverse"),
     transfer: tr("تحويل", "Transfer"),
@@ -27,7 +28,7 @@ const actionLabel = (a: AuditAction, tr: Tr) =>
     login: tr("دخول", "Login"),
   })[a];
 
-const tone = (a: AuditAction) => (a === "cancel" || a === "reverse" ? "danger" : a === "price_change" || a === "approve" ? "warning" : a === "create" || a === "confirm" ? "success" : "neutral");
+const tone = (a: AuditAction) => (a === "cancel" || a === "reverse" || a === "delete" ? "danger" : a === "price_change" || a === "approve" ? "warning" : a === "create" || a === "confirm" ? "success" : "neutral");
 
 /** The page of the record a line is about: the order, the invoice, the item… (a list page when the record has no page of its own). */
 function recordHref(e: AuditEntry): string | undefined {

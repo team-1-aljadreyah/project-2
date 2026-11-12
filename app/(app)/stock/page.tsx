@@ -47,13 +47,13 @@ export default function StockPage() {
 
   const stockCols: Column<ShelfRow>[] = [
     { key: "n", head: tr("المادة", "Item"), cell: (r) => name(itemById.get(r.item_id)) },
-    { key: "s", head: tr("على الرف", "On shelf"), cell: (r) => qty(sum(r, "on_shelf"), itemById.get(r.item_id)?.pieces_per_carton ?? 1) },
+    { key: "s", head: tr("على الرف", "On shelf"), cell: (r) => qty(sum(r, "on_shelf"), itemById.get(r.item_id)?.pieces_per_carton ?? 1, itemById.get(r.item_id)) },
     {
       key: "res",
       head: tr("محجوز لطلبات", "Held"),
-      cell: (r) => <span className="text-primary-ink">{sum(r, "reserved") ? qty(sum(r, "reserved"), itemById.get(r.item_id)?.pieces_per_carton ?? 1) : "-"}</span>,
+      cell: (r) => <span className="text-primary-ink">{sum(r, "reserved") ? qty(sum(r, "reserved"), itemById.get(r.item_id)?.pieces_per_carton ?? 1, itemById.get(r.item_id)) : "-"}</span>,
     },
-    { key: "e", head: tr("منتهي", "Expired"), cell: (r) => (sum(r, "expired") ? <span className="text-danger">{qty(sum(r, "expired"), itemById.get(r.item_id)?.pieces_per_carton ?? 1)}</span> : "-") },
+    { key: "e", head: tr("منتهي", "Expired"), cell: (r) => (sum(r, "expired") ? <span className="text-danger">{qty(sum(r, "expired"), itemById.get(r.item_id)?.pieces_per_carton ?? 1, itemById.get(r.item_id))}</span> : "-") },
     {
       key: "a",
       head: tr("متوفر للبيع", "Sellable"),
@@ -62,7 +62,7 @@ export default function StockPage() {
         const low = it && it.stock.total < it.min_stock;
         return (
           <span className={low ? "font-semibold text-danger" : "font-semibold"}>
-            {qty(sum(r, "sellable"), it?.pieces_per_carton ?? 1)} {low && <AlertTriangle className="inline size-3.5" />}
+            {qty(sum(r, "sellable"), it?.pieces_per_carton ?? 1, it)} {low && <AlertTriangle className="inline size-3.5" />}
           </span>
         );
       },
@@ -73,13 +73,13 @@ export default function StockPage() {
     { key: "b", head: tr("الدفعة", "Batch"), cell: (r) => <span className="num">#{r.batch.id}</span> },
     { key: "w", head: tr("المخزن", "Warehouse"), cell: (r) => name(lookups.warehouses.find((w) => w.id === r.batch.warehouse_id)) },
     { key: "e", head: tr("الصلاحية", "Expiry"), cell: (r) => <span className="num">{r.batch.expiry_date}</span> },
-    { key: "q", head: tr("الكمية", "Qty"), cell: (r) => qty(r.batch.qty_left, itemById.get(r.batch.item_id)?.pieces_per_carton ?? 1) },
+    { key: "q", head: tr("الكمية", "Qty"), cell: (r) => qty(r.batch.qty_left, itemById.get(r.batch.item_id)?.pieces_per_carton ?? 1, itemById.get(r.batch.item_id)) },
     { key: "s", head: tr("الحالة", "Status"), cell: (r) => <BatchStatusBadge status={r.batch.status} days={r.days_left} /> },
   ];
   const dmgCols: Column<DamagedRecord>[] = [
     { key: "t", head: tr("الوقت", "Time"), cell: (d) => dateTime(d.created_at) },
     { key: "n", head: tr("المادة", "Item"), cell: (d) => name(itemById.get(d.item_id)) },
-    { key: "q", head: tr("الكمية", "Qty"), cell: (d) => qty(d.pieces, itemById.get(d.item_id)?.pieces_per_carton ?? 1) },
+    { key: "q", head: tr("الكمية", "Qty"), cell: (d) => qty(d.pieces, itemById.get(d.item_id)?.pieces_per_carton ?? 1, itemById.get(d.item_id)) },
     {
       key: "s",
       head: tr("المصدر", "Source"),
@@ -200,7 +200,7 @@ export default function StockPage() {
                   <div className="min-w-0">
                     <p className="font-medium">{name(it)}</p>
                     <p className="text-xs text-muted">
-                      {tr("على الرف", "On shelf")} {qty(sum(r, "on_shelf"), it?.pieces_per_carton ?? 1)}
+                      {tr("على الرف", "On shelf")} {qty(sum(r, "on_shelf"), it?.pieces_per_carton ?? 1, it)}
                       {sum(r, "expired") > 0 && (
                         <span className="text-danger">
                           {" "}
@@ -209,7 +209,7 @@ export default function StockPage() {
                       )}
                     </p>
                   </div>
-                  <p className={`text-sm font-semibold ${it && it.stock.total < it.min_stock ? "text-danger" : ""}`}>{qty(sum(r, "sellable"), it?.pieces_per_carton ?? 1)}</p>
+                  <p className={`text-sm font-semibold ${it && it.stock.total < it.min_stock ? "text-danger" : ""}`}>{qty(sum(r, "sellable"), it?.pieces_per_carton ?? 1, it)}</p>
                 </div>
               );
             }}

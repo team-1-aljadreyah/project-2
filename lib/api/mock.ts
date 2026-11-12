@@ -129,6 +129,7 @@ import { makeSeed } from "./mock/seed";
 import { fullSite, ordered } from "./site-defaults";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
+import { unitName } from "../units";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const db0 = () => loadDb(() => makeSeed());
@@ -1108,8 +1109,10 @@ export const mockApi: Api = {
       if (change.name !== undefined || change.name_en !== undefined) audit(db, a, "update", "item", it.id, `تعديل اسم المادة ${it.name}`, `Renamed item ${it.name_en}`, now);
       if (change.tier_id !== undefined && (change.carton_price !== undefined || change.piece_price !== undefined)) {
         const p = it.prices.find((x) => x.tier_id === change.tier_id) ?? notFound();
-        const carton = change.carton_price ?? p.carton_price;
-        const piece = change.piece_price ?? p.piece_price;
+        let carton = change.carton_price ?? p.carton_price;
+        let piece = change.piece_price ?? p.piece_price;
+        if (it.sells === "piece" || it.pieces_per_carton <= 1) carton = piece * it.pieces_per_carton;
+        if (it.sells === "pack") piece = Math.round(carton / it.pieces_per_carton);
         if (!(carton > 0) || !(piece > 0)) fail(422, "VALIDATION", "السعر يجب أن يكون أكبر من صفر", "The price must be above zero");
         if (carton !== p.carton_price || piece !== p.piece_price) {
           // The old price is remembered, as in the full item form (an order written offline before now keeps it).
@@ -1183,10 +1186,31 @@ export const mockApi: Api = {
       if (input.min_stock < 0) errors.min_stock = msg("لا يكون سالباً", "Can't be negative");
       if (input.weight_kg !== undefined && !(input.weight_kg > 0 && input.weight_kg <= 100)) errors.weight_kg = msg("بين 0.01 و 100 كغم", "Between 0.01 and 100 kg");
       if (input.commission_percent < 0 || input.commission_percent > 50) errors.commission_percent = msg("بين 0 و 50", "Between 0 and 50");
+      // The units: two names (a few letters each) and which are sold. A pack of one is the single itself.
+      const pack_name = input.pack_name?.trim() || "كارتون";
+      const piece_name = input.piece_name?.trim() || "قطعة";
+      if (pack_name.length > 20) errors.pack_name = msg("اسم قصير (20 حرفاً على الأكثر)", "A short name (20 letters at most)");
+      if (piece_name.length > 20) errors.piece_name = msg("اسم قصير (20 حرفاً على الأكثر)", "A short name (20 letters at most)");
+      if (pack_name === piece_name && input.pieces_per_carton > 1) errors.piece_name = msg("اسم مختلف عن الوحدة الكبيرة", "A different name from the big pack");
+      const sells: "both" | "pack" | "piece" = input.pieces_per_carton <= 1 ? "piece" : input.sells === "pack" || input.sells === "piece" ? input.sells : "both";
+      // A price for each unit that is sold; the other one follows from it (kept for the old screens and reports).
       input.prices.forEach((p) => {
-        if (!(p.carton_price > 0)) errors[`prices.${p.tier_id}.carton_price`] = msg("مطلوب", "Required");
-        if (!(p.piece_price > 0)) errors[`prices.${p.tier_id}.piece_price`] = msg("مطلوب", "Required");
+        if (sells !== "piece" && !(p.carton_price > 0)) errors[`prices.${p.tier_id}.carton_price`] = msg("مطلوب", "Required");
+        if (sells !== "pack" && !(p.piece_price > 0)) errors[`prices.${p.tier_id}.piece_price`] = msg("مطلوب", "Required");
       });
+      input = {
+        ...input,
+        pack_name: pack_name === "كارتون" ? undefined : pack_name,
+        piece_name: piece_name === "قطعة" ? undefined : piece_name,
+        sells: sells === "both" ? undefined : sells,
+        prices: input.prices.map((p) =>
+          sells === "piece"
+            ? { ...p, carton_price: p.piece_price * input.pieces_per_carton }
+            : sells === "pack"
+              ? { ...p, piece_price: Math.round(p.carton_price / input.pieces_per_carton) }
+              : p,
+        ),
+      };
       if (db.items.some((x) => x.id !== id && x.name.trim() === input.name.trim())) errors.name = msg("توجد مادة بنفس الاسم", "An item with this name exists");
       if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
       if (id) {
@@ -1202,6 +1226,8 @@ export const mockApi: Api = {
           if (old) db.price_changes.push({ item_id: it.id, tier_id: p.tier_id, carton_price: old.carton_price, piece_price: old.piece_price, until: now.toISOString() });
         }
         Object.assign(it, { ...input, name: input.name.trim(), name_en: input.name_en.trim() });
+        // Back to the usual names / both units: the old values go.
+        for (const k of ["pack_name", "piece_name", "sells"] as const) if (input[k] === undefined) delete it[k];
         if (changed.length) {
           const t = changed.map((p) => `${db.tiers.find((x) => x.id === p.tier_id)?.name}: ${p.carton_price.toLocaleString("en")}/${p.piece_price.toLocaleString("en")}`).join("، ");
           audit(db, a, "price_change", "item", it.id, `تغيير سعر ${it.name} (${t}). الفواتير القديمة لا تتغير`, `Price change for ${it.name_en}. Old invoices keep their prices`, now);
@@ -1213,6 +1239,38 @@ export const mockApi: Api = {
       db.items.push(it);
       audit(db, a, "create", "item", it.id, `إضافة المادة ${it.name}`, `Added item ${it.name_en}`, now);
       return itemView(db, it, a, now);
+    }),
+  deleteItem: (id) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const it = db.items.find((x) => x.id === id && !x.deleted) ?? notFound();
+      // Never lose goods: what is still in a warehouse leaves first (a count or damaged), and open orders end.
+      const left = db.batches.filter((b) => b.item_id === id).reduce((t, b) => t + b.qty_left, 0);
+      if (left > 0) fail(409, "BAD_STATE", `في المخازن منها ${left.toLocaleString("en")} ${unitName(it, "piece")}: أخرجها أولاً (بالجرد أو كتالف) ثم احذفها، أو أوقفها بدل الحذف`, `${left} pieces are still in stock: take them out first (count or damaged), or stop the item instead`);
+      const open = db.orders.find((o) => (o.status === "pending" || o.status === "needs_approval" || o.status === "approved") && o.lines.some((l) => l.item_id === id));
+      if (open) fail(409, "BAD_STATE", `عليها الطلب ${open.number} ولم يُسلَّم بعد: سلّمه أو ألغه أولاً`, `Order ${open.number} with it isn't delivered yet: deliver or cancel it first`);
+      const supply = (db.supply_orders ?? []).find((s) => (s.status === "sent" || s.status === "partial") && s.lines.some((l) => l.item_id === id));
+      if (supply) fail(409, "BAD_STATE", `عليها طلب التوريد ${supply.number} ولم يُستلم بعد: استلمه أو ألغه أولاً`, `Supply order ${supply.number} with it isn't received yet`);
+      const used =
+        db.batches.some((b) => b.item_id === id) ||
+        db.orders.some((o) => o.lines.some((l) => l.item_id === id)) ||
+        db.receipts.some((r) => r.lines.some((l) => l.item_id === id)) ||
+        (db.supply_orders ?? []).some((s) => s.lines.some((l) => l.item_id === id)) ||
+        db.transfers.some((t) => t.lines.some((l) => l.item_id === id)) ||
+        db.stocktakes.some((s) => s.lines.some((l) => l.item_id === id));
+      db.special_prices = db.special_prices.filter((p) => p.item_id !== id);
+      if (!used) {
+        // Never received nor sold: gone for good.
+        db.items = db.items.filter((x) => x.id !== id);
+        if (db.custom_values) delete db.custom_values[`item:${id}`];
+        audit(db, a, "delete", "item", id, `حذف المادة ${it.name} نهائياً (لم تُستعمل)`, `Deleted item ${it.name_en} (never used)`, now);
+        return { result: "removed" as const };
+      }
+      // Used before: hidden everywhere (it can't be sold, received or counted), the old records keep its name.
+      it.deleted = true;
+      it.active = false;
+      audit(db, a, "delete", "item", id, `حذف المادة ${it.name} (لها سجلات قديمة: أُخفيت وبقي اسمها في الفواتير)`, `Deleted item ${it.name_en} (hidden; old records keep it)`, now);
+      return { result: "hidden" as const };
     }),
   itemBatches: (itemId) =>
     read((db, a, now) => {

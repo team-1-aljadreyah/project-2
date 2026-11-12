@@ -15,12 +15,13 @@ import { Badge, Button, Card, DataTable, Empty, Money, PageHeader, SearchBox, Se
 import { api } from "@/lib/api";
 import type { Item, ItemQuick } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { soldUnits } from "@/lib/units";
 import { shrinkImage } from "@/lib/image";
 import { useCustomizing } from "@/lib/site";
 import { daysUntil, matches, priceOf } from "@/lib/utils";
 
 export default function ItemsPage() {
-  const { tr, name, qty, money, lang } = useFmt();
+  const { tr, name, qty, money, lang, unit: un } = useFmt();
   const { user, items, lookups, reloadItems } = useApp();
   const toast = useToast();
   // Customize mode (manager): the name and the prices are changed in the list, and a photo column shows.
@@ -44,7 +45,7 @@ export default function ItemsPage() {
   // The stock shown: the chosen warehouse only (manager / accountant filter), or both.
   const stockOf = (i: Item) => (wh ? (i.stock.by_warehouse.find((w) => w.warehouse_id === wh)?.qty ?? 0) : i.stock.total);
   const low = (i: Item) => stockOf(i) < (wh ? i.min_stock / 2 : i.min_stock);
-  const rows = items.filter((i) => (f === "all" ? i.active : f === "low" ? i.active && low(i) : !i.active) && (!cat || i.category === cat) && matches(q, i.name, i.name_en, i.barcode, i.category));
+  const rows = items.filter((i) => !i.deleted && (f === "all" ? i.active : f === "low" ? i.active && low(i) : !i.active) && (!cat || i.category === cat) && matches(q, i.name, i.name_en, i.barcode, i.category));
   const seesCost = user.role !== "rep";
 
   const extra = useCustomColumns<Item>("item");
@@ -52,25 +53,42 @@ export default function ItemsPage() {
     ...(editing ? [{ key: "ph", head: tr("الصورة", "Photo"), cell: (i: Item) => <PhotoCell item={i} onDone={reloadItems} /> }] : []),
     { key: "n", head: tr("المادة", "Item"), cell: (i) => <EditText value={name(i)} onSave={(v) => quick(i.id, lang === "ar" ? { name: v } : { name_en: v })} /> },
     { key: "c", head: tr("الصنف", "Category"), cell: (i) => <span className="text-muted">{i.category}</span> },
-    { key: "p", head: tr("بالكارتون", "Per carton"), cell: (i) => <span className="num">{i.pieces_per_carton}</span>, align: "center" },
+    {
+      key: "p",
+      head: tr("الوحدات", "Units"),
+      cell: (i) => (
+        <span className="text-xs whitespace-nowrap">
+          {i.pieces_per_carton > 1 ? `${un(i, "carton")} = ${i.pieces_per_carton} ${un(i, "piece")}` : un(i, "piece")}
+          {soldUnits(i).length === 1 && i.pieces_per_carton > 1 && <span className="block text-muted">{tr(`يُباع بال${un(i, soldUnits(i)[0])} فقط`, `${un(i, soldUnits(i)[0])} only`)}</span>}
+        </span>
+      ),
+      align: "center",
+      sort: (i) => i.pieces_per_carton,
+    },
     {
       key: "pc",
-      head: tr("سعر الكارتون", "Carton price"),
-      cell: (i) => (
-        <EditText numeric value={priceOf(i, tier, "carton")} onSave={(v) => quick(i.id, { tier_id: tier, carton_price: Number(v) })}>
-          <Money value={priceOf(i, tier, "carton")} />
-        </EditText>
-      ),
+      head: tr("سعر الوحدة الكبيرة", "Big pack price"),
+      cell: (i) =>
+        soldUnits(i).includes("carton") ? (
+          <EditText numeric value={priceOf(i, tier, "carton")} onSave={(v) => quick(i.id, { tier_id: tier, carton_price: Number(v) })}>
+            <Money value={priceOf(i, tier, "carton")} /> <span className="text-xs text-muted">/ {un(i, "carton", true)}</span>
+          </EditText>
+        ) : (
+          <span className="text-faint">—</span>
+        ),
       align: "end",
     },
     {
       key: "pp",
-      head: tr("سعر القطعة", "Piece price"),
-      cell: (i) => (
-        <EditText numeric value={priceOf(i, tier, "piece")} onSave={(v) => quick(i.id, { tier_id: tier, piece_price: Number(v) })}>
-          <Money value={priceOf(i, tier, "piece")} />
-        </EditText>
-      ),
+      head: tr("سعر الوحدة الصغيرة", "Single price"),
+      cell: (i) =>
+        soldUnits(i).includes("piece") ? (
+          <EditText numeric value={priceOf(i, tier, "piece")} onSave={(v) => quick(i.id, { tier_id: tier, piece_price: Number(v) })}>
+            <Money value={priceOf(i, tier, "piece")} /> <span className="text-xs text-muted">/ {un(i, "piece", true)}</span>
+          </EditText>
+        ) : (
+          <span className="text-faint">—</span>
+        ),
       align: "end",
     },
     ...(seesCost ? [{ key: "cost", head: tr("متوسط الشراء/قطعة", "Avg cost/pc"), cell: (i: Item) => <Money value={i.avg_cost} className="text-muted" />, align: "end" as const }] : []),
@@ -79,7 +97,7 @@ export default function ItemsPage() {
       head: tr("المتوفر للبيع", "Sellable"),
       cell: (i) => (
         <span className={low(i) ? "font-semibold text-danger" : ""}>
-          {qty(stockOf(i), i.pieces_per_carton)} {low(i) && <AlertTriangle className="inline size-3.5" />}
+          {qty(stockOf(i), i.pieces_per_carton, i)} {low(i) && <AlertTriangle className="inline size-3.5" />}
         </span>
       ),
     },
@@ -119,7 +137,7 @@ export default function ItemsPage() {
             options={[
               { value: "all", label: tr("الفعّالة", "Active"), count: items.filter((i) => i.active).length },
               { value: "low", label: tr("تحت الحد الأدنى", "Below minimum"), count: items.filter((i) => i.active && low(i)).length },
-              ...(user.role === "manager" ? [{ value: "inactive" as const, label: tr("الموقوفة", "Inactive"), count: items.filter((i) => !i.active).length }] : []),
+              ...(user.role === "manager" ? [{ value: "inactive" as const, label: tr("الموقوفة", "Inactive"), count: items.filter((i) => !i.active && !i.deleted).length }] : []),
             ]}
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -153,9 +171,9 @@ export default function ItemsPage() {
               <div className="min-w-0">
                 <p className="font-medium">{name(i)}</p>
                 <p className="text-xs text-muted">
-                  {i.category} · {i.pieces_per_carton} {tr("بالكارتون", "per carton")}
+                  {i.category} · {i.pieces_per_carton > 1 ? `${un(i, "carton")} = ${i.pieces_per_carton} ${un(i, "piece")}` : un(i, "piece")}
                 </p>
-                <p className={`text-xs ${low(i) ? "text-danger" : "text-muted"}`}>{qty(stockOf(i), i.pieces_per_carton)}</p>
+                <p className={`text-xs ${low(i) ? "text-danger" : "text-muted"}`}>{qty(stockOf(i), i.pieces_per_carton, i)}</p>
               </div>
               <div className="text-end text-sm">
                 <p className="num font-semibold">{money(priceOf(i, tier, "carton"))}</p>

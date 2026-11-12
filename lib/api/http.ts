@@ -142,6 +142,9 @@ export const httpApi = {
   listItems: () => get<Item[]>("/items"),
   getItem: (id: number) => get<Item>(`/items/${id}`),
   saveItem: (id: number | null, input: ItemInput) => save<Item>("/items", id, input),
+  /** Delete an item (manager). Never used: removed for good ("removed"). Used before: hidden everywhere, its
+   *  name kept on the old records ("hidden"). Refused while it has stock or is on an open order. */
+  deleteItem: (id: number) => del<{ result: "removed" | "hidden" }>(`/items/${id}`),
   /** image: a data URL from the page (the backend stores the file and returns its link in item.image), or null to remove. */
   setItemImage: (id: number, image: string | null) => post<Item>(`/items/${id}/image`, { image }),
   itemBatches: (itemId: number) => get<Batch[]>(`/items/${itemId}/batches`),

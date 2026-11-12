@@ -14,6 +14,7 @@ import { Button, Card, Empty, errorText, Field, Input, NumberInput, PageHeader, 
 import { api, ApiError } from "@/lib/api";
 import { workWarehouses, type Invoice, type Item, type Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { firstUnit, soldUnits } from "@/lib/units";
 import { useUnsaved } from "@/lib/unsaved";
 import { useLoad } from "@/lib/use-load";
 import { cn, dayOfIso, matches, today } from "@/lib/utils";
@@ -22,7 +23,7 @@ type Line = { item_id: number; unit: Unit; qty: number };
 const newRef = () => `counter-${crypto.randomUUID()}`;
 
 export default function CounterPage() {
-  const { tr, money, name, num, qty: qtyText, dateTime } = useFmt();
+  const { tr, money, name, num, qty: qtyText, dateTime, unit: unitOf } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const toast = useToast();
   const mine = workWarehouses(user, lookups.warehouses) ?? lookups.warehouses.map((w) => w.id);
@@ -58,7 +59,7 @@ export default function CounterPage() {
   const found = q.trim() ? items.filter((it) => it.active && matches(q, it.name, it.name_en, it.barcode, it.category)).slice(0, 8) : [];
 
   function add(it: Item) {
-    const unit: Unit = it.pieces_per_carton > 1 ? "carton" : "piece";
+    const unit: Unit = firstUnit(it);
     setLines((ls) => (ls.some((l) => l.item_id === it.id && l.unit === unit) ? ls.map((l) => (l.item_id === it.id && l.unit === unit ? { ...l, qty: l.qty + 1 } : l)) : [...ls, { item_id: it.id, unit, qty: 1 }]));
     setQ("");
     setErr({});
@@ -137,7 +138,7 @@ export default function CounterPage() {
               <Button
                 onClick={() =>
                   openWhatsApp(
-                    `فاتورة ${done.number}\n${done.lines.map((l) => `- ${itemById.get(l.item_id)?.name}: ${l.qty} ${l.unit === "carton" ? "كارتون" : "قطعة"} = ${money(l.total)}`).join("\n")}\nالمجموع: ${money(done.total)} (مدفوع)`,
+                    `فاتورة ${done.number}\n${done.lines.map((l) => `- ${itemById.get(l.item_id)?.name}: ${l.qty} ${unitOf(itemById.get(l.item_id), l.unit)} = ${money(l.total)}`).join("\n")}\nالمجموع: ${money(done.total)} (مدفوع)`,
                     done.counter?.buyer_phone,
                   )
                 }
@@ -198,10 +199,12 @@ export default function CounterPage() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{name(it)}</span>
                         <span className={cn("block text-xs", inStock(it) > 0 ? "text-muted" : "text-danger")}>
-                          {tr("في المخزن", "In stock")}: {qtyText(inStock(it), it.pieces_per_carton)}
+                          {tr("في المخزن", "In stock")}: {qtyText(inStock(it), it.pieces_per_carton, it)}
                         </span>
                       </span>
-                      <span className="num text-sm font-semibold">{money(price(it, it.pieces_per_carton > 1 ? "carton" : "piece"))}</span>
+                      <span className="text-sm">
+                        <span className="num font-semibold">{money(price(it, firstUnit(it)))}</span> <span className="text-xs text-muted">/ {unitOf(it, firstUnit(it))}</span>
+                      </span>
                       <Plus className="size-4 text-action" />
                     </button>
                   </li>
@@ -222,18 +225,13 @@ export default function CounterPage() {
                     <span className="min-w-0 flex-1 basis-40">
                       <span className="block truncate font-medium">{name(it)}</span>
                       <span className={cn("block text-xs", short || err[`lines.${i}.qty`] ? "text-danger" : "text-muted")}>
-                        {err[`lines.${i}.qty`] ?? (short ? tr(`المتوفر ${qtyText(inStock(it), it.pieces_per_carton)} فقط`, `Only ${qtyText(inStock(it), it.pieces_per_carton)}`) : `${money(price(it, l.unit))} ${tr("للواحد", "each")}`)}
+                        {err[`lines.${i}.qty`] ?? (short ? tr(`المتوفر ${qtyText(inStock(it), it.pieces_per_carton, it)} فقط`, `Only ${qtyText(inStock(it), it.pieces_per_carton, it)}`) : `${money(price(it, l.unit))} / ${unitOf(it, l.unit)}`)}
                       </span>
                     </span>
-                    {it.pieces_per_carton > 1 && (
-                      <Segmented
-                        value={l.unit}
-                        onChange={(u) => change1(i, { unit: u })}
-                        options={[
-                          { value: "carton" as Unit, label: tr("كارتون", "Carton") },
-                          { value: "piece" as Unit, label: tr("قطعة", "Piece") },
-                        ]}
-                      />
+                    {soldUnits(it).length > 1 ? (
+                      <Segmented value={l.unit} onChange={(u) => change1(i, { unit: u })} options={soldUnits(it).map((u) => ({ value: u, label: unitOf(it, u) }))} />
+                    ) : (
+                      <span className="text-sm font-medium text-muted">{unitOf(it, l.unit)}</span>
                     )}
                     <span className="inline-flex h-11 items-center rounded-xl border border-line-strong" dir="ltr">
                       <button type="button" aria-label={tr("أقل", "Less")} className="flex size-11 items-center justify-center" onClick={() => (l.qty > 1 ? change1(i, { qty: l.qty - 1 }) : setLines((ls) => ls.filter((_, k) => k !== i)))}>

@@ -40,7 +40,7 @@ export default function ReturnView() {
                         {name(it)}
                       </RefLink>
                     </p>
-                    <p className="text-xs text-muted">{it && qty(l.pieces, it.pieces_per_carton)}</p>
+                    <p className="text-xs text-muted">{it && qty(l.pieces, it.pieces_per_carton, it)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {l.condition === "good" ? <Badge tone="success">{tr("سليم، عاد إلى المخزون", "Good, back on shelf")}</Badge> : <Badge tone="danger">{tr("تالف", "Damaged")}</Badge>}

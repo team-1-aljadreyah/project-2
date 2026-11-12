@@ -99,7 +99,7 @@ function SearchBox({ pages, onClose }: { pages: SearchPage[]; onClose: () => voi
       may("/customers/1") ? quiet(api.listCustomers().then((cs) => cs.filter((c) => !c.walk_in)), []) : Promise.resolve([]),
       may("/orders/1") ? quiet(api.listOrders(), []) : Promise.resolve([]),
       may("/invoices/1") ? quiet(api.listInvoices(), []) : Promise.resolve([]),
-      may("/items/1") ? quiet(api.listItems(), [] as Item[]) : Promise.resolve([] as Item[]),
+      may("/items/1") ? quiet(api.listItems().then((l) => l.filter((i) => !i.deleted)), [] as Item[]) : Promise.resolve([] as Item[]),
     ]).then(([customers, orders, invoices, items]) => alive && setData({ customers, orders, invoices, items }));
     return () => {
       alive = false;

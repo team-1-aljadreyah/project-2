@@ -3,15 +3,18 @@
 import { useUnsaved } from "@/lib/unsaved";
 import { CustomInputs, missingRequired, saveCustom, useFields } from "@/components/custom-fields";
 
-// Add / edit an item (manager): carton size, minimum stock, commission and a price for every tier.
+// Add / edit an item (manager): its units (the big pack and the single, their names, which are sold),
+// minimum stock, commission and a price for every tier; and delete it.
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { Item, ItemInput } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useApp } from "./shell";
-import { Button, Dialog, Field, Input, NumberInput, Notice, Switch, errorText, useToast } from "./ui";
+import { Button, Dialog, Field, Input, NumberInput, Notice, Segmented, Switch, errorText, useToast } from "./ui";
+import { Trash2 } from "lucide-react";
+import { PACK_NAMES, PIECE_NAMES } from "@/lib/units";
 
-export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onClose: () => void; item?: Item; onSaved?: (i: Item) => void }) {
+export function ItemForm({ open, onClose, item, onSaved, onDeleted }: { open: boolean; onClose: () => void; item?: Item; onSaved?: (i: Item) => void; onDeleted?: () => void }) {
   const { tr, name } = useFmt();
   const { lookups, reloadItems } = useApp();
   const toast = useToast();
@@ -21,6 +24,9 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
     category: item?.category ?? lookups.categories[0] ?? "",
     barcode: item?.barcode ?? "",
     pieces_per_carton: item?.pieces_per_carton ?? 12,
+    pack_name: item?.pack_name ?? "كارتون",
+    piece_name: item?.piece_name ?? "قطعة",
+    sells: item?.sells ?? "both",
     min_stock: item?.min_stock ?? 120,
     commission_percent: item?.commission_percent ?? 2,
     weight_kg: item?.weight_kg,
@@ -37,6 +43,36 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
   // The manager's own fields (advanced settings), saved right after the item.
   const [cv, setCv] = useState<Record<string, string | number | boolean | null>>(() => ({ ...item?.custom }));
   const { editable } = useFields("item");
+
+  // The names as typed (empty = the usual ones), for the labels below.
+  const pack = f.pack_name?.trim() || "كارتون";
+  const piece = f.piece_name?.trim() || "قطعة";
+  const single = f.pieces_per_carton <= 1;
+  const sells = single ? "piece" : (f.sells ?? "both");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function remove() {
+    if (!item) return;
+    setBusy(true);
+    try {
+      const r = await api.deleteItem(item.id);
+      toast(
+        "success",
+        r.result === "removed"
+          ? tr(`حُذفت ${item.name} نهائياً`, `${item.name_en || item.name} deleted`)
+          : tr(`حُذفت ${item.name}: لها فواتير قديمة فبقي اسمها فيها`, `${item.name_en || item.name} deleted; old invoices keep its name`),
+      );
+      reloadItems();
+      setConfirmDelete(false);
+      onClose();
+      onDeleted?.();
+    } catch (e) {
+      setConfirmDelete(false);
+      toast("danger", errorText(e, tr));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function save() {
     const missing = missingRequired(editable, cv);
@@ -69,6 +105,11 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
       title={item ? tr("تعديل المادة", "Edit item") : tr("مادة جديدة", "New item")}
       footer={
         <>
+          {item && (
+            <Button variant="ghost" className="me-auto text-danger" onClick={() => setConfirmDelete(true)} disabled={busy}>
+              <Trash2 className="size-4" /> {tr("حذف المادة", "Delete item")}
+            </Button>
+          )}
           <Button onClick={onClose}>{tr("إلغاء", "Cancel")}</Button>
           <Button variant="primary" loading={busy} onClick={save}>
             {tr("حفظ", "Save")}
@@ -94,10 +135,47 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
         <Field label={tr("الباركود", "Barcode")}>
           <Input dir="ltr" inputMode="numeric" value={f.barcode} onChange={(e) => set({ barcode: e.target.value })} />
         </Field>
-        <Field label={tr("عدد القطع في الكارتون", "Pieces per carton")} error={err.pieces_per_carton}>
-          <NumberInput value={f.pieces_per_carton} onChange={(v) => set({ pieces_per_carton: v === "" ? 0 : v })} invalid={!!err.pieces_per_carton} />
-        </Field>
-        <Field label={tr("الحد الأدنى (بالقطعة)", "Minimum stock (pieces)")} error={err.min_stock} hint={tr("إذا نزل المخزون عنه يصلك إشعار", "You get a notification below this")}>
+        {/* The units: rice in 5 kg bags is «كيس» (and maybe «شوال» of 10), oil is «كارتون» of 12 «قنينة». */}
+        <div className="grid gap-3 rounded-xl border border-line bg-card-2/50 p-3 sm:col-span-2 sm:grid-cols-3">
+          <p className="text-sm font-semibold sm:col-span-3">{tr("وحدات البيع", "Selling units")}</p>
+          <Field label={tr("الوحدة الصغيرة", "The single")} error={err.piece_name} hint={tr("قطعة، كيس، علبة، قنينة…", "piece, bag, can, bottle…")}>
+            <Input list="piece-names" aria-label={tr("الوحدة الصغيرة", "The single")} value={f.piece_name} onChange={(e) => set({ piece_name: e.target.value })} invalid={!!err.piece_name} />
+            <datalist id="piece-names">
+              {PIECE_NAMES.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label={tr("الوحدة الكبيرة", "The big pack")} error={err.pack_name} hint={tr("كارتون، شوال، صندوق، ربطة…", "carton, sack, box, bundle…")}>
+            <Input list="pack-names" aria-label={tr("الوحدة الكبيرة", "The big pack")} value={f.pack_name} onChange={(e) => set({ pack_name: e.target.value })} invalid={!!err.pack_name} disabled={single} />
+            <datalist id="pack-names">
+              {PACK_NAMES.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label={tr(`كم ${piece} في ال${pack}؟`, `${piece} in a ${pack}`)} error={err.pieces_per_carton} hint={tr("1 = لا وحدة كبيرة", "1 = no big pack")}>
+            <NumberInput value={f.pieces_per_carton} onChange={(v) => set({ pieces_per_carton: v === "" ? 0 : v })} invalid={!!err.pieces_per_carton} />
+          </Field>
+          <div className="sm:col-span-3">
+            <p className="mb-1.5 text-sm">{tr("تُباع بـ", "Sold by")}</p>
+            {single ? (
+              <p className="text-sm text-muted">{tr(`${piece} فقط (لا وحدة كبيرة)`, `${piece} only (no big pack)`)}</p>
+            ) : (
+              <Segmented
+                className="flex-wrap"
+                value={sells}
+                onChange={(v) => set({ sells: v })}
+                options={[
+                  { value: "both", label: tr(`${pack} و${piece}`, `${pack} and ${piece}`) },
+                  { value: "pack", label: tr(`${pack} فقط`, `${pack} only`) },
+                  { value: "piece", label: tr(`${piece} فقط`, `${piece} only`) },
+                ]}
+              />
+            )}
+          </div>
+        </div>
+        <Field label={tr(`الحد الأدنى (بال${piece})`, `Minimum stock (${piece})`)} error={err.min_stock} hint={tr("إذا نزل المخزون عنه يصلك إشعار", "You get a notification below this")}>
           <NumberInput value={f.min_stock} onChange={(v) => set({ min_stock: v === "" ? 0 : v })} />
         </Field>
         <Field label={tr("وزن القطعة (كغم)", "Weight of one piece (kg)")} error={err.weight_kg} hint={tr("لحساب حمولة السيارات", "For the vehicles' loads")}>
@@ -115,14 +193,15 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
       <div className="overflow-hidden rounded-xl border border-line">
         <div className="grid grid-cols-[1fr_1fr_1fr] gap-2 bg-card-2 px-3 py-2 text-xs text-muted">
           <span>{tr("النوع", "Tier")}</span>
-          <span>{tr("سعر الكارتون", "Carton price")}</span>
-          <span>{tr("سعر القطعة", "Piece price")}</span>
+          <span>{tr(`سعر ال${pack}`, `${pack} price`)}</span>
+          <span>{tr(`سعر ال${piece}`, `${piece} price`)}</span>
         </div>
         {f.prices.map((p) => (
           <div key={p.tier_id} className="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 border-t border-line px-3 py-2">
             <span className="text-sm font-medium">{name(lookups.tiers.find((t) => t.id === p.tier_id))}</span>
-            <NumberInput value={p.carton_price || ""} onChange={(v) => setPrice(p.tier_id, { carton_price: v === "" ? 0 : v })} invalid={!!err[`prices.${p.tier_id}.carton_price`]} />
-            <NumberInput value={p.piece_price || ""} onChange={(v) => setPrice(p.tier_id, { piece_price: v === "" ? 0 : v })} invalid={!!err[`prices.${p.tier_id}.piece_price`]} />
+            {/* A unit that isn't sold has no price to type (it follows from the other one). */}
+            <NumberInput aria-label={tr(`سعر ال${pack}`, `${pack} price`)} disabled={sells === "piece"} placeholder={sells === "piece" ? "—" : undefined} value={sells === "piece" ? "" : p.carton_price || ""} onChange={(v) => setPrice(p.tier_id, { carton_price: v === "" ? 0 : v })} invalid={!!err[`prices.${p.tier_id}.carton_price`]} />
+            <NumberInput aria-label={tr(`سعر ال${piece}`, `${piece} price`)} disabled={sells === "pack"} placeholder={sells === "pack" ? "—" : undefined} value={sells === "pack" ? "" : p.piece_price || ""} onChange={(v) => setPrice(p.tier_id, { piece_price: v === "" ? 0 : v })} invalid={!!err[`prices.${p.tier_id}.piece_price`]} />
           </div>
         ))}
       </div>
@@ -134,6 +213,28 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <CustomInputs object="item" values={cv} onChange={setCv} errors={err} />
       </div>
+      {item && confirmDelete && (
+        <Dialog
+          open
+          onClose={() => setConfirmDelete(false)}
+          title={tr(`حذف ${item.name}؟`, `Delete ${item.name_en || item.name}?`)}
+          footer={
+            <>
+              <Button onClick={() => setConfirmDelete(false)}>{tr("تراجع", "Back")}</Button>
+              <Button variant="danger" loading={busy} onClick={remove}>
+                <Trash2 className="size-4" /> {tr("نعم، احذف", "Yes, delete")}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm">
+            {tr(
+              "إن لم تُستلم هذه المادة ولم تُبع أبداً تُحذف نهائياً. وإن كانت لها فواتير أو استلامات قديمة تختفي من كل القوائم والمتجر، ويبقى اسمها في سجلاتها القديمة. لا تُحذف وفي المخازن منها شيء، أو عليها طلب لم يُسلَّم.",
+              "Never received nor sold: it is deleted for good. With old invoices or receipts: it disappears from every list and the store, and the old records keep its name. It can't be deleted while some is in stock or on an undelivered order.",
+            )}
+          </p>
+        </Dialog>
+      )}
     </Dialog>
   );
 }

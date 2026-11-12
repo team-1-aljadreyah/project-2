@@ -22,7 +22,7 @@ interface RLine {
 }
 
 export default function NewReturnPage() {
-  const { tr, money, date, qty: fmtQty, name } = useFmt();
+  const { tr, money, date, qty: fmtQty, name, unit: un } = useFmt();
   const { itemById } = useApp();
   const router = useAppRouter();
   const toast = useToast();
@@ -138,7 +138,7 @@ export default function NewReturnPage() {
                         <div>
                           <p className="font-medium">{name(it)}</p>
                           <p className="text-xs text-muted">
-                            {tr("يمكن إرجاع حتى", "Can return up to")} {it && fmtQty(r.can, it.pieces_per_carton)} · {money(Math.round(r.perPiece))} / {tr("قطعة", "pc")}
+                            {tr("يمكن إرجاع حتى", "Can return up to")} {it && fmtQty(r.can, it.pieces_per_carton, it)} · {money(Math.round(r.perPiece))} / {tr("قطعة", "pc")}
                           </p>
                         </div>
                         {p > 0 && <Money value={Math.round(r.perPiece * p)} className="font-semibold" />}
@@ -149,8 +149,8 @@ export default function NewReturnPage() {
                             value={l?.unit ?? "piece"}
                             onChange={(u) => setLine(r.item_id, { unit: u })}
                             options={[
-                              { value: "piece", label: tr("قطعة", "Piece") },
-                              ...(it && r.can >= it.pieces_per_carton ? [{ value: "carton" as Unit, label: tr("كارتون", "Carton") }] : []),
+                              { value: "piece", label: un(it, "piece") },
+                              ...(it && r.can >= it.pieces_per_carton ? [{ value: "carton" as Unit, label: un(it, "carton") }] : []),
                             ]}
                           />
                           <Stepper value={l?.qty ?? 0} onChange={(v) => setLine(r.item_id, { qty: v })} />
