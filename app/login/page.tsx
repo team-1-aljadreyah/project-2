@@ -1,5 +1,8 @@
 "use client";
 
+import { useSite } from "@/lib/site";
+import { deniedOf } from "@/lib/access";
+
 // The login page, after the "Login Page Illustration - Online Payment" shot Yasser chose:
 // a strong background, one big rounded card, the illustration on one side and a light form on the other
 // ("Hello, welcome back", underline fields, one big button, sign-up link). Made in our warehouse colors.
@@ -38,6 +41,7 @@ const DEMO: { phone: string; role: Role; name: string; icon: LucideIcon; tag?: [
 const DEMO_PASSWORD = "123456";
 
 export default function LoginPage() {
+  const site = useSite();
   const { tr, lang } = useFmt();
   const router = useRouter();
   const session = useSession();
@@ -84,7 +88,7 @@ export default function LoginPage() {
       setSession(s);
       // Back to the page you wanted before logging in, if your role may open it; otherwise your home page.
       const next = takeNext();
-      router.replace(next && canOpen(s.user.role, splitAppPath(next).path, s.user.rep_kinds) ? next : homeOf(s.user.role, s.user.rep_kinds));
+      router.replace(next && canOpen(s.user.role, splitAppPath(next).path, s.user.rep_kinds, deniedOf(site, s.user)) ? next : homeOf(s.user.role, s.user.rep_kinds));
       // Next keeps this page's state for when you come back (after logging out). So leave it clean:
       // not "busy" (that disabled every button with a spinner forever) and without the password.
       setBusy(null);
