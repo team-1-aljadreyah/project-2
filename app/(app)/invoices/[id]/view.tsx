@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useAppRouter } from "@/lib/app-path";
 import { ClipboardList, MessageCircle, Printer, Undo2, Wallet } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { useBrand } from "@/lib/site";
@@ -25,7 +26,7 @@ export default function InvoiceView() {
   const returns = useLoad(() => (i && user.role !== "shop" ? api.listReturns() : Promise.resolve([])), [i?.id]);
   const payments = useLoad(() => (i && user.role !== "warehouse" ? api.listPayments().catch(() => []) : Promise.resolve([])), [i?.id]);
   const printNow = useSearchParams().get("print") === "1";
-  const router = useRouter();
+  const router = useAppRouter();
   const ready = !!i && customer.state.status !== "loading";
 
   // Opened with the list's print button: print once everything (the shop's name and address too) is on the

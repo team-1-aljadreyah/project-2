@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/lib/app-path";
 import { useMemo, useState } from "react";
 import { CheckCircle2, PackageCheck, PackageX } from "lucide-react";
 import { useApp } from "@/components/shell";
@@ -22,7 +22,7 @@ interface RLine {
 export default function NewReturnPage() {
   const { tr, money, date, qty: fmtQty, name } = useFmt();
   const { itemById } = useApp();
-  const router = useRouter();
+  const router = useAppRouter();
   const toast = useToast();
   const invoices = useLoad(() => api.listInvoices(), []);
   const customers = useLoad(() => api.listCustomers(), []);

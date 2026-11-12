@@ -6,7 +6,7 @@
 // and a bag sheet like the design's checkout: address, items, payment summary, "send order".
 // Orders go through the same api.createOrder as everywhere else, and keep working without internet.
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/lib/app-path";
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -151,7 +151,7 @@ function subscribeBag(cb: () => void) {
 export function ShopStore({ customer }: { customer: Customer }) {
   const { tr, money, name } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
-  const router = useRouter();
+  const router = useAppRouter();
   const toast = useToast();
 
   const raw = useSyncExternalStore(subscribeBag, () => readRaw(user.id, customer.id), () => EMPTY);

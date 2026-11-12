@@ -6,7 +6,7 @@
   "lang": "ar",
   "dir": "rtl",
   "start_url": "/client?app=1",
-  "scope": "/",
+  "scope": "/client",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#08090b",

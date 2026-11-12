@@ -18,6 +18,7 @@ import { errorText } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Role } from "@/lib/api/types";
 import { homeOf, setSession, takeNext, useSession } from "@/lib/auth";
+import { splitAppPath } from "@/lib/app-path";
 import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -83,7 +84,7 @@ export default function LoginPage() {
       setSession(s);
       // Back to the page you wanted before logging in, if your role may open it; otherwise your home page.
       const next = takeNext();
-      router.replace(next && canOpen(s.user.role, next, s.user.rep_kinds) ? next : homeOf(s.user.role, s.user.rep_kinds));
+      router.replace(next && canOpen(s.user.role, splitAppPath(next).path, s.user.rep_kinds) ? next : homeOf(s.user.role, s.user.rep_kinds));
       // Next keeps this page's state for when you come back (after logging out). So leave it clean:
       // not "busy" (that disabled every button with a spinner forever) and without the password.
       setBusy(null);

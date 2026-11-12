@@ -4,7 +4,8 @@
 // 1. PayOnlineCard: choose the amount → our server creates the payment → go to the gateway's page.
 // 2. OnlineReturn: back from the gateway with ?payment=…, ask our server until the result is final
 //    (coming back does not mean it worked: only the gateway's notification decides, like in Project 1).
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useAppRouter } from "@/lib/app-path";
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { CheckCircle2, CreditCard, Loader2, Lock, RotateCcw, X, XCircle } from "lucide-react";
@@ -86,7 +87,7 @@ export function OnlineReturn() {
 
 function ReturnBanner({ id }: { id: string }) {
   const { tr, money } = useFmt();
-  const router = useRouter();
+  const router = useAppRouter();
   const p = useLoad(() => api.getOnlinePayment(id), [id]);
   const status = p.data?.status;
 

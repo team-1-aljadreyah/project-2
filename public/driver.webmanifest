@@ -6,7 +6,7 @@
   "lang": "ar",
   "dir": "rtl",
   "start_url": "/driver?app=1",
-  "scope": "/",
+  "scope": "/driver",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#08090b",

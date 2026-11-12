@@ -12,7 +12,8 @@ import { AnimatePresence, animate, motion, useInView } from "motion/react";
 import { Check, ChevronDown, Download, MoreVertical, Plus, Share, X } from "lucide-react";
 import { BrandName, LogoMark } from "@/components/logo";
 import { LanguageSwitch } from "@/components/switches";
-import { homeOf, useSession } from "@/lib/auth";
+import { homeOf, rememberNext, useSession } from "@/lib/auth";
+import { inApp } from "@/lib/app-path";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +51,12 @@ export function useAppEntry(app: AppKind) {
   const session = useSession();
   const role = session?.user.role;
   const mine = app === "client" ? role === "shop" : role === "rep";
-  const home = session ? homeOf(session.user.role, session.user.rep_kinds) : "/login";
+  // The app's own home, inside its address space (/client/shop, /driver/rep…), so it stays in the installed app.
+  const home = session ? (mine ? inApp(`/${app}`, homeOf(session.user.role, session.user.rep_kinds)) : homeOf(session.user.role, session.user.rep_kinds)) : "/login";
+  // Not logged in: after logging in (or signing up) from here, come back into this app.
+  useEffect(() => {
+    if (!session) rememberNext(`/${app}?app=1`);
+  }, [session, app]);
   // Opened from the icon on the phone's home screen (?app=1), already logged in: straight into the app.
   useEffect(() => {
     if (mine && new URLSearchParams(window.location.search).get("app") === "1") router.replace(home);

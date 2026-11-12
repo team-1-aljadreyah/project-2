@@ -4,7 +4,8 @@
 // Keeping them in one place means every screen looks and behaves the same.
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { splitAppPath, useAppRouter } from "@/lib/app-path";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
@@ -252,7 +253,7 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
 /** May the logged-in person open this address? (Phone numbers and other sites: always.) */
 export function useMayOpen() {
   const user = useSession()?.user;
-  return (href: string | null | undefined): href is string => !!href && (!href.startsWith("/") || (!!user && canOpen(user.role, href.split(/[?#]/)[0], user.rep_kinds)));
+  return (href: string | null | undefined): href is string => !!href && (!href.startsWith("/") || (!!user && canOpen(user.role, splitAppPath(href).path, user.rep_kinds)));
 }
 
 /** The small arrow that says "this opens something". It points the way the language reads. */
@@ -302,7 +303,7 @@ function openFor(e: React.MouseEvent, href: string, push: (href: string) => void
  * For a job that may not open the page, it is a plain row.
  */
 export function ClickRow({ href, className, children }: { href: string | null | undefined; className?: string; children: ReactNode }) {
-  const router = useRouter();
+  const router = useAppRouter();
   const may = useMayOpen();
   if (!may(href)) return <tr className={className}>{children}</tr>;
   const open = (e: React.MouseEvent) => !ownClick(e) && openFor(e, href, router.push);
@@ -337,7 +338,7 @@ export function PageHeader({ title, subtitle, back, actions }: { title: ReactNod
   const { lang, tr } = useFmt();
   const BackIcon = lang === "ar" ? ArrowRight : ArrowLeft;
   // A page the manager renamed in the menu shows its new name here too.
-  const path = usePathname();
+  const path = splitAppPath(usePathname()).path;
   const labels = useSite().nav.labels;
   if (typeof title === "string") title = pageTitle(title, path, labels, lang);
   return (
@@ -544,9 +545,9 @@ export function DataTable<T>({
   const { tr } = useFmt();
   const toast = useToast();
   const mode = useCustomizing();
-  const layId = `table:${usePathname().replace(/\/\d+/g, "/_")}`;
+  const layId = `table:${splitAppPath(usePathname()).path.replace(/\/\d+/g, "/_")}`;
   const lay = useSite().layouts[layId];
-  const router = useRouter();
+  const router = useAppRouter();
   if (!rows.length) return <>{empty}</>;
   // A click anywhere in a row opens it. A link, a button or a field inside the row keeps its own job.
   const rowClick = (href: string | undefined, action?: () => void) => (e: React.MouseEvent) => {

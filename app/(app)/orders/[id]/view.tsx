@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useAppRouter } from "@/lib/app-path";
 import { useEffect, useState } from "react";
 import { Ban, CheckCircle2, Clock, FileText, PackageCheck, Pencil, ShieldCheck } from "lucide-react";
 import { useApp } from "@/components/shell";
@@ -22,7 +22,7 @@ export default function OrderView() {
   const id = useIdParam();
   const { tr, dateTime, money, qty, name } = useFmt();
   const { user, lookups, itemById, reloadItems } = useApp();
-  const router = useRouter();
+  const router = useAppRouter();
   const toast = useToast();
   const order = useLoad(() => api.getOrder(id), [id]);
   const locations = useRepLocations();

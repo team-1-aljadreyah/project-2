@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useAppRouter } from "@/lib/app-path";
 import { Suspense, useEffect, useState } from "react";
 import { ArrowDownWideNarrow, CheckCircle2, WifiOff } from "lucide-react";
 import { Button, Card, CardHeader, Field, LimitBar, Money, NumberInput, Notice, PageHeader, Segmented, Select, Textarea, errorText, useToast } from "@/components/ui";
@@ -29,7 +30,7 @@ function WithCustomer() {
 
 function NewPaymentForm({ pre }: { pre?: number }) {
   const { tr, money, date } = useFmt();
-  const router = useRouter();
+  const router = useAppRouter();
   const toast = useToast();
   const offline = useOffline();
   const customers = useLoad(() => api.listCustomers(), []);
