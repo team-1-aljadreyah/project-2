@@ -123,7 +123,7 @@ export function CustomizeToggle() {
       className={cn("inline-flex h-10 items-center gap-1.5 rounded-xl px-2.5 text-sm font-medium transition", mode ? "bg-action text-white" : "text-muted hover:bg-card-2 hover:text-text")}
     >
       {mode ? <Check className="size-[18px]" /> : <Paintbrush className="size-[18px]" />}
-      <span className="hidden sm:inline">{mode ? tr("تم", "Done") : tr("تخصيص", "Customize")}</span>
+      <span className="hidden xl:inline">{mode ? tr("تم", "Done") : tr("تخصيص", "Customize")}</span>
     </button>
   );
 }

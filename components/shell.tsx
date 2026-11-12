@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Bell, CloudOff, Volume2, VolumeX, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Wifi, WifiOff, X } from "lucide-react";
+import { Bell, CloudOff, Volume2, VolumeX, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Type, Wifi, WifiOff, X } from "lucide-react";
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
@@ -19,6 +19,7 @@ import { setExportBlocked } from "@/lib/utils";
 import { AppLauncher, AppBanner } from "@/components/app-launcher";
 import { QuickSearch } from "@/components/quick-search";
 import { UnsavedGuard } from "@/components/unsaved-guard";
+import { setTextSize, useTextSize } from "@/lib/text-size";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
@@ -400,7 +401,8 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
       <div className={cn("flex min-w-0 flex-1 items-center gap-2 overflow-hidden", !phone && "md:hidden", phone && user.role === "shop" && "max-sm:invisible")}>
         <Logo small href={phone ? inApp(prefix, homeOf(user.role, user.rep_kinds)) : "/"} />
       </div>
-      <div className={cn("hidden flex-1", !phone && "md:block")}>
+      {/* min-w-0: a long warehouse filter stays inside the bar (it scrolls) instead of pushing the page wider. */}
+      <div className={cn("hidden min-w-0 flex-1", !phone && "md:block")}>
         {user.role === "shop" && <ShopSwitcher user={user} />}
         {hasWarehouseFilter(user) && <WarehouseFilterSwitch warehouses={warehouses} />}
       </div>
@@ -420,8 +422,10 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
       {user.role === "manager" && <CustomizeToggle />}
       <Bell2 user={user} />
       {(user.role === "manager" || user.role === "accountant") && <CurrencySwitch rate={usdRate} />}
-      <LanguageSwitch />
-      <ThemeToggle />
+      <div className="hidden items-center gap-1.5 2xl:flex">
+        <LanguageSwitch />
+        <ThemeToggle />
+      </div>
       <div className="relative">
         <button type="button" onClick={() => setMenu((m) => !m)} aria-expanded={menu} className="ms-1 flex h-10 items-center gap-2 rounded-xl px-1.5 hover:bg-card-2 sm:px-2">
           <Avatar user={user} size={32} />
@@ -454,6 +458,7 @@ function AccountMenu({ user, onClose, onAccount }: { user: User; onClose: () => 
   const ref = useRef<HTMLDivElement>(null);
   const [sim, setSim] = useState(isSimulatedOffline);
   const sound = useSoundOn();
+  const textSize = useTextSize();
   useEffect(() => {
     const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && onClose();
     document.addEventListener("mousedown", onDown);
@@ -487,6 +492,34 @@ function AccountMenu({ user, onClose, onAccount }: { user: User; onClose: () => 
             </span>
           }
         />
+      </div>
+      {/* Language and day/night: here when the top bar has no room for them. */}
+      <div className="mx-1 my-1 flex items-center justify-between gap-2 rounded-xl bg-card-2 px-3 py-2 2xl:hidden">
+        <span className="text-sm">{tr("اللغة والمظهر", "Language and look")}</span>
+        <span className="flex items-center gap-1">
+          <LanguageSwitch />
+          <ThemeToggle />
+        </span>
+      </div>
+      {/* Text size: bigger for whoever needs it (kept on this device). */}
+      <div className="mx-1 my-1 rounded-xl bg-card-2 px-3 py-2">
+        <p className="mb-1.5 flex items-center gap-2 text-sm">
+          <Type className="size-4" /> {tr("حجم الخط", "Text size")}
+        </p>
+        <div className="grid grid-cols-3 gap-1">
+          {(["normal", "large", "xl"] as const).map((z, i) => (
+            <button
+              key={z}
+              type="button"
+              onClick={() => setTextSize(z)}
+              aria-pressed={textSize === z}
+              className={cn("rounded-lg py-1.5 font-semibold transition", textSize === z ? "bg-primary text-on-primary" : "text-muted hover:bg-card")}
+              style={{ fontSize: `${12 + i * 2}px` }}
+            >
+              {[tr("عادي", "Normal"), tr("كبير", "Large"), tr("أكبر", "Larger")][i]}
+            </button>
+          ))}
+        </div>
       </div>
       {USE_MOCK && (
         <div className="mx-1 my-1 rounded-xl bg-card-2 px-3 py-2">
