@@ -1,5 +1,7 @@
 "use client";
 
+import { useRemembered } from "@/lib/remember";
+
 // The accountant's "account file", after the "Accountity" design Yasser chose for the accountant:
 // three numbers at the top, the shop's profile card and details on the side, its invoices as colored tiles,
 // a chart of what it bought against what it paid, and its latest payments. Only the accountant opens it.
@@ -31,7 +33,7 @@ export default function AccountsPage() {
 
   // The shop to show: from the link (?customer=ID), or the one the accountant picks. Default: the most debt.
   const [chosen, setChosen] = useState<number | null>(() => (typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("customer")) || null : null));
-  const [month, setMonth] = useState(() => today().slice(0, 7));
+  const [month, setMonth] = useRemembered("accounts:month", () => today().slice(0, 7));
 
   const all = useMemo(() => (customers.data ?? []).filter((c) => !c.pending), [customers.data]);
   const c = all.find((x) => x.id === chosen) ?? [...all].sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0))[0];

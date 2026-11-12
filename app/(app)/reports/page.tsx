@@ -1,5 +1,7 @@
 "use client";
 
+import { useRemembered } from "@/lib/remember";
+
 import Link from "next/link";
 import { useState } from "react";
 import { Download } from "lucide-react";
@@ -20,7 +22,7 @@ export default function ReportsPage() {
   const { tr } = useFmt();
   const { user } = useApp();
   const stockOnly = user.role === "warehouse";
-  const [tab, setTab] = useState<Tab>(stockOnly ? "expiry" : "daily");
+  const [tab, setTab] = useRemembered<Tab>("reports:tab", stockOnly ? "expiry" : "daily");
   const tabs: { value: Tab; label: string }[] = [
     ...(!stockOnly
       ? [
@@ -100,9 +102,9 @@ function Daily() {
 function Sales() {
   const { tr, name, num } = useFmt();
   const { user } = useApp();
-  const [group, setGroup] = useState<SalesGroup>("item");
-  const [from, setFrom] = useState(today(-29));
-  const [to, setTo] = useState(today());
+  const [group, setGroup] = useRemembered<SalesGroup>("reports:group", "item");
+  const [from, setFrom] = useRemembered("reports:from", today(-29));
+  const [to, setTo] = useRemembered("reports:to", today());
   const wh = useWarehouseFilter();
   const rows = useLoad(() => api.salesReport(group, from, to, wh), [group, from, to, wh]);
   const showProfit = user.role === "manager" || user.role === "accountant";

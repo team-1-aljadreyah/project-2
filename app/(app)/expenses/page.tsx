@@ -1,5 +1,7 @@
 "use client";
 
+import { useRemembered } from "@/lib/remember";
+
 // Expenses (صرفيات): the money that goes out for running the company, not for goods: rent, salaries, the
 // generator, fuel, repairs, loading labour… Each one is a payment voucher (سند صرف) with who got the money,
 // how it was paid, what it was for (a warehouse, a vehicle) and a picture of the bill.
@@ -27,9 +29,9 @@ export default function ExpensesPage() {
   const list = useLoad(() => api.listExpenses(), []);
   const dash = useLoad(() => api.dashboard(), []);
   const wh = useWarehouseFilter();
-  const [month, setMonth] = useState(() => today().slice(0, 7));
-  const [show, setShow] = useState<Show>("all");
-  const [cat, setCat] = useState<string | null>(null);
+  const [month, setMonth] = useRemembered("expenses:month", () => today().slice(0, 7));
+  const [show, setShow] = useRemembered<Show>("expenses:show", "all");
+  const [cat, setCat] = useRemembered<string | null>("expenses:cat", null);
   const [adding, setAdding] = useState(false);
 
   const all = list.data ?? [];

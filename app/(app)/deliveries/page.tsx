@@ -1,5 +1,7 @@
 "use client";
 
+import { useRemembered } from "@/lib/remember";
+
 // Deliveries. The delivery rep's flow, so no delivery can be faked:
 //   at the warehouse: scan the shipment's QR → it is "out" with him (his name and the time are recorded);
 //   at the shop: photo of the packages + the PIN only the shop owner has → "delivered".
@@ -36,7 +38,7 @@ export default function DeliveriesPage() {
   const orders = useLoad(() => api.listOrders(), []);
   useRealtime(["orders"], () => orders.reload());
   const customers = useLoad(() => api.listCustomers().catch(() => []), []);
-  const [tab, setTab] = useState<Tab>(isRep ? "out" : "ready");
+  const [tab, setTab] = useRemembered<Tab>("deliveries:tab", isRep ? "out" : "ready");
   const [scan, setScan] = useState(false);
   const [busy, setBusy] = useState(false);
   const [handing, setHanding] = useState<Order | null>(null);

@@ -6,8 +6,9 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { splitAppPath, useAppRouter } from "@/lib/app-path";
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
+import { createContext, isValidElement, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useRemembered } from "@/lib/remember";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown, CheckCircle2, ChevronRight, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
 import { useSession } from "@/lib/auth";
 import { deniedOf } from "@/lib/access";
@@ -517,6 +518,39 @@ export interface Column<T> {
   /** Hide on phones (the card view shows `mobile` instead). */
   hideOnMobile?: boolean;
   align?: "start" | "end" | "center";
+  /** What the column sorts by, when the cell alone can't say (a date shown as "2 days ago"). */
+  sort?: (row: T) => number | string;
+  /** This column can't be sorted (buttons). Columns without a title never are. */
+  noSort?: boolean;
+}
+
+/** The value a cell sorts by, read from what it shows: an amount's number, a badge's status, a date, a text. */
+function sortValue(node: ReactNode): string | number {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "number") return node;
+  if (typeof node === "string") {
+    const t = node.replace(/[\u200e\u200f]/g, "").trim();
+    const d = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);
+    if (d) return Number(d[3]) * 10000 + Number(d[2]) * 100 + Number(d[1]);
+    if (/^-?[\d,]+(\.\d+)?(\s|%|$)/.test(t)) return Number(t.replace(/[^\d.-]/g, ""));
+    return t;
+  }
+  if (Array.isArray(node)) {
+    const parts = node.map(sortValue);
+    return parts.find((p) => typeof p === "number") ?? parts.filter(Boolean).join(" ");
+  }
+  if (isValidElement(node)) {
+    const p = node.props as Record<string, unknown>;
+    if (typeof p.value === "number") return p.value;
+    if (p.children !== undefined) return sortValue(p.children as ReactNode);
+    if (typeof p.status === "string") return p.status;
+  }
+  return "";
+}
+
+function compare(a: string | number, b: string | number) {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), "ar", { numeric: true });
 }
 
 export function DataTable<T>({
@@ -540,15 +574,29 @@ export function DataTable<T>({
   empty?: ReactNode;
   footer?: ReactNode;
 }) {
-  // Every list is split into pages with numbered circles under it (1, 2, 3…). It also keeps long lists fast:
-  // only one page of rows is drawn (twice: table + phone cards).
-  const pg = usePages(rows);
   // Customize mode (manager): the columns are dragged to a new order and hidden with the eye.
   // It is saved for this page's table ("table:/orders"), for everyone who sees it.
   const { tr } = useFmt();
   const toast = useToast();
   const mode = useCustomizing();
   const layId = `table:${splitAppPath(usePathname()).path.replace(/\/\d+/g, "/_")}`;
+  // Sorting: a click on a column's title (high → low, low → high, back to the page's own order). Kept for
+  // this table while the app is open.
+  const [sortBy, setSortBy] = useRemembered<{ key: string; dir: 1 | -1 } | null>(`sort:${layId}`, null);
+  const sortCol = sortBy && columns.find((c) => c.key === sortBy.key);
+  const ordered_ = useMemo(() => {
+    if (!sortCol || !sortBy) return rows;
+    const val = (r: T) => (sortCol.sort ? sortCol.sort(r) : sortValue(sortCol.cell(r)));
+    return rows
+      .map((r) => ({ r, v: val(r) }))
+      .sort((a, b) => compare(a.v, b.v) * sortBy.dir)
+      .map((x) => x.r);
+  }, [rows, sortCol, sortBy]);
+  const sortable = (c: Column<T>) => !c.noSort && !!c.head && !mode;
+  const nextSort = (c: Column<T>) => setSortBy(sortBy?.key !== c.key ? { key: c.key, dir: -1 } : sortBy.dir === -1 ? { key: c.key, dir: 1 } : null);
+  // Every list is split into pages with numbered circles under it (1, 2, 3…). It also keeps long lists fast:
+  // only one page of rows is drawn (twice: table + phone cards).
+  const pg = usePages(ordered_);
   const lay = useSite().layouts[layId];
   const router = useAppRouter();
   if (!rows.length) return <>{empty}</>;
@@ -577,6 +625,16 @@ export function DataTable<T>({
                       <SortItem id={c.key} inline hidden={hiddenCols.includes(c.key)} onHide={() => saveLay({ hidden: toggleIn(hiddenCols, c.key) })}>
                         {c.head}
                       </SortItem>
+                    ) : sortable(c) ? (
+                      <button
+                        type="button"
+                        onClick={() => nextSort(c)}
+                        title={tr("رتّب حسب هذا العمود", "Sort by this column")}
+                        className={cn("inline-flex items-center gap-1 rounded hover:text-text", sortBy?.key === c.key && "font-semibold text-text")}
+                      >
+                        {c.head}
+                        {sortBy?.key === c.key ? sortBy.dir === -1 ? <ArrowDown className="size-3.5" /> : <ArrowUp className="size-3.5" /> : <ArrowUpDown className="size-3 opacity-40" />}
+                      </button>
                     ) : (
                       c.head
                     )}
@@ -618,6 +676,28 @@ export function DataTable<T>({
           </table>
         </div>
       </SortArea>
+      {mobile && columns.some(sortable) && rows.length > 1 && (
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2 md:hidden">
+          <ArrowUpDown className="size-3.5 text-faint" />
+          <select
+            value={sortBy ? `${sortBy.key}:${sortBy.dir}` : ""}
+            onChange={(e) => {
+              const [key, dir] = e.target.value.split(":");
+              setSortBy(key ? { key, dir: Number(dir) as 1 | -1 } : null);
+            }}
+            aria-label={tr("ترتيب القائمة", "Sort the list")}
+            className="min-w-0 flex-1 bg-transparent text-xs text-muted outline-none"
+          >
+            <option value="">{tr("الترتيب المعتاد", "Usual order")}</option>
+            {columns.filter(sortable).map((c) => (
+              <optgroup key={c.key} label={typeof c.head === "string" ? c.head : c.key}>
+                <option value={`${c.key}:-1`}>{tr(`${typeof c.head === "string" ? c.head : ""}: الأكبر أولاً`, `${typeof c.head === "string" ? c.head : ""}: high to low`)}</option>
+                <option value={`${c.key}:1`}>{tr(`${typeof c.head === "string" ? c.head : ""}: الأصغر أولاً`, `${typeof c.head === "string" ? c.head : ""}: low to high`)}</option>
+              </optgroup>
+            ))}
+          </select>
+        </div>
+      )}
       {mobile && (
         <ul className="divide-y divide-line md:hidden">
           {shown.map((r) => {

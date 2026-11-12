@@ -1,4 +1,6 @@
 "use client";
+
+import { useRemembered } from "@/lib/remember";
 import { useCustomColumns } from "@/components/custom-fields";
 
 import { useRef, useState } from "react";
@@ -29,8 +31,8 @@ export default function ItemsPage() {
         toast("success", tr("تم الحفظ، ويظهر التغيير في كل الصفحات", "Saved. The change shows on every page"));
       })
       .catch((e) => toast("danger", errorText(e, tr)));
-  const [q, setQ] = useState("");
-  const [cat, setCat] = useState("");
+  const [q, setQ] = useRemembered("items:q", "");
+  const [cat, setCat] = useRemembered("items:cat", "");
   const [f, setF] = useState<"all" | "low" | "inactive">("all");
   const [add, setAdd] = useState(false);
   const [tier, setTier] = useState(lookups.tiers[1]?.id ?? lookups.tiers[0].id);

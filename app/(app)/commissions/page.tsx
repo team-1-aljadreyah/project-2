@@ -1,5 +1,7 @@
 "use client";
 
+import { useRemembered } from "@/lib/remember";
+
 import { useState } from "react";
 import { Download, Lock } from "lucide-react";
 import { useApp } from "@/components/shell";
@@ -26,7 +28,7 @@ export default function CommissionsPage() {
   const { user } = useApp();
   const toast = useToast();
   const months = lastMonths(6);
-  const [month, setMonth] = useState(months[0]);
+  const [month, setMonth] = useRemembered("commissions:month", months[0]);
   const rows = useLoad(() => api.commissions(month), [month]);
   const [busy, setBusy] = useState(false);
   const current = month === today().slice(0, 7);
