@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ImageOff, Pencil, Plus, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/my-account";
 import { useApp } from "@/components/shell";
@@ -8,7 +9,7 @@ import { getSession } from "@/lib/auth";
 import { useSite } from "@/lib/site";
 import { jobName, roleName } from "@/components/status";
 import { cn } from "@/lib/utils";
-import { Badge, Button, Card, DataTable, Dialog, ErrorBox, errorText, Field, Input, LoadingRows, Notice, PageHeader, RefLink, Select, Switch, useToast, type Column } from "@/components/ui";
+import { Badge, Button, Card, DataTable, Dialog, ErrorBox, errorText, Field, Input, LoadingRows, Notice, NumberInput, PageHeader, RefLink, Select, Switch, useToast, type Column } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { Role, User, UserInput } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -22,6 +23,10 @@ export default function UsersPage() {
   const users = useLoad(() => api.listUsers(), []);
   const customers = useLoad(() => api.listCustomers(), []);
   const [edit, setEdit] = useState<User | "new" | null>(null);
+  // ?edit=<id> (a rep's row in the dashboard's targets card): that person's form opens at once.
+  const linkedId = Number(useSearchParams().get("edit")) || null;
+  const [linkedDone, setLinkedDone] = useState(false);
+  const shown = edit ?? (!linkedDone && linkedId ? (users.data?.find((u) => u.id === linkedId) ?? null) : null);
   const site = useSite();
   const columns: Column<User>[] = [
     {
@@ -114,7 +119,17 @@ export default function UsersPage() {
           />
         )}
       </Card>
-      {edit && <UserDialog user={edit === "new" ? undefined : edit} customers={customers.data ?? []} onClose={() => setEdit(null)} onSaved={users.reload} />}
+      {shown && (
+        <UserDialog
+          user={shown === "new" ? undefined : shown}
+          customers={customers.data ?? []}
+          onClose={() => {
+            setEdit(null);
+            setLinkedDone(true);
+          }}
+          onSaved={users.reload}
+        />
+      )}
     </>
   );
 }
@@ -134,6 +149,7 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
     active: user?.active ?? true,
     password: "",
     profile_id: user?.profile_id ?? null,
+    sales_target: user?.sales_target ?? null,
   });
   const site = useSite();
   const profiles = site.profiles.filter((p) => p.role === f.role);
@@ -261,6 +277,15 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
                 );
               })}
             </div>
+          </Field>
+        )}
+        {f.role === "rep" && (f.rep_kinds ?? []).includes("sales") && (
+          <Field
+            label={tr("هدف المبيعات الشهري", "Monthly sales target")}
+            hint={tr("ما يُنتظر أن يبيعه في الشهر (الفواتير ناقص المرتجعات). يراه شريطاً في صفحته، ويُرتَّب به المندوبون في اللوحة. فارغ = بلا هدف.", "What he should sell in a month (invoices less returns). He sees it as a bar on his page, and reps are ranked by it on the dashboard. Empty = no target.")}
+            error={err.sales_target}
+          >
+            <NumberInput value={f.sales_target ?? ""} onChange={(v) => set({ sales_target: v === "" ? null : v })} suffix={tr("د.ع", "IQD")} placeholder="50,000,000" invalid={!!err.sales_target} />
           </Field>
         )}
         {(f.role === "warehouse" || f.role === "staff") && (

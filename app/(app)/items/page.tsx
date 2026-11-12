@@ -122,7 +122,7 @@ export default function ItemsPage() {
               ...(user.role === "manager" ? [{ value: "inactive" as const, label: tr("الموقوفة", "Inactive"), count: items.filter((i) => !i.active).length }] : []),
             ]}
           />
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Select value={cat} onChange={(e) => setCat(e.target.value)} className="sm:w-40" aria-label={tr("الفئة", "Category")}>
               <option value="">{tr("كل الأصناف", "All categories")}</option>
               {lookups.categories.map((c) => (
@@ -136,8 +136,9 @@ export default function ItemsPage() {
                 </option>
               ))}
             </Select>
-            <div className="flex gap-2">
-              <SearchBox value={q} onChange={setQ} placeholder={tr("الاسم أو الباركود", "Name or barcode")} className="sm:w-64" />
+            {/* The search takes what room is left, or a line of its own on a tablet (tight with the scan button). */}
+            <div className="flex min-w-0 gap-2 sm:min-w-[18rem] sm:flex-1 xl:flex-none">
+              <SearchBox value={q} onChange={setQ} placeholder={tr("الاسم أو الباركود", "Name or barcode")} className="min-w-0 flex-1 xl:w-64" />
               <ScanButton onClick={() => setScanning(true)} />
             </div>
           </div>

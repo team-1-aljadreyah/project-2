@@ -10,6 +10,7 @@ import { RankBars, SalesBars } from "@/components/charts";
 import { EditText, SortArea, SortItem, toggleIn, useSaveSite } from "@/components/customize";
 import { useApp } from "@/components/shell";
 import { UsdRateCard } from "@/components/usd-rate";
+import { TargetRanking } from "@/components/rep-targets";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { OrderStatusBadge } from "@/components/status";
 import { Button, Card, CardHeader, ErrorBox, LimitBar, Money, PageHeader, Skeleton, Stat } from "@/components/ui";
@@ -204,6 +205,8 @@ export default function DashboardPage() {
         </Card>
       ),
     },
+    // The reps' race this month (their targets), for whoever runs the reps.
+    ...(user.role === "manager" || user.role === "accountant" ? [{ id: "c_targets", el: <TargetRanking title={T("c_targets", "أهداف المندوبين هذا الشهر", "Rep targets this month")} /> }] : []),
     {
       id: "c_debts",
       el: (

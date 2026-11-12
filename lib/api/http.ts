@@ -5,6 +5,7 @@ import type {
   Allocation,
   Batch,
   CommissionRow,
+  RepTarget,
   Customer,
   CustomerInput,
   DailySales,
@@ -275,6 +276,8 @@ export const httpApi = {
   commissions: (month: string) => get<CommissionRow[]>("/commissions", { month }),
   closeMonth: (month: string) => post<CommissionRow[]>("/commissions/close", { month }),
   closedMonths: () => get<string[]>("/commissions/closed"),
+  /** Each marketing rep's month against his monthly target, ranked (a rep gets only his own row). */
+  repTargets: (month: string) => get<RepTarget[]>("/reps/targets", { month }),
 
   // The dollar rate (the accountant fixes it every day)
   usdRates: () => get<UsdRate[]>("/usd-rates"),

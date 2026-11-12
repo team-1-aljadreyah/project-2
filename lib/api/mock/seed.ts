@@ -486,6 +486,17 @@ export function makeSeed(now = new Date()): Db {
   // عباس (marketing) sells only grains, sugar, oils and canned food; أسواق الكوثر has its own price for basmati rice.
   const abbas = db.users.find((u) => u.id === 5);
   if (abbas) abbas.rep_categories = ["حبوب ورز", "سكر وطحين", "زيوت وسمن", "معلبات"];
+  // Monthly sales targets: about what each marketing rep is on pace to sell this month, one a stretch, one easy
+  // (in whole millions), so the dashboard's ranking and the reps' bars show something real.
+  const month = dayOf(now).slice(0, 7);
+  const share = now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  [4, 5, 6].forEach((id, k) => {
+    const u = db.users.find((x) => x.id === id);
+    if (!u) return;
+    const sold = db.invoices.filter((i) => i.rep_id === id && dayOf(new Date(i.date)).startsWith(month)).reduce((t, i) => t + i.total, 0);
+    const pace = sold ? sold / share : 30_000_000;
+    u.sales_target = Math.max(5, Math.round((pace * [1.25, 0.9, 1.05][k]) / 1_000_000)) * 1_000_000;
+  });
   const rice = db.items.find((i) => i.id === 1);
   if (rice) {
     const p = rice.prices.find((x) => x.tier_id === 1) ?? rice.prices[0];

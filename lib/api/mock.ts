@@ -38,7 +38,7 @@ import type {
   CustomObject,
   CustomValue,
 } from "./types";
-import { EXPENSE_APPROVAL_ABOVE, RULE_FIELDS, inHours, worksIn } from "./types";
+import { EXPENSE_APPROVAL_ABOVE, RULE_FIELDS, inHours, repDoes, worksIn } from "./types";
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
 import {
   approveOrder,
@@ -771,6 +771,7 @@ export const mockApi: Api = {
       if ((input.role === "warehouse" || input.role === "staff") && !input.warehouse_id) errors.warehouse_id = msg("اختر المخزن", "Choose the warehouse");
       if (input.role === "shop" && !input.customer_id) errors.customer_id = msg("اختر المحل", "Choose the shop");
       if (input.role === "rep" && input.rep_kinds && !input.rep_kinds.length) errors.rep_kinds = msg("اختر عمله: تسويق أو توصيل أو الاثنين", "Choose: marketing, delivery or both");
+      if (input.sales_target != null && !(input.sales_target >= 0 && input.sales_target < 1e13)) errors.sales_target = msg("الهدف غير صحيح", "The target is wrong");
       // One warehouse keeper for each warehouse: he is the one who answers for its stock.
       const otherKeeper = input.role === "warehouse" && input.active && db.users.find((u) => u.id !== id && u.role === "warehouse" && u.active && u.warehouse_id === input.warehouse_id);
       if (otherKeeper)
@@ -787,6 +788,8 @@ export const mockApi: Api = {
         warehouse_id: input.role === "warehouse" || input.role === "staff" ? input.warehouse_id : undefined,
         rep_kinds: input.role === "rep" ? (input.rep_kinds?.length ? input.rep_kinds : (["sales", "delivery"] as const).slice()) : undefined,
         rep_categories: input.role === "rep" && input.rep_categories?.length ? input.rep_categories : undefined,
+        // Only a rep who markets has a sales target.
+        sales_target: input.role === "rep" && input.sales_target && (!input.rep_kinds?.length || input.rep_kinds.includes("sales")) ? Math.round(input.sales_target) : undefined,
         customer_id: input.role === "shop" ? input.customer_id : undefined,
         active: input.active,
       };
@@ -1671,6 +1674,26 @@ export const mockApi: Api = {
     }),
   closeMonth: (month) => write((db, a, now) => closeMonth(db, a, month, now)),
   closedMonths: () => read((db) => Object.keys(db.closed_months).sort()),
+  // Rep targets: each marketing rep's month (invoices less the returns on his invoices) against his target.
+  repTargets: (month) =>
+    read((db, a) => {
+      need(a, ["manager", "accountant", "rep"]);
+      const inMonth = (iso: string) => dayOf(new Date(iso)).startsWith(month);
+      const rows = db.users
+        .filter((u) => repDoes(u, "sales") && u.active && !u.deleted)
+        .map((u) => {
+          const invs = db.invoices.filter((i) => i.rep_id === u.id && inMonth(i.date));
+          const sales = invs.reduce((t, i) => t + i.total, 0);
+          const returns = db.returns.filter((r) => inMonth(r.created_at) && db.invoices.find((i) => i.id === r.invoice_id)?.rep_id === u.id).reduce((t, r) => t + r.amount, 0);
+          const target = u.sales_target ?? 0;
+          const net = sales - returns;
+          return { rep: person(u), month, target, sales, returns, net, invoices: invs.length, pct: target ? Math.round((net / target) * 100) : 0, rank: 0, of: 0 };
+        });
+      // Reps with a target first, by how much of it is done; then by what they sold.
+      rows.sort((x, y) => Number(!!y.target) - Number(!!x.target) || y.pct - x.pct || y.net - x.net);
+      rows.forEach((r, i) => Object.assign(r, { rank: i + 1, of: rows.length }));
+      return a.role === "rep" ? rows.filter((r) => r.rep.id === a.id) : rows;
+    }),
 
   // Reports
   dashboard: (warehouseId) =>
