@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Bell, CloudOff, Volume2, VolumeX, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Type, Wifi, WifiOff, X } from "lucide-react";
+import { Bell, CloudOff, Compass, Volume2, VolumeX, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Type, Wifi, WifiOff, X } from "lucide-react";
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
@@ -19,6 +19,7 @@ import { setExportBlocked } from "@/lib/utils";
 import { AppLauncher, AppBanner } from "@/components/app-launcher";
 import { QuickSearch } from "@/components/quick-search";
 import { UnsavedGuard } from "@/components/unsaved-guard";
+import { Tour, startTour } from "@/components/tour";
 import { setTextSize, useTextSize } from "@/lib/text-size";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
@@ -187,6 +188,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
       </div>
       <BottomBar user={user} phone={phone} />
       <UnsavedGuard />
+      <Tour key={user.id} user={user} />
       <QueueSender />
     </div>
   );
@@ -231,7 +233,7 @@ function Sidebar({ user }: { user: User }) {
   // Inside an app (launcher): one list, in the app's own order, without the groups.
   const inApp = !!useCurrentApp(user) && !editing;
   return (
-    <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-line bg-card md:flex">
+    <aside data-tour="menu" className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-line bg-card md:flex">
       <div className="flex h-16 items-center gap-2 border-b border-line px-4">
         <Logo href="/" />
       </div>
@@ -322,7 +324,7 @@ function BottomBar({ user, phone }: { user: User; phone: boolean }) {
   const rest = nav.filter((n) => !main.includes(n));
   return (
     <>
-      <nav className={cn("no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur", !phone && "md:hidden")}>
+      <nav data-tour="menu" className={cn("no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur", !phone && "md:hidden")}>
         <div className="mx-auto grid max-w-lg grid-cols-5">
           {main.map((n) => {
             const active = isActive(path, n.href);
@@ -427,7 +429,7 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
         <ThemeToggle />
       </div>
       <div className="relative">
-        <button type="button" onClick={() => setMenu((m) => !m)} aria-expanded={menu} className="ms-1 flex h-10 items-center gap-2 rounded-xl px-1.5 hover:bg-card-2 sm:px-2">
+        <button type="button" data-tour="account" onClick={() => setMenu((m) => !m)} aria-expanded={menu} aria-label={tr("حسابي والإعدادات", "My account and settings")} className="ms-1 flex h-10 items-center gap-2 rounded-xl px-1.5 hover:bg-card-2 sm:px-2">
           <Avatar user={user} size={32} />
           <span className="hidden text-start text-xs leading-tight lg:block">
             <span className="block font-medium text-text">{user.name}</span>
@@ -501,6 +503,16 @@ function AccountMenu({ user, onClose, onAccount }: { user: User; onClose: () => 
           <ThemeToggle />
         </span>
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          startTour();
+        }}
+        className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm hover:bg-card-2"
+      >
+        <Compass className="size-4" /> {tr("جولة تعريفية", "Tour of the site")}
+      </button>
       {/* Text size: bigger for whoever needs it (kept on this device). */}
       <div className="mx-1 my-1 rounded-xl bg-card-2 px-3 py-2">
         <p className="mb-1.5 flex items-center gap-2 text-sm">
@@ -625,6 +637,7 @@ function Bell2({ user }: { user: User }) {
       <NotificationAlerts key={user.id} list={list.data} />
       <Link
         href="/notifications"
+        data-tour="bell"
         aria-label={tr("الإشعارات", "Notifications")}
         className="relative inline-flex size-10 items-center justify-center rounded-xl text-muted hover:bg-card-2 hover:text-text"
       >

@@ -64,6 +64,7 @@ export function QuickSearch({ pages }: { pages: SearchPage[] }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        data-tour="search"
         aria-label={tr("بحث في الموقع", "Search the site")}
         title={tr("بحث (Ctrl+K)", "Search (Ctrl+K)")}
         className="flex size-10 items-center justify-center rounded-xl text-muted hover:bg-card-2 hover:text-text"
