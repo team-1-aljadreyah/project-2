@@ -1267,6 +1267,18 @@ export interface NewTransfer {
   note?: string;
 }
 
+/** One product in the public catalog (the shop owners' landing page, no sign-in): what it is and whether it
+ *  is in stock — never a price, a quantity or a cost (each shop's price depends on its level). */
+export interface CatalogItem extends ItemUnits {
+  id: number;
+  name: string;
+  name_en: string;
+  category: string;
+  image?: string;
+  pieces_per_carton: number;
+  in_stock: boolean;
+}
+
 export interface ItemInput extends ItemUnits {
   weight_kg?: number;
   name: string;

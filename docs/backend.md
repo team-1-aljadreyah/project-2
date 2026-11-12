@@ -45,6 +45,10 @@ The server must filter and hide, not only the pages:
   categories the manager gave him (`rep_categories`, empty = all). His monthly target (`sales_target`, set by
   the manager on the user) is counted by `GET /reps/targets`: the month's invoices with his `rep_id` less the
   returns on them; he gets only his own row (with his rank), the manager and accountant get every marketing rep.
+- **The public catalog** (`GET /catalog`, no sign-in): every active item that isn't deleted, with only `id`,
+  the names, category, picture, packing (`pieces_per_carton`, the unit names, `sells`) and `in_stock` (sellable
+  pieces > 0 anywhere). Never a price, a quantity, a cost or a barcode: the shop owners' landing page shows it
+  to anyone. Cache it for a few minutes; pictures through a CDN.
 - **ZainCash** (the shop pays its debt from its wallet; `provider: "zaincash"` on `POST /payments/online`, from
   1,000 IQD; Qi Card stays the default). Payment gateway API v2: keep `client_id` / `client_secret` in the
   server's environment only (the demo uses ZainCash's public UAT test keys in `lib/zaincash.ts`, never real ones).
@@ -225,7 +229,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 `ChatMessage`, `RepTarget`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 134 endpoints, generated from lib/api/http.ts -->
+<!-- 135 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -423,6 +427,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 
 | Call | Method | Path | Takes | Returns | Notes |
 |---|---|---|---|---|---|
+| `catalog` | GET | `/catalog` |  | `CatalogItem[]` | The public catalog (no sign-in): the products on sale with their pictures, no prices. |
 | `counterSale` | POST | `/counter-sales` | `input: CounterSaleInput` | `Invoice` | The keeper's counter sale: the invoice, already paid in full (the goods left the warehouse). |
 | `repTargets` | GET | `/reps/targets` | `month: string` | `RepTarget[]` | Each marketing rep's month against his monthly target, ranked (a rep gets only his own row). |
 

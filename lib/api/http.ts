@@ -5,6 +5,7 @@ import type {
   Allocation,
   Batch,
   CommissionRow,
+  CatalogItem,
   CounterSaleInput,
   RepTarget,
   Customer,
@@ -142,6 +143,8 @@ export const httpApi = {
   listItems: () => get<Item[]>("/items"),
   getItem: (id: number) => get<Item>(`/items/${id}`),
   saveItem: (id: number | null, input: ItemInput) => save<Item>("/items", id, input),
+  /** The public catalog (no sign-in): the products on sale with their pictures, no prices. */
+  catalog: () => get<CatalogItem[]>("/catalog"),
   /** Delete an item (manager). Never used: removed for good ("removed"). Used before: hidden everywhere, its
    *  name kept on the old records ("hidden"). Refused while it has stock or is on an open order. */
   deleteItem: (id: number) => del<{ result: "removed" | "hidden" }>(`/items/${id}`),
