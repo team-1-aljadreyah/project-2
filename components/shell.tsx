@@ -14,7 +14,8 @@ import { NotificationAlerts } from "@/components/notification-alerts";
 import { ChatWidget } from "@/components/support/chat-widget";
 import { ShopSwitcher } from "@/components/shop-switcher";
 import { Avatar, MyAccountDialog } from "@/components/my-account";
-import { deniedOf, useCurrentApp, useDenied } from "@/lib/access";
+import { deniedOf, profileOf, useCurrentApp, useDenied } from "@/lib/access";
+import { setExportBlocked } from "@/lib/utils";
 import { AppLauncher, AppBanner } from "@/components/app-launcher";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
@@ -123,6 +124,15 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
 
   const denied = useDenied(user);
   const allowed = canOpen(user.role, path, user.rep_kinds, denied);
+  // Finer permissions from the person's profile: see-only, and no exporting.
+  const profile = profileOf(useSite(), user);
+  const toastDenied = useToast();
+  useEffect(() => {
+    setExportBlocked(!!profile?.deny_actions?.includes("export"));
+    const onDenied = () => toastDenied("danger", tr("ليس من صلاحيات ملفك: التصدير", "Your profile doesn't allow exporting"));
+    window.addEventListener("nahrain:denied", onDenied);
+    return () => window.removeEventListener("nahrain:denied", onDenied);
+  }, [profile, toastDenied, tr]);
   const phone = isPhoneApp(user.role);
 
   // Amounts in dollars: only the manager and the accountant, at the day's rate.
@@ -143,6 +153,11 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar user={user} warehouses={lookups.data?.warehouses ?? []} usdRate={usdRate} phone={phone} />
         <OfflineBar />
+        {profile?.read_only && (
+          <div className="no-print border-b border-warning/30 bg-warning-soft px-4 py-2 text-center text-sm font-medium text-warning">
+            {tr("ملفك للعرض فقط: ترى صفحاتك ولا يمكنك تغيير شيء", "Your profile is see-only: you can look but not change anything")}
+          </div>
+        )}
         {user.role === "manager" && <CustomizeBar />}
         <main className={cn("mx-auto w-full flex-1 px-3 pt-4 pb-28 sm:px-5", phone ? "max-w-5xl" : "max-w-7xl md:pb-10")}>
           {!allowed ? (

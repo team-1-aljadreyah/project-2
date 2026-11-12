@@ -869,6 +869,12 @@ export interface Profile {
   denied: string[];
   /** Money they don't see: purchase cost and profit, and the customers' debts. */
   limits: { no_profit?: boolean; no_debt?: boolean };
+  /** See only: they open their pages but can't change anything (their own account and notifications still work). */
+  read_only?: boolean;
+  /** Login hours: outside them they can't log in, and an open session ends. Days: 0 = Sunday … 6 = Saturday. */
+  hours?: { from: string; to: string; days: number[] };
+  /** Things their job can do that this profile takes away. */
+  deny_actions?: ProfileAction[];
   /** The app their menu opens on (see AppDef). */
   default_app?: string;
 }
@@ -889,6 +895,18 @@ export interface AppDef {
   roles: Role[];
   profiles: string[];
   active: boolean;
+}
+
+/** Actions a profile can take away (each one is checked by the server, export by the pages). */
+export type ProfileAction = "cancel_orders" | "discount" | "payments" | "returns" | "export";
+export const PROFILE_ACTIONS: ProfileAction[] = ["cancel_orders", "discount", "payments", "returns", "export"];
+
+/** Is this moment inside the profile's login hours? (no hours = always) */
+export function inHours(hours: Profile["hours"], now: Date) {
+  if (!hours) return true;
+  if (!hours.days.includes(now.getDay())) return false;
+  const hm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return hours.from <= hours.to ? hm >= hours.from && hm < hours.to : hm >= hours.from || hm < hours.to;
 }
 
 export const APP_ICONS = ["grid", "cart", "wallet", "boxes", "truck", "chart", "users", "store", "star", "briefcase"] as const;

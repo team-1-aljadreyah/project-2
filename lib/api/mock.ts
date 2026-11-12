@@ -1,7 +1,7 @@
 // The fake backend. It has exactly the same functions as the real one (http.ts), follows the client's rules
 // (rules.ts) and hides fields by role like a real server would. Pages never know which one they use.
 import { publish } from "../realtime";
-import { getSession } from "../auth";
+import { clearToken, getSession } from "../auth";
 import { isOffline } from "../offline";
 import { ApiError, NETWORK_ERROR } from "./errors";
 import type { Api } from "./http";
@@ -29,12 +29,13 @@ import type {
   Statement,
   StatementRow,
   User,
+  ProfileAction,
   SiteCustom,
   CustomField,
   CustomObject,
   CustomValue,
 } from "./types";
-import { worksIn } from "./types";
+import { inHours, worksIn } from "./types";
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
 import {
   approveOrder,
@@ -130,12 +131,24 @@ const db0 = () => loadDb(() => makeSeed());
 const COST_ROLES: Role[] = ["manager", "accountant", "warehouse"];
 const PROFIT_ROLES: Role[] = ["manager", "accountant"];
 const seesCost = (u: DbUser) => COST_ROLES.includes(u.role);
-// A permission profile (advanced settings) can hide money the job would otherwise see.
-const limitsOf = (u: DbUser) => {
-  if (!u.profile_id) return {};
-  const p = fullSite(db0().custom).profiles.find((x) => x.id === u.profile_id && x.role === u.role);
-  return p?.limits ?? {};
-};
+// A permission profile (advanced settings) can hide money, take actions away, make a person see-only, and
+// set their login hours.
+const profileFor = (u: DbUser) => (u.profile_id ? fullSite(db0().custom).profiles.find((x) => x.id === u.profile_id && x.role === u.role) : undefined);
+const limitsOf = (u: DbUser) => profileFor(u)?.limits ?? {};
+/** A profile took this action away: the server refuses it with the reason. */
+function mayDo(u: DbUser, action: ProfileAction) {
+  if (!profileFor(u)?.deny_actions?.includes(action)) return;
+  const what: Record<ProfileAction, string> = { cancel_orders: "إلغاء الطلبات", discount: "إعطاء الخصم", payments: "تسجيل التسديدات", returns: "تسجيل المرتجعات", export: "التصدير" };
+  fail(403, "FORBIDDEN", `ليس من صلاحيات ملفك: ${what[action]}`, "Your profile doesn't allow this");
+}
+/** Outside the profile's login hours: refused (and the session ends). */
+function checkHours(u: DbUser, now: Date) {
+  const h = profileFor(u)?.hours;
+  if (h && !inHours(h, now)) {
+    clearToken();
+    fail(401, "UNAUTHENTICATED", `خارج ساعات الدخول المسموحة لك (${h.from} – ${h.to})`, `Outside your login hours (${h.from}–${h.to})`);
+  }
+}
 const seesProfit = (u: DbUser) => PROFIT_ROLES.includes(u.role) && !limitsOf(u).no_profit;
 // The warehouse people never see debts (keeper and staff).
 const seesDebt = (u: DbUser) => u.role !== "warehouse" && u.role !== "staff" && !limitsOf(u).no_debt;
@@ -144,7 +157,12 @@ function actorOf(db: Db): DbUser {
   const s = getSession();
   const id = s?.token?.startsWith("mock.") ? Number(s.token.slice(5)) : NaN;
   const u = db.users.find((x) => x.id === id);
-  if (!u || !u.active) throw new ApiError(401, msg("انتهت الجلسة، سجّل الدخول من جديد", "Your session ended. Log in again"), undefined, "UNAUTHENTICATED");
+  if (!u || !u.active) {
+    // A deleted or stopped account: back to the login page (not an endless error).
+    clearToken();
+    throw new ApiError(401, msg("انتهت الجلسة، سجّل الدخول من جديد", "Your session ended. Log in again"), undefined, "UNAUTHENTICATED");
+  }
+  checkHours(u, new Date());
   // A keeper who covers another warehouse now (temporary cover): known once for the whole request.
   if (u.role === "warehouse") {
     const nowIso = new Date().toISOString();
@@ -169,7 +187,7 @@ async function read<T>(fn: (db: Db, actor: DbUser, now: Date) => T): Promise<T> 
 }
 
 /** Write request: runs on a copy and saves only if every rule passed (all or nothing). Needs the network. */
-async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { anonymous?: boolean } = {}): Promise<T> {
+async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { anonymous?: boolean; self?: boolean } = {}): Promise<T> {
   await wait(250 + Math.random() * 250);
   if (isOffline()) throw new ApiError(NETWORK_ERROR, msg("لا يوجد اتصال بالإنترنت", "No internet connection"), undefined, "NETWORK");
   const draft = structuredClone(db0());
@@ -177,6 +195,8 @@ async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { ano
   sweep(draft, now);
   const before = liveMarks(draft);
   const actor = opts.anonymous ? (null as unknown as DbUser) : actorOf(draft);
+  // A see-only profile changes nothing but its own account and notifications (`self`).
+  if (actor && !opts.self && profileFor(actor)?.read_only) fail(403, "FORBIDDEN", "ملفك للعرض فقط: لا يمكنك تغيير شيء", "Your profile is see-only");
   const result = fn(draft, actor, now);
   saveDb(draft);
   emitChange();
@@ -187,6 +207,9 @@ async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { ano
   if (after.orders !== before.orders) publish("orders", "changed");
   return structuredClone(result);
 }
+
+/** A change to the person's own things (account, notifications): allowed even for a see-only profile. */
+const selfWrite = <T>(fn: (db: Db, actor: DbUser, now: Date) => T) => write(fn, { self: true });
 
 /** Small marks to see what a write changed (for the live events). */
 function liveMarks(db: Db) {
@@ -486,6 +509,8 @@ export const mockApi: Api = {
           fail(401, "UNAUTHENTICATED", "رقم الهاتف أو كلمة المرور غير صحيحة", "Wrong phone number or password");
         }
         if (!u.active) fail(403, "FORBIDDEN", "هذا الحساب موقوف، راجع المدير", "This account is disabled. Contact the manager");
+        const hours = profileFor(u)?.hours;
+        if (hours && !inHours(hours, now)) fail(403, "FORBIDDEN", `لا يمكنك الدخول الآن: ساعات دخولك ${hours.from} – ${hours.to}`, `You can't log in now: your hours are ${hours.from}–${hours.to}`);
         audit(db, u, "login", "user", u.id, `تسجيل دخول ${u.name}`, `${u.name} logged in`, now);
         const { password: _p, ...user } = u;
         void _p;
@@ -554,10 +579,10 @@ export const mockApi: Api = {
   cancelExpense: (id, reason) => write((db, a, now) => cancelExpense(db, a, id, reason, now)),
 
   // Your own account
-  setMyPhoto: (photo) => write((db, a) => strip(setMyPhoto(db, a, photo))),
-  changeMyPassword: (current, next) => write((db, a) => changeMyPassword(db, a, current, next)),
-  removeMyShop: (customerId, password) => write((db, a, now) => strip(removeMyShop(db, a, customerId, password, now))),
-  deleteMyAccount: (password) => write((db, a, now) => deleteMyAccount(db, a, password, now)),
+  setMyPhoto: (photo) => write((db, a) => strip(setMyPhoto(db, a, photo)), { self: true }),
+  changeMyPassword: (current, next) => write((db, a) => changeMyPassword(db, a, current, next), { self: true }),
+  removeMyShop: (customerId, password) => write((db, a, now) => strip(removeMyShop(db, a, customerId, password, now)), { self: true }),
+  deleteMyAccount: (password) => write((db, a, now) => deleteMyAccount(db, a, password, now), { self: true }),
 
   // Users
   setUserProfile: (id, profileId) =>
@@ -1310,7 +1335,7 @@ export const mockApi: Api = {
   chatThreads: () => read((db, a) => chatThreads(db, a)),
   getChat: (customerId) => read((db, a) => chatOf(db, a, customerId)),
   replyChat: (customerId, text) => write((db, a, now) => replyChat(db, a, customerId, text, now)),
-  markChatRead: (customerId) => write((db, a) => markChatRead(db, a, customerId)),
+  markChatRead: (customerId) => write((db, a) => markChatRead(db, a, customerId), { self: true }),
 
   // Delivery proof
   dispatchDelivery: (code) => write((db, a, now) => orderView(dispatchDelivery(db, a, code, now), a)),
@@ -1322,7 +1347,7 @@ export const mockApi: Api = {
   unlockDelivery: (id) => write((db, a, now) => orderView(unlockDelivery(db, a, id, now), a)),
   myShops: () => read((db, a) => myShops(db, a)),
   switchShop: (customerId) =>
-    write((db, a) => {
+    selfWrite((db, a) => {
       const { password: _p, ...user } = switchShop(db, a, customerId);
       void _p;
       return user;
@@ -1357,14 +1382,26 @@ export const mockApi: Api = {
       if (!o || !canSeeOrder(a, o)) notFound();
       return db.delivery_photos?.[id] ?? null;
     }),
-  createOrder: (input) => write((db, a, now) => createOrder(db, a, input, now)),
+  createOrder: (input) =>
+    write((db, a, now) => {
+      if ((input.discount_percent ?? 0) > 0) mayDo(a, "discount");
+      return createOrder(db, a, input, now);
+    }),
   acceptOrder: (id) => write((db, a, now) => orderView(acceptOrder(db, a, id, now), a)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
   prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),
   updateOrder: (id, input) => write((db, a, now) => orderView(updateOrder(db, a, id, input, now), a)),
-  setOrderDiscount: (id, percent) => write((db, a, now) => orderView(setOrderDiscount(db, a, id, percent, now), a)),
-  cancelOrder: (id, reason) => write((db, a, now) => cancelOrder(db, a, id, reason, now)),
+  setOrderDiscount: (id, percent) =>
+    write((db, a, now) => {
+      if (percent > 0) mayDo(a, "discount");
+      return orderView(setOrderDiscount(db, a, id, percent, now), a);
+    }),
+  cancelOrder: (id, reason) =>
+    write((db, a, now) => {
+      mayDo(a, "cancel_orders");
+      return cancelOrder(db, a, id, reason, now);
+    }),
 
   // Invoices
   listInvoices: () =>
@@ -1410,7 +1447,11 @@ export const mockApi: Api = {
       if (!c || !canSeeCustomer(a, c)) notFound();
       return allocate(db, customerId, Math.max(0, amount)).allocations;
     }),
-  createPayment: (input) => write((db, a, now): Payment => createPayment(db, a, input, now)),
+  createPayment: (input) =>
+    write((db, a, now): Payment => {
+      mayDo(a, "payments");
+      return createPayment(db, a, input, now);
+    }),
 
   // Online payment (Qi Card, demo gateway)
   startOnlinePayment: (input) => write((db, a, now) => startOnline(db, a, input, now)),
@@ -1447,7 +1488,11 @@ export const mockApi: Api = {
       if (!inv || !canSeeOrder(a, inv)) notFound();
       return returnView(r);
     }),
-  createReturn: (input) => write((db, a, now) => returnView(createReturn(db, a, input, now))),
+  createReturn: (input) =>
+    write((db, a, now) => {
+      mayDo(a, "returns");
+      return returnView(createReturn(db, a, input, now));
+    }),
 
   // Commission
   commissions: (month) =>
@@ -1591,13 +1636,13 @@ export const mockApi: Api = {
         .reverse(),
     ),
   markRead: (id) =>
-    write((db) => {
+    selfWrite((db) => {
       const n = db.notifications.find((x) => x.id === id);
       if (n) n.read = true;
       return null;
     }),
   markAllRead: () =>
-    write((db, a) => {
+    selfWrite((db, a) => {
       for (const n of db.notifications) if (n.roles.includes(a.role) && (!n.user_id || n.user_id === a.id)) n.read = true;
       return null;
     }),
