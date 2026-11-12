@@ -25,17 +25,19 @@ export default function InvoicesPage() {
   // A Map finds a name in one step, instead of searching the whole customer list for every row.
   const names = useMemo(() => new Map((customers.data ?? []).map((c) => [c.id, c.name])), [customers.data]);
   const cName = (id: number) => names.get(id) ?? `#${id}`;
-  const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? "-";
+  const rName = (id: number) => lookups.reps.find((r) => r.id === id)?.name ?? (id === 0 ? tr("بيع مباشر", "Counter") : "-");
+  // A counter sale: «زبون مباشر» and the buyer's name when he gave it.
+  const who = (i: Invoice) => (i.counter ? [tr("زبون مباشر", "Walk-in"), i.counter.buyer_name].filter(Boolean).join(" · ") : cName(i.customer_id));
   const wh = useWarehouseFilter();
   const all = (invoices.data ?? []).filter((i) => inWarehouse(wh, i.warehouse_id));
   const pass = (i: Invoice, s: typeof status) => s === "all" || (s === "unpaid" ? i.status !== "paid" : i.status === s);
-  const rows = all.filter((i) => pass(i, status) && matches(q, i.number, cName(i.customer_id), rName(i.rep_id)));
+  const rows = all.filter((i) => pass(i, status) && matches(q, i.number, who(i), rName(i.rep_id)));
   const showProfit = user.role === "manager" || user.role === "accountant";
 
   const columns: Column<Invoice>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (i) => <span className="num">{i.number}</span> },
     { key: "d", head: tr("التاريخ", "Date"), cell: (i) => date(i.date) },
-    { key: "c", head: tr("الزبون", "Customer"), cell: (i) => <RefLink href={`/customers/${i.customer_id}`}>{cName(i.customer_id)}</RefLink> },
+    { key: "c", head: tr("الزبون", "Customer"), cell: (i) => (i.counter ? who(i) : <RefLink href={`/customers/${i.customer_id}`}>{cName(i.customer_id)}</RefLink>) },
     { key: "r", head: tr("المندوب", "Rep"), cell: (i) => rName(i.rep_id) },
     { key: "t", head: tr("المبلغ", "Total"), cell: (i) => <Money value={i.total} />, align: "end" },
     { key: "p", head: tr("المسدد", "Paid"), cell: (i) => <Money value={i.paid + i.returned} className="text-muted" />, align: "end" },
@@ -70,7 +72,7 @@ export default function InvoicesPage() {
               onClick={() =>
                 downloadCsv("invoices", [
                   [tr("الرقم", "No."), tr("التاريخ", "Date"), tr("الزبون", "Customer"), tr("المندوب", "Rep"), tr("المبلغ", "Total"), tr("الباقي", "Left")],
-                  ...rows.map((i) => [i.number, date(i.date), cName(i.customer_id), rName(i.rep_id), i.total, Math.max(0, i.remaining)]),
+                  ...rows.map((i) => [i.number, date(i.date), who(i), rName(i.rep_id), i.total, Math.max(0, i.remaining)]),
                 ])
               }
             >
@@ -105,7 +107,7 @@ export default function InvoicesPage() {
             mobile={(i) => (
               <div className="space-y-1">
                 <div className="flex justify-between gap-2">
-                  <span className="font-semibold">{cName(i.customer_id)}</span>
+                  <span className="font-semibold">{who(i)}</span>
                   <Money value={i.total} className="font-semibold" />
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted">

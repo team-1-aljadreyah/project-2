@@ -51,20 +51,21 @@ export default function InvoiceView() {
   const myReturns = (returns.data ?? []).filter((r) => r.invoice_id === i.id);
   const myPays = (payments.data ?? []).filter((p) => p.allocations.some((a) => a.invoice_id === i.id));
   const seesMoney = user.role !== "warehouse";
-  const canPay = seesMoney && user.role !== "shop" && i.remaining > 0;
+  const canPay = seesMoney && user.role !== "shop" && i.remaining > 0 && !i.counter;
   const canReturn = ["manager", "accountant", "rep"].includes(user.role) && i.lines.some((l) => l.pieces > l.returned_pieces);
   const showCost = user.role === "manager" || user.role === "accountant";
 
   const share = () => {
     const lines = i.lines.map((l) => `- ${itemById.get(l.item_id)?.name}: ${l.qty} ${l.unit === "carton" ? "كارتون" : "قطعة"} = ${money(l.total)}`).join("\n");
     const text = `${brand.company}\nفاتورة ${i.number}\n${c?.name ?? ""}\n${lines}\nالمجموع: ${money(i.total)}\nالباقي: ${money(Math.max(0, i.remaining))}`;
+    if (i.counter) return openWhatsApp(`${brand.company}\nفاتورة ${i.number}\n${lines}\nالمجموع: ${money(i.total)} (مدفوعة)`, i.counter.buyer_phone);
     openWhatsApp(`${text}\n${pageLink(`/client/invoices/${i.id}`)}`, c?.phone);
   };
 
   return (
     <>
       <PageHeader
-        back={user.role === "shop" ? "/statement" : "/invoices"}
+        back={user.role === "shop" ? "/statement" : i.counter && user.role === "warehouse" ? "/counter" : "/invoices"}
         title={
           <span className="flex flex-wrap items-center gap-2">
             {tr("فاتورة", "Invoice")} <span className="num">{i.number}</span> {seesMoney && <InvoiceStatusBadge status={i.status} />}
@@ -122,21 +123,46 @@ export default function InvoiceView() {
         </div>
 
         <div className="grid gap-4 border-b border-line py-5 text-sm sm:grid-cols-2">
-          <div>
-            <p className="text-xs text-muted">{tr("إلى", "Bill to")}</p>
-            <p className="font-semibold">
-              <RefLink href={c && `/customers/${c.id}`}>{c?.name}</RefLink>
-            </p>
-            <p className="text-muted">{c?.owner_name}</p>
-            <p className="text-muted">
-              {c?.address} · <span dir="ltr">{c?.phone}</span>
-            </p>
-          </div>
-          <div className="sm:text-end">
-            <p className="text-xs text-muted">{tr("المندوب", "Rep")}</p>
-            <p className="font-semibold">{rep?.name}</p>
-            <p className="text-muted">{name(lookups.tiers.find((t) => t.id === c?.tier_id))}</p>
-          </div>
+          {i.counter ? (
+            <>
+              {/* A counter sale: the buyer (if he gave his name), the keeper who sold, paid in full at the warehouse. */}
+              <div>
+                <p className="text-xs text-muted">{tr("إلى", "Bill to")}</p>
+                <p className="font-semibold">{i.counter.buyer_name || tr("زبون مباشر", "Walk-in buyer")}</p>
+                {i.counter.buyer_phone && (
+                  <p className="num text-muted" dir="ltr">
+                    {i.counter.buyer_phone}
+                  </p>
+                )}
+                <p className="text-muted">
+                  {tr("بيع مباشر من المخزن", "Sold at the warehouse")} · {i.counter.method === "transfer" ? tr("مدفوعة بالتحويل", "paid by transfer") : tr("مدفوعة نقداً", "paid in cash")}
+                </p>
+              </div>
+              <div className="sm:text-end">
+                <p className="text-xs text-muted">{tr("البائع", "Sold by")}</p>
+                <p className="font-semibold">{i.created_by.name}</p>
+                <p className="text-muted">{name(lookups.tiers.find((t) => t.id === i.counter?.tier_id))}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="text-xs text-muted">{tr("إلى", "Bill to")}</p>
+                <p className="font-semibold">
+                  <RefLink href={c && `/customers/${c.id}`}>{c?.name}</RefLink>
+                </p>
+                <p className="text-muted">{c?.owner_name}</p>
+                <p className="text-muted">
+                  {c?.address} · <span dir="ltr">{c?.phone}</span>
+                </p>
+              </div>
+              <div className="sm:text-end">
+                <p className="text-xs text-muted">{tr("المندوب", "Rep")}</p>
+                <p className="font-semibold">{rep?.name}</p>
+                <p className="text-muted">{name(lookups.tiers.find((t) => t.id === c?.tier_id))}</p>
+              </div>
+            </>
+          )}
         </div>
 
         <table className="mt-4 w-full text-sm">

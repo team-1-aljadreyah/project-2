@@ -42,6 +42,7 @@ import { EXPENSE_APPROVAL_ABOVE, RULE_FIELDS, inHours, repDoes, worksIn } from "
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
 import {
   approveOrder,
+  counterSale,
   setOrderDiscount,
   updateOrder,
   approveShop,
@@ -382,6 +383,8 @@ function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | 
   };
   const labelOf = (g: typeof group, id: number): [string, string] => {
     if (g === "rep") {
+      // Rep 0: the counter sales (sold at the warehouse, no rep).
+      if (id === 0) return ["بيع مباشر", "Counter sales"];
       const u = db.users.find((x) => x.id === id);
       return [u?.name ?? "-", u?.name ?? "-"];
     }
@@ -1550,6 +1553,12 @@ export const mockApi: Api = {
         return st;
       }
       return o;
+    }),
+  // The keeper's counter sale: order, invoice (stock out) and payment in full, at once.
+  counterSale: (input) =>
+    write((db, a, now) => {
+      const v = invoiceView(db, counterSale(db, a, input, now), seesProfit(a));
+      return seesDebt(a) ? v : { ...v, paid: 0, remaining: 0 };
     }),
   acceptOrder: (id) => write((db, a, now) => orderView(acceptOrder(db, a, id, now), a)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),

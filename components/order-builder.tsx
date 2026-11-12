@@ -54,7 +54,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
   const router = useAppRouter();
   const toast = useToast();
   const offline = useOffline();
-  const customers = useLoad(() => api.listCustomers(), []);
+  const customers = useLoad(() => api.listCustomers().then((cs) => cs.filter((c) => !c.walk_in)), []);
 
   const [draft, setDraft] = useState<Draft>(() => readDraft(user.id, lookups.warehouses[0].id, fixedCustomerId ?? preselectCustomerId ?? null));
   const [q, setQ] = useState("");

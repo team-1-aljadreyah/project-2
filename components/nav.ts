@@ -28,6 +28,7 @@ import {
   Users,
   UserCog,
   Wallet,
+  HandCoins,
   Banknote,
   type LucideIcon,
 } from "lucide-react";
@@ -67,6 +68,8 @@ export const NAV: NavItem[] = [
     group: "sales",
     mobile: ["manager", "warehouse", "accountant", "shop", "staff"],
   },
+  // The keeper sells to someone who came to the warehouse and pays on the spot.
+  { href: "/counter", ar: "بيع مباشر", en: "Counter sale", icon: HandCoins, roles: ["warehouse"], group: "sales" },
   { href: "/invoices", ar: "الفواتير", en: "Invoices", icon: ReceiptText, roles: ["manager", "accountant", "rep", "shop"], group: "sales", mobile: ["shop"] },
   { href: "/returns", ar: "المرتجعات", en: "Returns", icon: Undo2, roles: ["manager", "accountant", "rep", "warehouse"], group: "sales" },
   {

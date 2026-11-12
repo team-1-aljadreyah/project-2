@@ -3,7 +3,7 @@
 import { useRemembered } from "@/lib/remember";
 
 import { useState } from "react";
-import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, PackagePlus, PackageX, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, HandCoins, PackagePlus, PackageX, Wand2 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { hasWarehouseFilter, setWarehouseFilter, useMyWarehouses, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
@@ -107,6 +107,11 @@ export default function StockPage() {
             )}
             {user.role !== "accountant" && user.role !== "staff" && (
             <>
+              {user.role === "warehouse" && (
+                <Button href="/counter">
+                  <HandCoins className="size-4" /> {tr("بيع مباشر", "Counter sale")}
+                </Button>
+              )}
               <Button href="/stocktakes">
                 <ClipboardCheck className="size-4" /> {tr("جرد", "Count")}
               </Button>
