@@ -1,5 +1,7 @@
 "use client";
 
+import { BarcodeScanner, ScanButton } from "@/components/barcode-scanner";
+
 import { useRemembered } from "@/lib/remember";
 import { useCustomColumns } from "@/components/custom-fields";
 
@@ -32,6 +34,8 @@ export default function ItemsPage() {
       })
       .catch((e) => toast("danger", errorText(e, tr)));
   const [q, setQ] = useRemembered("items:q", "");
+  // A scanned barcode goes into the search (it matches the barcode).
+  const [scanning, setScanning] = useState(false);
   const [cat, setCat] = useRemembered("items:cat", "");
   const [f, setF] = useState<"all" | "low" | "inactive">("all");
   const [add, setAdd] = useState(false);
@@ -132,7 +136,10 @@ export default function ItemsPage() {
                 </option>
               ))}
             </Select>
-            <SearchBox value={q} onChange={setQ} placeholder={tr("الاسم أو الباركود", "Name or barcode")} className="sm:w-64" />
+            <div className="flex gap-2">
+              <SearchBox value={q} onChange={setQ} placeholder={tr("الاسم أو الباركود", "Name or barcode")} className="sm:w-64" />
+              <ScanButton onClick={() => setScanning(true)} />
+            </div>
           </div>
         </div>
         <DataTable
@@ -162,6 +169,15 @@ export default function ItemsPage() {
         />
       </Card>
       {add && <ItemForm open onClose={() => setAdd(false)} />}
+      {scanning && (
+        <BarcodeScanner
+          onClose={() => setScanning(false)}
+          onCode={(code) => {
+            setQ(code);
+            setScanning(false);
+          }}
+        />
+      )}
     </>
   );
 }
