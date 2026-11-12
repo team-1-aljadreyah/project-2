@@ -31,6 +31,9 @@ import {
   HandCoins,
   Banknote,
   type LucideIcon,
+  Clapperboard,
+  Search,
+  UserRound,
 } from "lucide-react";
 import { ordered } from "@/lib/api/site-defaults";
 import { repDoes, type RepKind, type Role, type SiteCustom } from "@/lib/api/types";
@@ -57,7 +60,10 @@ export const NAV: NavItem[] = [
   { href: "/hall", ar: "قاعة التجهيز", en: "Picking hall", icon: Warehouse, roles: ["warehouse"], group: "main", mobile: ["warehouse"] },
   { href: "/map", ar: "خريطة المخازن", en: "Warehouse map", icon: MapIcon, roles: ["manager", "warehouse", "accountant", "staff"], group: "main" },
   { href: "/rep", ar: "الرئيسية", en: "Home", icon: Home, roles: ["rep"], group: "main", mobile: ["rep"], kind: "sales" },
-  { href: "/shop", ar: "اطلب الآن", en: "Order now", icon: Store, roles: ["shop"], group: "main", mobile: ["shop"] },
+  // The shop owner's app: five tabs (home, search, our products, my orders, my account).
+  { href: "/shop", ar: "الرئيسية", en: "Home", icon: Store, roles: ["shop"], group: "main", mobile: ["shop"] },
+  { href: "/search", ar: "بحث", en: "Search", icon: Search, roles: ["shop"], group: "main", mobile: ["shop"] },
+  { href: "/showcase", ar: "منتجاتنا", en: "Our products", icon: Clapperboard, roles: ["shop"], group: "main", mobile: ["shop"] },
   { href: "/orders/new", ar: "طلب جديد", en: "New order", icon: ShoppingCart, roles: ["rep", "manager"], group: "sales", mobile: ["rep"], kind: "sales" },
   {
     href: "/orders",
@@ -70,7 +76,7 @@ export const NAV: NavItem[] = [
   },
   // The keeper sells to someone who came to the warehouse and pays on the spot.
   { href: "/counter", ar: "بيع مباشر", en: "Counter sale", icon: HandCoins, roles: ["warehouse"], group: "sales" },
-  { href: "/invoices", ar: "الفواتير", en: "Invoices", icon: ReceiptText, roles: ["manager", "accountant", "rep", "shop"], group: "sales", mobile: ["shop"] },
+  { href: "/invoices", ar: "الفواتير", en: "Invoices", icon: ReceiptText, roles: ["manager", "accountant", "rep", "shop"], group: "sales" },
   { href: "/returns", ar: "المرتجعات", en: "Returns", icon: Undo2, roles: ["manager", "accountant", "rep", "warehouse"], group: "sales" },
   {
     href: "/deliveries",
@@ -83,7 +89,8 @@ export const NAV: NavItem[] = [
     kind: "delivery",
   },
   { href: "/customers", ar: "الزبائن والديون", en: "Customers", icon: Users, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["accountant"], kind: "sales" },
-  { href: "/statement", ar: "كشف حسابي", en: "My statement", icon: FileText, roles: ["shop"], group: "money", mobile: ["shop"] },
+  { href: "/statement", ar: "كشف حسابي", en: "My statement", icon: FileText, roles: ["shop"], group: "money" },
+  { href: "/account", ar: "حسابي", en: "My account", icon: UserRound, roles: ["shop"], group: "money", mobile: ["shop"] },
   { href: "/payments", ar: "التسديدات", en: "Payments", icon: Wallet, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["rep", "manager", "accountant"] },
   { href: "/expenses", ar: "الصرفيات", en: "Expenses", icon: Banknote, roles: ["accountant", "manager"], group: "money", mobile: ["accountant"] },
   { href: "/commissions", ar: "العمولات", en: "Commission", icon: Percent, roles: ["manager", "accountant", "rep"], group: "money", kind: "sales" },

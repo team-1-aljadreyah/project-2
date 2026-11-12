@@ -470,6 +470,13 @@ function setProfileFrom(db: Db, u: DbUser, id: string | null | undefined) {
 
 /** Advanced settings as saved: every profile and app must make sense (names, jobs, colors, pages). */
 function checkAdvanced(s: SiteCustom) {
+  // The store's ads: a picture (not too big), a title, a link to something in the store.
+  if (s.banners.length > 12) fail(422, "VALIDATION", "12 إعلاناً على الأكثر", "12 ads at most");
+  for (const b of s.banners) {
+    if (!b.id || !b.title?.trim() || b.title.length > 60) fail(422, "VALIDATION", "عنوان الإعلان مطلوب (60 حرفاً على الأكثر)", "The ad needs a title (60 letters at most)");
+    if (!/^data:image\/(jpeg|png|webp);base64,/.test(b.image ?? "") || b.image.length > 600_000) fail(422, "VALIDATION", "صورة الإعلان غير صحيحة أو كبيرة جداً", "The ad's picture is wrong or too big");
+    if (!["category", "brand", "item", "search"].includes(b.link?.kind) || typeof b.link.value !== "string") fail(422, "VALIDATION", "اختر ما يفتحه الإعلان", "Choose what the ad opens");
+  }
   const ids = new Set<string>();
   for (const p of s.profiles) {
     if (!p.id || ids.has(p.id)) fail(422, "VALIDATION", "ملف مكرر", "Duplicate profile");
@@ -854,6 +861,7 @@ export const mockApi: Api = {
         name: it.name,
         name_en: it.name_en,
         category: it.category,
+        ...(it.brand ? { brand: it.brand } : {}),
         ...(it.image ? { image: it.image } : {}),
         pieces_per_carton: it.pieces_per_carton,
         ...(it.pack_name ? { pack_name: it.pack_name } : {}),
@@ -1210,6 +1218,7 @@ export const mockApi: Api = {
       if (input.min_stock < 0) errors.min_stock = msg("لا يكون سالباً", "Can't be negative");
       if (input.weight_kg !== undefined && !(input.weight_kg > 0 && input.weight_kg <= 100)) errors.weight_kg = msg("بين 0.01 و 100 كغم", "Between 0.01 and 100 kg");
       if (input.commission_percent < 0 || input.commission_percent > 50) errors.commission_percent = msg("بين 0 و 50", "Between 0 and 50");
+      if (input.brand && input.brand.trim().length > 40) errors.brand = msg("اسم قصير (40 حرفاً على الأكثر)", "A short name (40 letters at most)");
       // The units: two names (a few letters each) and which are sold. A pack of one is the single itself.
       const pack_name = input.pack_name?.trim() || "كارتون";
       const piece_name = input.piece_name?.trim() || "قطعة";
@@ -1224,6 +1233,7 @@ export const mockApi: Api = {
       });
       input = {
         ...input,
+        brand: input.brand?.trim() || undefined,
         pack_name: pack_name === "كارتون" ? undefined : pack_name,
         piece_name: piece_name === "قطعة" ? undefined : piece_name,
         sells: sells === "both" ? undefined : sells,
@@ -1251,7 +1261,7 @@ export const mockApi: Api = {
         }
         Object.assign(it, { ...input, name: input.name.trim(), name_en: input.name_en.trim() });
         // Back to the usual names / both units: the old values go.
-        for (const k of ["pack_name", "piece_name", "sells"] as const) if (input[k] === undefined) delete it[k];
+        for (const k of ["pack_name", "piece_name", "sells", "brand"] as const) if (input[k] === undefined) delete it[k];
         if (changed.length) {
           const t = changed.map((p) => `${db.tiers.find((x) => x.id === p.tier_id)?.name}: ${p.carton_price.toLocaleString("en")}/${p.piece_price.toLocaleString("en")}`).join("، ");
           audit(db, a, "price_change", "item", it.id, `تغيير سعر ${it.name} (${t}). الفواتير القديمة لا تتغير`, `Price change for ${it.name_en}. Old invoices keep their prices`, now);

@@ -1,5 +1,7 @@
 "use client";
 
+import { BannerSettings } from "@/components/shop/banner-settings";
+
 import Link from "next/link";
 import { SlidersHorizontal } from "lucide-react";
 
@@ -49,6 +51,8 @@ export default function SettingsPage() {
           </span>
           <span className="text-sm font-semibold text-primary-ink">{tr("ادخل ←", "Open →")}</span>
         </Link>
+        {/* The ads at the top of the shop owners' store */}
+        <BannerSettings />
         <Card className="lg:col-span-2">
           <CardHeader
             title={tr("هوية الموقع", "Site identity")}

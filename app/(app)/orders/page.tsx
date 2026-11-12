@@ -1,5 +1,7 @@
 "use client";
 
+import { ShopOrdersTabs } from "@/components/shop/orders-tabs";
+
 import { useRemembered } from "@/lib/remember";
 import { useCustomColumns } from "@/components/custom-fields";
 
@@ -60,6 +62,7 @@ export default function OrdersPage() {
 
   return (
     <>
+      <ShopOrdersTabs />
       <PageHeader
         title={tr("الطلبات", "Orders")}
         subtitle={user.role === "warehouse" ? tr("الطلبات التي تنتظر التجهيز من مخزنك", "Orders waiting to be issued from your warehouse") : undefined}

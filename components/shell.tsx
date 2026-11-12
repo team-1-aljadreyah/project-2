@@ -217,7 +217,9 @@ function useNav(user: User, all = false) {
   return app.pages.map((h) => shown.find((n) => n.href === h)).filter((n): n is (typeof shown)[number] => !!n);
 }
 
-function isActive(path: string, href: string) {
+function isActive(path: string, href: string, role?: string) {
+  // The shop owner's «طلبياتي» holds his orders, invoices and statement.
+  if (href === "/orders" && role === "shop") return /^\/(orders|invoices|statement|returns)(\/|$)/.test(path);
   if (href === "/orders") return path === "/orders" || (/^\/orders\/\d+/.test(path) && true);
   return path === href || path.startsWith(href + "/");
 }
@@ -324,16 +326,17 @@ function BottomBar({ user, phone }: { user: User; phone: boolean }) {
   const [openAt, setOpenAt] = useState<string | null>(null);
   const open = openAt === path;
   const setOpen = (v: boolean) => setOpenAt(v ? path : null);
-  const main = nav.filter((n) => n.mobile?.includes(user.role)).slice(0, 4);
-  const rest = nav.filter((n) => !main.includes(n));
-  // Every page already in the bar (the shop owner): no «المزيد» (it would open an empty sheet).
+  // The shop owner: his five tabs, and nothing under «المزيد» (the rest is inside them). Others: four and more.
+  const shop = user.role === "shop";
+  const main = nav.filter((n) => n.mobile?.includes(user.role)).slice(0, shop ? 5 : 4);
+  const rest = shop ? [] : nav.filter((n) => !main.includes(n));
   const more = rest.length > 0;
   return (
     <>
       <nav data-tour="menu" className={cn("no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur", !phone && "md:hidden")}>
-        <div className={cn("mx-auto grid max-w-lg", more ? "grid-cols-5" : main.length === 4 ? "grid-cols-4" : main.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+        <div className={cn("mx-auto grid max-w-lg", more || main.length === 5 ? "grid-cols-5" : main.length === 4 ? "grid-cols-4" : main.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
           {main.map((n) => {
-            const active = isActive(path, n.href);
+            const active = isActive(path, n.href, user.role);
             return (
               <Link
                 key={n.href}
@@ -347,7 +350,7 @@ function BottomBar({ user, phone }: { user: User; phone: boolean }) {
                 <span className={cn("flex items-center justify-center rounded-full transition", phone ? "h-8 w-14" : "h-7 w-12", active && (phone ? "bg-action/15 text-action" : "bg-primary-soft"))}>
                   <n.icon className={phone ? "size-6" : "size-5"} aria-hidden />
                 </span>
-                <span className="max-w-full truncate px-1">{tr(n.ar, n.en)}</span>
+                <span className="max-w-full truncate px-1">{shop && n.href === "/orders" ? tr("طلبياتي", "My orders") : tr(n.ar, n.en)}</span>
               </Link>
             );
           })}

@@ -18,7 +18,7 @@ import { useRealtime } from "@/lib/realtime";
 import { DeliveryPanel } from "@/components/delivery/status";
 import { ShipmentTracker, useRepLocations } from "@/components/delivery/live-map";
 import { OrderTotals } from "@/components/discount";
-import { editOrderInBag } from "@/components/shop-store";
+import { editOrderInBag } from "@/lib/shop-bag";
 import { PrepareOrder } from "@/components/prepare-order";
 import { ShipmentsCard, VehicleBox } from "@/components/vehicles";
 import { piecesOf, useIdParam } from "@/lib/utils";

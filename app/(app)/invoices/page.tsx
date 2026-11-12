@@ -1,5 +1,7 @@
 "use client";
 
+import { ShopOrdersTabs } from "@/components/shop/orders-tabs";
+
 import { useRemembered } from "@/lib/remember";
 
 import { useMemo } from "react";
@@ -63,6 +65,7 @@ export default function InvoicesPage() {
 
   return (
     <>
+      <ShopOrdersTabs />
       <PageHeader
         title={tr("الفواتير", "Invoices")}
         subtitle={tr("الفاتورة تحفظ السعر وقت البيع، تغيير الأسعار لاحقاً لا يغيّرها", "An invoice keeps the price at the time of sale. Later price changes don't touch it")}
