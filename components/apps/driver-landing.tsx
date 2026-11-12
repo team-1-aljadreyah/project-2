@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { AppFooter, AppHeader, BigButton, Blobs, CountUp, GradientText, InstallCard, Marquee, PhoneDemo, Questions, Rivers, SectionHead, StickyActions, IDENTITY, useAppEntry } from "./kit";
+import { AppFooter, AppHeader, BigButton, Blobs, CountUp, GradientText, InstallButton, InstallCard, Marquee, PhoneDemo, Questions, Rivers, SectionHead, StickyActions, IDENTITY, useAppEntry } from "./kit";
 
 // The page's two colors (the identity of the reps' app, see IDENTITY in ./kit).
 const C = IDENTITY.driver;
@@ -73,13 +73,14 @@ export function DriverLanding() {
                   "Today's shops in order on the map, the shipments in your van, and a hand-over with the shop owner's PIN and a photo that protects you. No papers, even without internet.",
                 )}
               </motion.p>
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="mt-8 hidden flex-wrap justify-center gap-3 sm:flex lg:justify-start">
-                <BigButton href={main.href} color={C.main}>
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="mt-8 flex flex-wrap justify-center gap-3 lg:justify-start">
+                <BigButton className="max-sm:hidden" href={main.href} color={C.main}>
                   {main.label} <Forward className="size-5" />
                 </BigButton>
-                <BigButton href="#day" ghost>
+                <BigButton className="max-sm:hidden" href="#day" ghost>
                   {tr("شاهد يومك", "See your day")}
                 </BigButton>
+                <InstallButton app="driver" variant="ghost" />
               </motion.div>
               <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} className="mt-7 flex flex-wrap justify-center gap-2 text-sm lg:justify-start">
                 {[
@@ -157,7 +158,7 @@ export function DriverLanding() {
         </section>
 
         <section className="px-4 pb-10">
-          <InstallCard app="driver" color={C.main} />
+          <InstallCard app="driver" />
         </section>
 
         <Rivers app="driver" className="mb-6" />
@@ -189,6 +190,7 @@ export function DriverLanding() {
         <BigButton href={main.href} color={C.main} className="flex-1">
           {main.label} <Forward className="size-5" />
         </BigButton>
+        <InstallButton app="driver" variant="icon" className="size-13 rounded-2xl" />
       </StickyActions>
     </div>
   );

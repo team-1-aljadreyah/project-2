@@ -7,8 +7,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, animate, motion, useInView } from "motion/react";
-import { ChevronDown, Download, Share } from "lucide-react";
+import { Check, ChevronDown, Download, MoreVertical, Plus, Share, X } from "lucide-react";
 import { BrandName, LogoMark } from "@/components/logo";
 import { LanguageSwitch } from "@/components/switches";
 import { homeOf, useSession } from "@/lib/auth";
@@ -114,6 +115,7 @@ export function AppHeader({ app, links, cta }: { app: AppKind; links: { href: st
           ))}
         </div>
         <div className="ms-auto flex items-center gap-1.5 lg:ms-0">
+          <InstallButton app={app} variant="icon" />
           <LanguageSwitch onBrand />
           <Link href={cta.href} className="shine hidden h-10 items-center rounded-full bg-white px-4 text-sm font-bold text-[#0b0c0e] transition hover:bg-white/90 sm:flex">
             {cta.label}
@@ -268,59 +270,214 @@ export function Questions({ items, color }: { items: { q: string; a: string }[];
   );
 }
 
-/** The browser's "install this app" offer (Chrome / Android), kept until the button is pressed. */
+// ---------- Installing the app ("download") ----------
+// Chrome / Edge / Android offer to install with an event ("beforeinstallprompt") that comes once, early, and
+// only when they decide the page can be installed. It is caught here, as soon as this file loads, and kept for
+// the "download" buttons. When there is no offer (Safari, Firefox, or Chrome didn't make one), the buttons
+// open the steps for the person's device instead, and on a computer a QR code to open the app on the phone.
+
 interface InstallPrompt extends Event {
   prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
-const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.matchMedia("(display-mode: standalone)").matches;
 
-/** "Put it on your home screen": the browser's install button when it offers one, the Share-menu way on iPhone. */
-export function InstallCard({ app, color }: { app: AppKind; color: string }) {
+let offer: InstallPrompt | null = null;
+let installed = false;
+const installSubs = new Set<() => void>();
+const tellInstall = () => installSubs.forEach((f) => f());
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    offer = e as InstallPrompt;
+    tellInstall();
+  });
+  window.addEventListener("appinstalled", () => {
+    installed = true;
+    offer = null;
+    tellInstall();
+  });
+}
+
+type Device = "ios" | "android" | "desktop";
+const deviceOf = (): Device => (/iphone|ipad|ipod/i.test(navigator.userAgent) ? "ios" : /android/i.test(navigator.userAgent) ? "android" : "desktop");
+const standalone = () => window.matchMedia("(display-mode: standalone)").matches || installed;
+const subInstall = (fn: () => void) => {
+  installSubs.add(fn);
+  return () => {
+    installSubs.delete(fn);
+  };
+};
+
+/** Can the browser install it right now with one tap? Is it already open as the installed app? Which device? */
+function useInstall() {
+  const canPrompt = useSyncExternalStore(subInstall, () => !!offer, () => false);
+  const isApp = useSyncExternalStore(subInstall, standalone, () => false);
+  const device = useSyncExternalStore(subInstall, deviceOf, () => "desktop" as Device);
+  return { canPrompt, isApp, device };
+}
+
+/**
+ * The "download the app" button. With the browser's offer: its install window at once.
+ * Without it: a sheet with the steps for this device (and a QR code on a computer).
+ * Already opened as the installed app: it says so (the round one hides).
+ */
+export function InstallButton({ app, variant = "solid", className, label }: { app: AppKind; variant?: "solid" | "ghost" | "icon"; className?: string; label?: string }) {
   const { tr } = useFmt();
-  const [install, setInstall] = useState<InstallPrompt | null>(null);
-  const ios = useSyncExternalStore(
-    () => () => {},
-    isIos,
-    () => false,
-  );
-  useEffect(() => {
-    const keep = (e: Event) => {
-      e.preventDefault();
-      setInstall(e as InstallPrompt);
-    };
-    window.addEventListener("beforeinstallprompt", keep);
-    return () => window.removeEventListener("beforeinstallprompt", keep);
-  }, []);
+  const { canPrompt, isApp } = useInstall();
+  const [sheet, setSheet] = useState(false);
+  const { main } = IDENTITY[app];
+  const text = label ?? tr("حمّل التطبيق", "Download the app");
+  if (isApp) return variant === "icon" ? null : <span className={cn("inline-flex h-13 items-center gap-2 rounded-2xl border border-white/15 px-5 text-sm font-bold text-white/70", className)}>{tr("التطبيق مثبّت على جهازك", "Installed on this device")}</span>;
+  const press = async () => {
+    if (canPrompt && offer) {
+      const o = offer;
+      await o.prompt();
+      const choice = await o.userChoice.catch(() => null);
+      if (choice?.outcome === "accepted") offer = null;
+      tellInstall();
+      return;
+    }
+    setSheet(true);
+  };
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mx-auto flex max-w-2xl flex-col items-center gap-5 rounded-[28px] border border-white/10 bg-white/[0.04] p-6 text-center sm:flex-row sm:text-start">
+    <>
+      <button
+        type="button"
+        onClick={press}
+        aria-label={text}
+        title={text}
+        className={cn(
+          "inline-flex shrink-0 items-center justify-center gap-2 font-bold transition active:scale-[0.97]",
+          variant === "icon" && "size-10 rounded-full border border-white/15 bg-white/10 hover:bg-white/20",
+          variant === "ghost" && "h-13 rounded-2xl border border-white/15 bg-white/5 px-5 text-white backdrop-blur hover:bg-white/10",
+          variant === "solid" && "shine h-13 rounded-2xl px-5 text-[#0b0c0e] hover:brightness-105",
+          className,
+        )}
+        style={variant === "solid" ? { background: main } : variant === "icon" ? { color: main } : undefined}
+      >
+        <Download className="size-5" />
+        {variant !== "icon" && text}
+      </button>
+      <AnimatePresence>{sheet && <InstallSheet app={app} onClose={() => setSheet(false)} />}</AnimatePresence>
+    </>
+  );
+}
+
+/** The steps to install it on this device, and (on a computer) a QR code that opens this page on the phone. */
+function InstallSheet({ app, onClose }: { app: AppKind; onClose: () => void }) {
+  const { tr } = useFmt();
+  const { device } = useInstall();
+  const { main, soft } = IDENTITY[app];
+  const [qr, setQr] = useState("");
+  useEffect(() => {
+    if (device !== "desktop") return;
+    let alive = true;
+    // This app's page, for the phone (the same address the computer uses: online, or on the same network).
+    import("qrcode").then((QR) => QR.toString(`${window.location.origin}/${app}`, { type: "svg", margin: 1, color: { dark: "#0b0c0e", light: "#ffffff" } }).then((svg) => alive && setQr(svg)));
+    return () => {
+      alive = false;
+    };
+  }, [device, app]);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+  const steps =
+    device === "ios"
+      ? [
+          { i: Share, t: tr("اضغط زر المشاركة أسفل شاشة Safari", "Press the Share button at the bottom of Safari") },
+          { i: Plus, t: tr("اختر «إضافة إلى الشاشة الرئيسية»", "Choose “Add to Home Screen”") },
+          { i: Check, t: tr("اضغط «إضافة»: تظهر أيقونته مع تطبيقاتك", "Press “Add”: its icon joins your apps") },
+        ]
+      : device === "android"
+        ? [
+            { i: MoreVertical, t: tr("افتح قائمة المتصفح ⋮ في الأعلى", "Open the browser menu ⋮ at the top") },
+            { i: Download, t: tr("اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»", "Choose “Install app” or “Add to Home screen”") },
+            { i: Check, t: tr("وافق: تظهر أيقونته مع تطبيقاتك", "Confirm: its icon joins your apps") },
+          ]
+        : [
+            { i: Download, t: tr("اضغط أيقونة التثبيت في آخر شريط العنوان", "Click the install icon at the end of the address bar") },
+            { i: MoreVertical, t: tr("أو من قائمة ⋮ ← «حفظ ومشاركة» ← «تثبيت الصفحة كتطبيق»", "Or menu ⋮ → “Save and share” → “Install page as app”") },
+            { i: Check, t: tr("يُفتح في نافذة خاصة به، بأيقونته", "It opens in its own window, with its icon") },
+          ];
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="dark fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal
+        aria-label={tr("تحميل التطبيق", "Download the app")}
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 320, damping: 30 }}
+        className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] border border-white/10 bg-[#111317] p-6 pb-[calc(env(safe-area-inset-bottom)+24px)] text-white shadow-2xl sm:rounded-[28px]"
+      >
+        <div className="flex items-start gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element -- a small fixed icon from /public */}
+          <img src={`/apps/${app}-192.png`} alt="" width={56} height={56} className="size-14 rounded-2xl" />
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-bold">{tr("حمّل التطبيق على جهازك", "Get the app on your device")}</p>
+            <p className="text-sm text-white/60">{app === "client" ? tr("تطبيق أصحاب المحلات", "The shop owners' app") : tr("تطبيق المندوبين", "The reps' app")}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label={tr("إغلاق", "Close")} className="flex size-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
+            <X className="size-4" />
+          </button>
+        </div>
+        <ol className="mt-6 space-y-3">
+          {steps.map((s, i) => (
+            <li key={i} className="flex items-center gap-3 rounded-2xl bg-white/[0.05] p-3">
+              <span className="num flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-[#0b0c0e]" style={{ background: i === 2 ? soft : main }}>
+                {i + 1}
+              </span>
+              <span className="flex-1 text-sm">{s.t}</span>
+              <s.i className="size-5 shrink-0" style={{ color: main }} />
+            </li>
+          ))}
+        </ol>
+        {device === "desktop" && (
+          <div className="mt-6 flex items-center gap-4 rounded-2xl border border-white/10 p-4">
+            <div className="size-28 shrink-0 overflow-hidden rounded-xl bg-white p-1.5 [&_svg]:size-full">
+              {/* The SVG comes from the qrcode library (this page's own address), not from user text. */}
+              {qr ? <div className="size-full" dangerouslySetInnerHTML={{ __html: qr }} /> : <div className="size-full animate-pulse rounded-lg bg-black/10" />}
+            </div>
+            <div>
+              <p className="font-bold">{tr("أو على جوالك", "Or on your phone")}</p>
+              <p className="mt-1 text-sm text-white/60">{tr("امسح الرمز بكاميرا الجوال ليُفتح التطبيق عليه، ثم ثبّته من هناك.", "Scan the code with the phone's camera to open the app there, then install it.")}</p>
+            </div>
+          </div>
+        )}
+        <p className="mt-4 text-center text-xs text-white/45">{tr("لا متجر ولا تحميل كبير: يعمل من المتصفح نفسه.", "No store and no big download: it runs from the browser itself.")}</p>
+      </motion.div>
+    </motion.div>,
+    document.body,
+  );
+}
+
+/** "Put it on your home screen": the card near the end of the page, with the download button. */
+export function InstallCard({ app }: { app: AppKind }) {
+  const { tr } = useFmt();
+  return (
+    <motion.div
+      id="download"
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="mx-auto flex max-w-2xl scroll-mt-28 flex-col items-center gap-5 rounded-[28px] border border-white/10 bg-white/[0.04] p-6 text-center sm:flex-row sm:text-start"
+    >
       {/* eslint-disable-next-line @next/next/no-img-element -- a small fixed icon from /public */}
       <img src={`/apps/${app}-192.png`} alt="" width={80} height={80} className="size-20 shrink-0 rounded-[22px] shadow-xl" />
       <div className="flex-1">
         <p className="text-lg font-bold">{tr("ضعه على شاشة جوالك", "Put it on your home screen")}</p>
-        <p className="mt-1 text-sm text-white/65">
-          {ios
-            ? tr("في Safari اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، فيصير له أيقونة كأي تطبيق.", "In Safari press Share, then “Add to Home Screen”: it gets an icon like any app.")
-            : tr("يُفتح من أيقونته كأي تطبيق، بلا متجر ولا تحميل كبير، ويعمل على أي جوال.", "It opens from its own icon like any app, with no store and no big download, on any phone.")}
-        </p>
-        {ios && (
-          <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-white/50 sm:justify-start">
-            <Share className="size-3.5" /> {tr("زر المشاركة أسفل الشاشة في Safari", "The Share button at the bottom of Safari")}
-          </p>
-        )}
+        <p className="mt-1 text-sm text-white/65">{tr("يُفتح من أيقونته كأي تطبيق، بلا متجر ولا تحميل كبير، ويعمل على أي جوال.", "It opens from its own icon like any app, with no store and no big download, on any phone.")}</p>
       </div>
-      {install && (
-        <button
-          type="button"
-          onClick={async () => {
-            await install.prompt();
-            setInstall(null);
-          }}
-          className="inline-flex h-12 shrink-0 items-center gap-2 rounded-2xl px-5 font-bold text-[#0b0c0e] transition active:scale-[0.98]"
-          style={{ background: color }}
-        >
-          <Download className="size-5" /> {tr("ثبّت التطبيق", "Install")}
-        </button>
-      )}
+      <InstallButton app={app} />
     </motion.div>
   );
 }
