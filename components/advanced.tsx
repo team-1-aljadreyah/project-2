@@ -13,7 +13,8 @@ import { roleName } from "@/components/status";
 import { Badge, Button, Card, Dialog, Empty, errorText, Field, Input, Notice, Switch, Textarea, useToast } from "@/components/ui";
 import { NAV, type NavItem } from "@/components/nav";
 import { api } from "@/lib/api";
-import type { AppDef, CustomField, CustomObject, CustomType, CustomValue, Profile, Role, User } from "@/lib/api/types";
+import type { AppDef, CustomField, CustomObject, CustomType, CustomValue, Profile, ProfileAction, Role, User } from "@/lib/api/types";
+import { PROFILE_ACTIONS } from "@/lib/api/types";
 import { FieldInput } from "@/components/custom-fields";
 import { homeOf } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
@@ -22,6 +23,24 @@ import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 
 export const JOBS: Profile["role"][] = ["accountant", "warehouse", "staff", "rep", "shop"];
+/** The week from Saturday, as in Iraq. */
+const WEEK: [number, string, string][] = [
+  [6, "السبت", "Sat"],
+  [0, "الأحد", "Sun"],
+  [1, "الإثنين", "Mon"],
+  [2, "الثلاثاء", "Tue"],
+  [3, "الأربعاء", "Wed"],
+  [4, "الخميس", "Thu"],
+  [5, "الجمعة", "Fri"],
+];
+const actionName = (a: ProfileAction, tr: (x: string, y: string) => string) =>
+  ({
+    cancel_orders: tr("إلغاء الطلبات", "Cancel orders"),
+    discount: tr("إعطاء خصم", "Give discounts"),
+    payments: tr("تسجيل التسديدات", "Record payments"),
+    returns: tr("تسجيل المرتجعات", "Record returns"),
+    export: tr("تصدير الملفات (Excel / CSV)", "Export files"),
+  })[a];
 const ALL_ROLES: Role[] = ["manager", ...JOBS];
 const COLORS = ["#e1692b", "#1fb5a5", "#3b82f6", "#8b5cf6", "#e11d74", "#16a34a", "#ca8a04", "#475569"];
 
@@ -157,6 +176,8 @@ export function ProfilesSection({ openId, go }: { openId?: string; go: (s: strin
                     <span className="text-xs text-muted">{tr(`${num(all - p.denied.length)} من ${num(all)} صفحة`, `${all - p.denied.length} of ${all} pages`)}</span>
                     {p.limits.no_profit && <Badge tone="warning">{tr("بلا أرباح", "No profit")}</Badge>}
                     {p.limits.no_debt && <Badge tone="warning">{tr("بلا ديون", "No debts")}</Badge>}
+                    {p.read_only && <Badge tone="warning">{tr("للعرض فقط", "See only")}</Badge>}
+                    {p.hours && <Badge>{`${p.hours.from}–${p.hours.to}`}</Badge>}
                     <span className="flex items-center gap-1 text-xs text-muted">
                       <UsersIcon className="size-3.5" /> {num(people)}
                     </span>
@@ -298,6 +319,76 @@ function ProfileEditor({ profile, users, onBack }: { profile: Profile; users: Us
           <Switch checked={!!f.limits.no_debt} onChange={(v) => setF({ ...f, limits: { ...f.limits, no_debt: v || undefined } })} label={tr("إخفاء ديون الزبائن", "Hide the customers' debts")} />
         </Card>
       )}
+
+      <Card className="space-y-4 p-4">
+        <p className="font-bold">{tr("صلاحيات أدق", "Finer permissions")}</p>
+        <Switch
+          checked={!!f.read_only}
+          onChange={(v) => setF({ ...f, read_only: v || undefined })}
+          label={
+            <span>
+              <b>{tr("للعرض فقط", "See only")}</b>
+              <span className="block text-xs text-muted">{tr("يفتح صفحاته ولا يغيّر شيئاً (حسابه وإشعاراته فقط)", "Opens their pages but changes nothing (only their account and notifications)")}</span>
+            </span>
+          }
+        />
+        <div>
+          <p className="mb-1.5 text-sm font-semibold">{tr("ما يستطيع فعله", "What they may do")}</p>
+          <p className="mb-2 text-xs text-muted">{tr("المطفأ يرفضه الخادم بسبب واضح، حتى لو كانت وظيفته تسمح به.", "What's off the server refuses with a clear reason, even if the job allows it.")}</p>
+          <div className="grid gap-1 sm:grid-cols-2">
+            {PROFILE_ACTIONS.map((act) => (
+              <Switch
+                key={act}
+                checked={!f.deny_actions?.includes(act)}
+                onChange={(v) => {
+                  const rest = (f.deny_actions ?? []).filter((x) => x !== act);
+                  setF({ ...f, deny_actions: v ? (rest.length ? rest : undefined) : [...rest, act] });
+                }}
+                label={actionName(act, tr)}
+              />
+            ))}
+          </div>
+        </div>
+        <div>
+          <Switch
+            checked={!!f.hours}
+            onChange={(v) => setF({ ...f, hours: v ? { from: "08:00", to: "18:00", days: [6, 0, 1, 2, 3, 4] } : undefined })}
+            label={
+              <span>
+                <b>{tr("ساعات الدخول", "Login hours")}</b>
+                <span className="block text-xs text-muted">{tr("خارجها لا يدخل، وتنتهي جلسته المفتوحة", "Outside them they can't log in, and an open session ends")}</span>
+              </span>
+            }
+          />
+          {f.hours && (
+            <div className="mt-2 space-y-3 rounded-xl bg-card-2 p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <Field label={tr("من", "From")}>
+                  <Input type="time" dir="ltr" value={f.hours.from} onChange={(e) => setF({ ...f, hours: { ...f.hours!, from: e.target.value } })} className="w-32" />
+                </Field>
+                <Field label={tr("إلى", "To")}>
+                  <Input type="time" dir="ltr" value={f.hours.to} onChange={(e) => setF({ ...f, hours: { ...f.hours!, to: e.target.value } })} className="w-32" />
+                </Field>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEK.map(([d, ar, en]) => {
+                  const on = f.hours!.days.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setF({ ...f, hours: { ...f.hours!, days: on ? f.hours!.days.filter((x) => x !== d) : [...f.hours!.days, d] } })}
+                      className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-semibold", on ? "border-primary bg-primary-soft text-primary-ink" : "border-line text-muted")}
+                    >
+                      {tr(ar, en)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
 
       {apps.length > 0 && (
         <Card className="p-4">

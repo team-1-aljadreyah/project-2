@@ -1,3 +1,4 @@
+import { exportAllowed } from "./utils";
 // A small Excel (.xlsx) file writer: one sheet, right-to-left for Arabic, bold rows, column widths.
 // An .xlsx file is a zip of a few XML files; fflate makes the zip in the browser (no server).
 import { strToU8, zipSync } from "fflate";
@@ -55,6 +56,7 @@ export function buildXlsx(rows: Cell[][], opts: { sheet?: string; rtl?: boolean;
 
 /** Save an .xlsx file in the browser. */
 export function downloadXlsx(name: string, rows: Cell[][], opts?: Parameters<typeof buildXlsx>[1]) {
+  if (!exportAllowed()) return;
   const data = buildXlsx(rows, opts);
   const blob = new Blob([data.slice().buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");

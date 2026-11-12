@@ -61,8 +61,21 @@ export function matches(q: string, ...fields: (string | undefined | null)[]) {
   return fields.some((f) => f && normalize(f).includes(n));
 }
 
+// A permission profile can take away exporting (advanced settings): every download asks here first.
+let exportBlocked = false;
+export function setExportBlocked(v: boolean) {
+  exportBlocked = v;
+}
+/** May this person download a file now? If not, the page shows why (the shell listens). */
+export function exportAllowed() {
+  if (!exportBlocked) return true;
+  window.dispatchEvent(new CustomEvent("nahrain:denied", { detail: "export" }));
+  return false;
+}
+
 /** Download rows as a CSV file that Excel opens (with Arabic). */
 export function downloadCsv(name: string, rows: (string | number)[][]) {
+  if (!exportAllowed()) return;
   const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
