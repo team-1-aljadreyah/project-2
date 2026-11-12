@@ -10,6 +10,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, Info, Loader2, Minus, Plus, Search, X, XCircle } from "lucide-react";
 import { ApiError } from "@/lib/api/errors";
 import { useSession } from "@/lib/auth";
+import { deniedOf } from "@/lib/access";
 import { useFmt } from "@/lib/i18n";
 import { ordered, saveSite, useCustomizing, useSite } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -227,14 +228,15 @@ export function Segmented<T extends string>({
   );
 }
 
-export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
+export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; disabled?: boolean }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 py-1">
+    <label className={cn("flex items-center justify-between gap-3 py-1", disabled ? "cursor-wait opacity-60" : "cursor-pointer")}>
       <span className="text-sm">{label}</span>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn("relative h-6 w-11 shrink-0 rounded-full transition", checked ? "bg-primary" : "bg-line-strong")}
       >
@@ -253,7 +255,8 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
 /** May the logged-in person open this address? (Phone numbers and other sites: always.) */
 export function useMayOpen() {
   const user = useSession()?.user;
-  return (href: string | null | undefined): href is string => !!href && (!href.startsWith("/") || (!!user && canOpen(user.role, splitAppPath(href).path, user.rep_kinds)));
+  const denied = deniedOf(useSite(), user);
+  return (href: string | null | undefined): href is string => !!href && (!href.startsWith("/") || (!!user && canOpen(user.role, splitAppPath(href).path, user.rep_kinds, denied)));
 }
 
 /** The small arrow that says "this opens something". It points the way the language reads. */

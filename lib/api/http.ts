@@ -100,6 +100,8 @@ export const httpApi = {
   register: (input: RegisterInput) => post<Session>("/auth/register", input),
   logout: () => post<void>("/auth/logout"),
   me: () => get<User>("/me"),
+  /** The manager puts someone in a permission profile of their job (null = the job's usual access). */
+  setUserProfile: (id: number, profileId: string | null) => post<User>(`/users/${id}/profile`, { profile_id: profileId }),
   /** The manager deletes a login (not his own). Its name stays on its records. */
   deleteUser: (id: number) => del<void>(`/users/${id}`),
   /** The manager removes someone's picture. */

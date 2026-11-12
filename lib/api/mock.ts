@@ -29,6 +29,7 @@ import type {
   Statement,
   StatementRow,
   User,
+  SiteCustom,
 } from "./types";
 import { worksIn } from "./types";
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
@@ -126,9 +127,15 @@ const db0 = () => loadDb(() => makeSeed());
 const COST_ROLES: Role[] = ["manager", "accountant", "warehouse"];
 const PROFIT_ROLES: Role[] = ["manager", "accountant"];
 const seesCost = (u: DbUser) => COST_ROLES.includes(u.role);
-const seesProfit = (u: DbUser) => PROFIT_ROLES.includes(u.role);
+// A permission profile (advanced settings) can hide money the job would otherwise see.
+const limitsOf = (u: DbUser) => {
+  if (!u.profile_id) return {};
+  const p = fullSite(db0().custom).profiles.find((x) => x.id === u.profile_id && x.role === u.role);
+  return p?.limits ?? {};
+};
+const seesProfit = (u: DbUser) => PROFIT_ROLES.includes(u.role) && !limitsOf(u).no_profit;
 // The warehouse people never see debts (keeper and staff).
-const seesDebt = (u: DbUser) => u.role !== "warehouse" && u.role !== "staff";
+const seesDebt = (u: DbUser) => u.role !== "warehouse" && u.role !== "staff" && !limitsOf(u).no_debt;
 
 function actorOf(db: Db): DbUser {
   const s = getSession();
@@ -366,6 +373,36 @@ function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | 
   return [...rows.values()].sort((a, b) => b.sales - a.sales);
 }
 
+/** The profile chosen in the users form: one of the same job, or none (also when the job changed). */
+function setProfileFrom(db: Db, u: DbUser, id: string | null | undefined) {
+  if (id === undefined && (!u.profile_id || fullSite(db.custom).profiles.find((p) => p.id === u.profile_id)?.role === u.role)) return;
+  const p = id ? fullSite(db.custom).profiles.find((x) => x.id === id && x.role === u.role) : undefined;
+  if (p) u.profile_id = p.id;
+  else delete u.profile_id;
+}
+
+/** Advanced settings as saved: every profile and app must make sense (names, jobs, colors, pages). */
+function checkAdvanced(s: SiteCustom) {
+  const ids = new Set<string>();
+  for (const p of s.profiles) {
+    if (!p.id || ids.has(p.id)) fail(422, "VALIDATION", "ملف مكرر", "Duplicate profile");
+    ids.add(p.id);
+    if (!p.name?.trim()) fail(422, "VALIDATION", "اسم ملف الصلاحيات مطلوب", "The profile needs a name");
+    if (!["warehouse", "staff", "rep", "accountant", "shop"].includes(p.role)) fail(422, "VALIDATION", "اختر وظيفة الملف", "Choose the profile's job");
+    if (!Array.isArray(p.denied) || p.denied.some((h) => typeof h !== "string" || !h.startsWith("/"))) fail(422, "VALIDATION", "صفحات غير صحيحة", "Wrong pages");
+  }
+  const apps = new Set<string>();
+  for (const x of s.apps) {
+    if (!x.id || apps.has(x.id)) fail(422, "VALIDATION", "تطبيق مكرر", "Duplicate app");
+    apps.add(x.id);
+    if (!x.name?.trim()) fail(422, "VALIDATION", "اسم التطبيق مطلوب", "The app needs a name");
+    if (!/^#[0-9a-f]{6}$/i.test(x.color)) fail(422, "VALIDATION", "لون التطبيق غير صحيح", "The app's color isn't valid");
+    if (!x.pages.length) fail(422, "VALIDATION", `اختر صفحات «${x.name}»`, `Choose the pages of ${x.name}`);
+    if (x.pages.some((h) => typeof h !== "string" || !h.startsWith("/"))) fail(422, "VALIDATION", "صفحات غير صحيحة", "Wrong pages");
+  }
+  for (const p of s.profiles) if (p.default_app && !apps.has(p.default_app)) delete p.default_app;
+}
+
 /** A user as the pages get it: no password, nothing worked out per request. */
 function strip(u: DbUser): User {
   const { password: _p, covering: _c, ...user } = u;
@@ -461,6 +498,21 @@ export const mockApi: Api = {
   deleteMyAccount: (password) => write((db, a, now) => deleteMyAccount(db, a, password, now)),
 
   // Users
+  setUserProfile: (id, profileId) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const u = db.users.find((x) => x.id === id && !x.deleted) ?? notFound();
+      if (profileId) {
+        const p = fullSite(db.custom).profiles.find((x) => x.id === profileId) ?? notFound();
+        if (p.role !== u.role) fail(422, "VALIDATION", "هذا الملف لوظيفة أخرى", "This profile is for another job");
+        u.profile_id = p.id;
+        audit(db, a, "update", "user", u.id, `${u.name} في ملف الصلاحيات «${p.name}»`, `${u.name} → profile ${p.name}`, now);
+      } else if (u.profile_id) {
+        delete u.profile_id;
+        audit(db, a, "update", "user", u.id, `${u.name} عاد إلى صلاحيات وظيفته المعتادة`, `${u.name} → the job's usual access`, now);
+      }
+      return strip(u);
+    }),
   deleteUser: (id) => write((db, a, now) => deleteUser(db, a, id, now)),
   removeUserPhoto: (id) => write((db, a, now) => strip(removeUserPhoto(db, a, id, now))),
   listUsers: () =>
@@ -507,6 +559,7 @@ export const mockApi: Api = {
         const u = db.users.find((x) => x.id === id) ?? notFound();
         Object.assign(u, clean);
         if (input.password) u.password = input.password;
+        setProfileFrom(db, u, input.profile_id);
         audit(db, a, "update", "user", u.id, `تعديل المستخدم ${u.name}`, `Updated user ${u.name}`, now);
         const { password: _p, ...rest } = u;
         void _p;
@@ -554,13 +607,28 @@ export const mockApi: Api = {
         if (b.logo.length > 400_000) fail(422, "VALIDATION", "الصورة كبيرة جداً", "The picture is too big");
       }
       if (next.look.action && !/^#[0-9a-f]{6}$/i.test(next.look.action)) fail(422, "VALIDATION", "اللون غير صحيح", "The color isn't valid");
+      checkAdvanced(next);
       const old = fullSite(db.custom);
+      // A profile that is gone: its people go back to their job's usual access.
+      const kept = new Set(next.profiles.map((p) => p.id));
+      for (const u of db.users) if (u.profile_id && (!kept.has(u.profile_id) || next.profiles.find((p) => p.id === u.profile_id)?.role !== u.role)) delete u.profile_id;
       db.custom = next;
       // One line in the activity log for a change of identity or of names (not one for every drag).
       const names = (x: typeof next) => JSON.stringify([x.nav.labels, x.nav.group_labels, x.dashboard.labels, x.texts]);
       if (JSON.stringify(old.brand) !== JSON.stringify(b))
         audit(db, a, "update", "settings", 0, `تعديل هوية الموقع: ${b.name} (${b.company})`, `Site identity changed: ${b.name_en} (${b.company_en})`, now);
       else if (names(old) !== names(next)) audit(db, a, "update", "settings", 0, "تعديل نصوص في الموقع (وضع التخصيص)", "Site texts rewritten (customize mode)", now);
+      // Advanced settings: one line for each profile or app added, changed or removed.
+      const diff = <T extends { id: string; name: string }>(was: T[], now_: T[], kind: string, kindEn: string) => {
+        for (const x of now_) {
+          const before = was.find((y) => y.id === x.id);
+          if (!before) audit(db, a, "create", "settings", 0, `${kind} جديد: ${x.name}`, `New ${kindEn}: ${x.name}`, now);
+          else if (JSON.stringify(before) !== JSON.stringify(x)) audit(db, a, "update", "settings", 0, `تعديل ${kind}: ${x.name}`, `${kindEn} changed: ${x.name}`, now);
+        }
+        for (const x of was) if (!now_.some((y) => y.id === x.id)) audit(db, a, "cancel", "settings", 0, `حذف ${kind}: ${x.name}`, `${kindEn} removed: ${x.name}`, now);
+      };
+      diff(old.profiles, next.profiles, "ملف صلاحيات", "profile");
+      diff(old.apps, next.apps, "تطبيق", "app");
       return next;
     }),
   createWarehouse: (input) =>

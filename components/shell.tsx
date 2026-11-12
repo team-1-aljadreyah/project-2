@@ -14,6 +14,8 @@ import { NotificationAlerts } from "@/components/notification-alerts";
 import { ChatWidget } from "@/components/support/chat-widget";
 import { ShopSwitcher } from "@/components/shop-switcher";
 import { Avatar, MyAccountDialog } from "@/components/my-account";
+import { deniedOf, useCurrentApp, useDenied } from "@/lib/access";
+import { AppLauncher, AppBanner } from "@/components/app-launcher";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
@@ -119,7 +121,8 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
     };
   }, [user, lookups.data, items.data, items.reload, lookups.reload]);
 
-  const allowed = canOpen(user.role, path, user.rep_kinds);
+  const denied = useDenied(user);
+  const allowed = canOpen(user.role, path, user.rep_kinds, denied);
   const phone = isPhoneApp(user.role);
 
   // Amounts in dollars: only the manager and the accountant, at the day's rate.
@@ -170,15 +173,23 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
   );
 }
 
-/** The pages of this user, with the manager's names and order. `all`: also the pages he hid (customize mode). */
+/**
+ * The pages of this user, with the manager's names and order. `all`: also the pages he hid (customize mode).
+ * Without the pages their permission profile takes away; inside an app (launcher), only that app's pages.
+ */
 function useNav(user: User, all = false) {
   const site = useSite();
+  const denied = deniedOf(site, user);
+  const app = useCurrentApp(user);
   const list = customNav(
-    NAV.filter((n) => navFor(n, user)),
+    NAV.filter((n) => navFor(n, user) && !denied.includes(n.href)),
     site.nav,
     user.role === "manager",
   );
-  return all ? list : list.filter((n) => !n.hidden);
+  const shown = all ? list : list.filter((n) => !n.hidden);
+  if (!app || all) return shown;
+  // The app's pages, in the app's order.
+  return app.pages.map((h) => shown.find((n) => n.href === h)).filter((n): n is (typeof shown)[number] => !!n);
 }
 
 function isActive(path: string, href: string) {
@@ -198,11 +209,14 @@ function Sidebar({ user }: { user: User }) {
   const groups = Object.keys(GROUPS) as (keyof typeof GROUPS)[];
   // The rows as they show, top to bottom: dragging works on this one list, across the groups.
   const flat = groups.flatMap((g) => nav.filter((n) => n.group === g));
+  // Inside an app (launcher): one list, in the app's own order, without the groups.
+  const inApp = !!useCurrentApp(user) && !editing;
   return (
     <aside className="no-print sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-line bg-card md:flex">
       <div className="flex h-16 items-center gap-2 border-b border-line px-4">
         <Logo href="/" />
       </div>
+      <AppBanner user={user} />
       <nav className="flex-1 overflow-y-auto px-3 py-3">
         <SortArea
           ids={flat.map((n) => n.href)}
@@ -211,13 +225,13 @@ function Sidebar({ user }: { user: User }) {
             save((s) => ({ ...s, nav: { ...s.nav, order: ids, groups: { ...s.nav.groups, [moved]: flat.find((n) => n.href === onto)?.group ?? "main" } } }))
           }
         >
-          {groups.map((g) => {
-            const list = nav.filter((n) => n.group === g);
+          {(inApp ? (["app"] as const) : groups).map((g) => {
+            const list = g === "app" ? nav : nav.filter((n) => n.group === g);
             if (!list.length) return null;
-            const groupName = lab(site.nav.group_labels[g], GROUPS[g][0], GROUPS[g][1]);
+            const groupName = g === "app" ? "" : lab(site.nav.group_labels[g], GROUPS[g][0], GROUPS[g][1]);
             return (
               <div key={g} className="mb-3">
-                {GROUPS[g][0] && (
+                {g !== "app" && GROUPS[g][0] && (
                   <p className="px-3 pb-1 pt-2 text-xs font-medium text-faint">
                     <EditText value={groupName} onSave={(v) => save((s) => ({ ...s, nav: { ...s.nav, group_labels: { ...s.nav.group_labels, [g]: { ...s.nav.group_labels[g], [lang]: v } } } }))} />
                   </p>
@@ -381,6 +395,7 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
         </div>
       )}
       <NetworkDot />
+      <AppLauncher user={user} />
       {user.role === "manager" && <CustomizeToggle />}
       <Bell2 user={user} />
       {(user.role === "manager" || user.role === "accountant") && <CurrencySwitch rate={usdRate} />}

@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { SlidersHorizontal } from "lucide-react";
+
 import { useState } from "react";
 import { LayoutGrid, MapPin as MapPinIcon, Paintbrush, Pencil, Plus, Save, Trash2, UserCheck } from "lucide-react";
 import { BrandDialog, EditText, SortArea, SortItem } from "@/components/customize";
@@ -35,6 +38,17 @@ export default function SettingsPage() {
     <>
       <PageHeader title={tr("الإعدادات", "Settings")} />
       <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
+        {/* The way into the advanced settings (profiles, apps), like Salesforce's Setup. */}
+        <Link href="/settings/advanced" className="box-row group flex items-center gap-4 rounded-2xl border border-primary/30 bg-gradient-to-l from-primary-soft to-card p-4 transition hover:border-primary lg:col-span-2">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-on-primary">
+            <SlidersHorizontal className="size-6" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-bold">{tr("الإعدادات المتقدمة", "Advanced settings")}</span>
+            <span className="block text-sm text-muted">{tr("ملفات الصلاحيات والتطبيقات: أضفها بنفسك بلا مبرمج، وتصل إلى الجميع فوراً.", "Permission profiles and apps: add them yourself, no developer; they reach everyone at once.")}</span>
+          </span>
+          <span className="text-sm font-semibold text-primary-ink">{tr("ادخل ←", "Open →")}</span>
+        </Link>
         <Card className="lg:col-span-2">
           <CardHeader
             title={tr("هوية الموقع", "Site identity")}

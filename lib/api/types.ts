@@ -29,6 +29,8 @@ export interface User {
   photo?: string;
   /** A deleted login: it can't log in, and it is no longer listed; its name stays on the records it made. */
   deleted?: boolean;
+  /** The manager's permission profile for this person (advanced settings). None = the job's usual access. */
+  profile_id?: string;
   active: boolean;
 }
 
@@ -808,7 +810,50 @@ export interface SiteCustom {
   layouts: Record<string, { order: string[]; hidden: string[] }>;
   /** Colors. `action`: the color of the main buttons (#rrggbb). None = the orange. */
   look: { action?: string };
+  /** Advanced settings: permission profiles (narrower access inside a job). */
+  profiles: Profile[];
+  /** Advanced settings: apps (named sets of pages, opened from the app launcher). */
+  apps: AppDef[];
 }
+
+/**
+ * A permission profile (like Salesforce's profiles, simpler): built on one job, it takes pages away from the
+ * people in it and can hide money they would otherwise see. It never gives more than the job has.
+ */
+export interface Profile {
+  id: string;
+  name: string;
+  name_en?: string;
+  description?: string;
+  /** The job it is built on (not the manager). Only people of this job can be in it. */
+  role: Exclude<Role, "manager">;
+  /** Pages of that job the people in it can't open (gone from their menu too). */
+  denied: string[];
+  /** Money they don't see: purchase cost and profit, and the customers' debts. */
+  limits: { no_profit?: boolean; no_debt?: boolean };
+  /** The app their menu opens on (see AppDef). */
+  default_app?: string;
+}
+
+/** An app: a named set of pages with its color and icon. The people it is for switch to it from the launcher. */
+export interface AppDef {
+  id: string;
+  name: string;
+  name_en?: string;
+  description?: string;
+  /** #rrggbb */
+  color: string;
+  /** One of APP_ICONS. */
+  icon: string;
+  /** The pages, in the menu's order. Each person sees only the ones their job lets them open. */
+  pages: string[];
+  /** Who sees it: these jobs and these profiles. Both empty = nobody yet. */
+  roles: Role[];
+  profiles: string[];
+  active: boolean;
+}
+
+export const APP_ICONS = ["grid", "cart", "wallet", "boxes", "truck", "chart", "users", "store", "star", "briefcase"] as const;
 
 /** A quick change to an item from the list (customize mode). */
 export interface ItemQuick {
@@ -1048,6 +1093,8 @@ export interface UserInput {
   customer_id?: number;
   active: boolean;
   password?: string;
+  /** A permission profile of the same job (advanced settings); none = the job's usual access. */
+  profile_id?: string | null;
 }
 
 // ---------- Support chat (shop owner ↔ warehouse staff / manager) ----------

@@ -5,6 +5,7 @@ import { ImageOff, Pencil, Plus, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/my-account";
 import { useApp } from "@/components/shell";
 import { getSession } from "@/lib/auth";
+import { useSite } from "@/lib/site";
 import { jobName, roleName } from "@/components/status";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, DataTable, Dialog, ErrorBox, errorText, Field, Input, LoadingRows, Notice, PageHeader, RefLink, Select, Switch, useToast, type Column } from "@/components/ui";
@@ -21,6 +22,7 @@ export default function UsersPage() {
   const users = useLoad(() => api.listUsers(), []);
   const customers = useLoad(() => api.listCustomers(), []);
   const [edit, setEdit] = useState<User | "new" | null>(null);
+  const site = useSite();
   const columns: Column<User>[] = [
     {
       key: "n",
@@ -41,7 +43,16 @@ export default function UsersPage() {
         </RefLink>
       ),
     },
-    { key: "r", head: tr("الدور", "Role"), cell: (u) => <Badge tone="primary">{jobName(u, tr)}</Badge> },
+    {
+      key: "r",
+      head: tr("الدور", "Role"),
+      cell: (u) => (
+        <span className="flex flex-wrap items-center gap-1">
+          <Badge tone="primary">{jobName(u, tr)}</Badge>
+          {u.profile_id && site.profiles.find((p) => p.id === u.profile_id) && <Badge>{site.profiles.find((p) => p.id === u.profile_id)!.name}</Badge>}
+        </span>
+      ),
+    },
     {
       key: "x",
       head: tr("مرتبط بـ", "Linked to"),
@@ -122,7 +133,10 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
     rep_categories: user?.rep_categories ?? [],
     active: user?.active ?? true,
     password: "",
+    profile_id: user?.profile_id ?? null,
   });
+  const site = useSite();
+  const profiles = site.profiles.filter((p) => p.role === f.role);
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<UserInput>) => setF((x) => ({ ...x, ...p }));
@@ -267,6 +281,18 @@ function UserDialog({ user, customers, onClose, onSaved }: { user?: User; custom
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {profiles.length > 0 && (
+          <Field label={tr("ملف الصلاحيات", "Permission profile")} hint={tr("من الإعدادات المتقدمة", "From the advanced settings")}>
+            <Select value={f.profile_id ?? ""} onChange={(e) => set({ profile_id: e.target.value || null })}>
+              <option value="">{tr("صلاحيات الوظيفة المعتادة", "The job's usual access")}</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
                 </option>
               ))}
             </Select>

@@ -149,11 +149,15 @@ export function navFor(n: Pick<NavItem, "roles" | "kind">, user: { role: Role; r
   return !(n.kind && user.role === "rep") || repDoes(user, n.kind);
 }
 
-/** Can this user open this path? The most specific rule wins. */
-export function canOpen(role: Role, path: string, kinds?: RepKind[]) {
+/**
+ * Can this user open this path? The most specific rule wins. `denied`: the pages their permission profile
+ * takes away (advanced settings); a page's own screens go with it (/orders → /orders/12).
+ */
+export function canOpen(role: Role, path: string, kinds?: RepKind[], denied: string[] = []) {
   const rules = [...EXTRA.map((e) => ({ prefix: e.prefix, roles: e.roles, kind: undefined })), ...NAV.map((n) => ({ prefix: n.href, roles: n.roles, kind: n.kind }))]
     .filter((r) => path === r.prefix || path.startsWith(r.prefix.endsWith("/") ? r.prefix : r.prefix + "/"))
     .sort((a, b) => b.prefix.length - a.prefix.length);
   if (!rules.length) return true;
+  if (denied.includes(rules[0].prefix.replace(/\/$/, ""))) return false;
   return navFor(rules[0], { role, rep_kinds: kinds });
 }
