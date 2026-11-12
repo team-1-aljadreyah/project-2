@@ -2703,3 +2703,145 @@ export function markChatRead(db: Db, actor: DbUser, customerId: number) {
   const last = (db.chat ?? []).filter((m) => m.customer_id === customerId).pop();
   if (last) readsOf(db, customerId)[side] = last.id;
 }
+
+// ---------- accounts: pictures, passwords, removing shops and accounts ----------
+
+const gone = (): never => fail(404, "NOT_FOUND", "غير موجود", "Not found");
+
+const OPEN_STATUSES = ["pending", "needs_approval", "approved"];
+
+/** Anyone changes their own picture (a small JPEG data URL made on the phone). Only the manager removes one. */
+export function setMyPhoto(db: Db, actor: DbUser, photo: string): DbUser {
+  const ok = typeof photo === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(photo) && photo.length <= 300_000;
+  if (!ok) fail(422, "VALIDATION", "اختر صورة (JPG أو PNG) أصغر من 200 كيلوبايت", "Choose a picture (JPG or PNG) under 200 KB", { photo: msg("صورة غير صالحة", "Not a valid picture") });
+  const u = db.users.find((x) => x.id === actor.id) ?? gone();
+  u.photo = photo;
+  return u;
+}
+
+/** The shop owner changes his password: the old one first, then the new one (6 characters or more). */
+export function changeMyPassword(db: Db, actor: DbUser, current: string, next: string) {
+  need(actor, ["shop"]);
+  const u = db.users.find((x) => x.id === actor.id) ?? gone();
+  const errors: Record<string, string> = {};
+  if (u.password !== current) errors.current = msg("كلمة المرور الحالية غير صحيحة", "The current password is wrong");
+  if ((next ?? "").length < 6) errors.next = msg("6 أحرف على الأقل", "At least 6 characters");
+  else if (next === current) errors.next = msg("اختر كلمة مرور مختلفة عن الحالية", "Choose a password different from the current one");
+  if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
+  u.password = next;
+}
+
+/** Why a shop can't be removed now: money still open between it and the company, or orders not finished. */
+function shopBlockers(db: Db, customerId: number): string[] {
+  const why: string[] = [];
+  const c = db.customers.find((x) => x.id === customerId);
+  if (!c) return why;
+  const bal = customerBalance(db, customerId);
+  if (bal > 0) why.push(`على ${c.name} دين ${Math.round(bal).toLocaleString("en-US")} د.ع يجب تسديده أولاً`);
+  if (bal < 0) why.push(`لـ ${c.name} رصيد ${Math.round(-bal).toLocaleString("en-US")} د.ع عند الشركة: راجع المحاسب لاستلامه`);
+  const open = db.orders.filter((o) => o.customer_id === customerId && OPEN_STATUSES.includes(o.status)).length;
+  if (open) why.push(`لـ ${c.name} طلبات لم تنتهِ (${open}): ألغها أو انتظر تسليمها`);
+  return why;
+}
+
+/** A deleted login: it can't log in again, its phone is free for a new account; its name stays in the records. */
+function closeLogin(db: Db, u: DbUser) {
+  u.deleted = true;
+  u.active = false;
+  u.phone = "";
+  u.password = "";
+  delete u.photo;
+  delete u.customer_id;
+  u.customer_ids = [];
+  for (const w of db.warehouses) if (w.cover?.user_id === u.id) delete w.cover;
+  for (const v of db.vehicles ?? []) if (v.driver_id === u.id) delete v.driver_id;
+}
+
+/** The owner removes one of his shops (he keeps the others). Its records stay with the company; it stops ordering. */
+export function removeMyShop(db: Db, actor: DbUser, customerId: number, password: string, now: Date): DbUser {
+  need(actor, ["shop"]);
+  const u = db.users.find((x) => x.id === actor.id) ?? gone();
+  if (u.password !== password) fail(422, "VALIDATION", "كلمة المرور غير صحيحة", "Wrong password", { password: msg("كلمة المرور غير صحيحة", "Wrong password") });
+  const mine = shopsOf(u);
+  if (!mine.includes(customerId)) fail(403, "FORBIDDEN", "هذا المحل ليس لك", "This shop isn't yours");
+  if (mine.length <= 1) fail(409, "BAD_STATE", "هذا محلك الوحيد: لإزالته احذف الحساب كله", "This is your only shop: delete the whole account instead");
+  const why = shopBlockers(db, customerId);
+  if (why.length) fail(409, "BAD_STATE", `لا يمكن إزالته الآن: ${why.join("؛ ")}.`, "It can't be removed now: money or orders are still open.");
+  const c = db.customers.find((x) => x.id === customerId) ?? gone();
+  c.active = false;
+  u.customer_ids = mine.filter((id) => id !== customerId);
+  if (u.customer_id === customerId) u.customer_id = u.customer_ids[0];
+  audit(db, u, "cancel", "customer", c.id, `${u.name} أزال محله ${c.name} من حسابه`, `${u.name} removed his shop ${c.name}`, now);
+  notify(
+    db,
+    {
+      type: "new_shop",
+      roles: ["manager"],
+      title: `${u.name} أزال محل ${c.name} من حسابه`,
+      title_en: `${u.name} removed the shop ${c.name}`,
+      body: "المحل موقوف الآن، وسجلاته وفواتيره باقية",
+      body_en: "The shop is off now; its records and invoices stay",
+      link: `/customers/${c.id}`,
+    },
+    now,
+  );
+  return u;
+}
+
+/** The owner deletes his whole account (after his password): only when nothing is open in any of his shops. */
+export function deleteMyAccount(db: Db, actor: DbUser, password: string, now: Date) {
+  need(actor, ["shop"]);
+  const u = db.users.find((x) => x.id === actor.id) ?? gone();
+  if (u.password !== password) fail(422, "VALIDATION", "كلمة المرور غير صحيحة", "Wrong password", { password: msg("كلمة المرور غير صحيحة", "Wrong password") });
+  const shops = shopsOf(u);
+  const why = shops.flatMap((id) => shopBlockers(db, id));
+  if (why.length) fail(409, "BAD_STATE", `لا يمكن حذف الحساب الآن: ${why.join("؛ ")}.`, "The account can't be deleted now: money or orders are still open.");
+  const names = shops.map((id) => db.customers.find((c) => c.id === id)).filter((c): c is DbCustomer => !!c);
+  for (const c of names) c.active = false;
+  const name = u.name;
+  closeLogin(db, u);
+  audit(db, { id: u.id, name, role: "shop" }, "cancel", "user", u.id, `${name} حذف حسابه`, `${name} deleted his account`, now);
+  notify(
+    db,
+    {
+      type: "new_shop",
+      roles: ["manager"],
+      title: `${name} حذف حسابه`,
+      title_en: `${name} deleted his account`,
+      body: names.length ? `محلاته موقوفة الآن: ${names.map((c) => c.name).join("، ")}. سجلاتها باقية` : "سجلاته باقية",
+      body_en: "His shops are off now; their records stay",
+      link: names.length ? `/customers/${names[0].id}` : "/customers",
+    },
+    now,
+  );
+}
+
+/** The manager deletes a login (not his own). Its name stays on every record it made. */
+export function deleteUser(db: Db, actor: DbUser, id: number, now: Date) {
+  need(actor, ["manager"]);
+  const u = db.users.find((x) => x.id === id && !x.deleted) ?? gone();
+  if (u.id === actor.id) fail(409, "BAD_STATE", "لا تستطيع حذف حسابك", "You can't delete your own account");
+  const why: string[] = [];
+  if (u.role === "manager" && !db.users.some((x) => x.id !== u.id && x.role === "manager" && x.active && !x.deleted)) why.push("هو المدير الوحيد");
+  if (u.role === "rep") {
+    const shops = db.customers.filter((c) => c.rep_id === u.id && c.active).length;
+    if (shops) why.push(`له محلات (${shops}): انقلها إلى مندوب آخر من صفحة الزبائن`);
+    const orders = db.orders.filter((o) => o.rep_id === u.id && OPEN_STATUSES.includes(o.status)).length;
+    if (orders) why.push(`له طلبات لم تنتهِ (${orders})`);
+    const trips = db.orders.filter((o) => o.delivery?.rep?.id === u.id && o.delivery?.status !== "delivered" && o.status !== "cancelled").length;
+    if (trips) why.push(`معه شحنات لم تُسلَّم (${trips})`);
+  }
+  if (why.length) fail(409, "BAD_STATE", `لا يمكن حذف ${u.name}: ${why.join("؛ ")}.`, `${u.name} can't be deleted yet: work is still open.`);
+  const name = u.name;
+  closeLogin(db, u);
+  audit(db, actor, "cancel", "user", id, `حذف حساب ${name}`, `Deleted the account of ${name}`, now);
+}
+
+/** The manager removes someone's picture (a wrong or unsuitable one). They can put another one. */
+export function removeUserPhoto(db: Db, actor: DbUser, id: number, now: Date): DbUser {
+  need(actor, ["manager"]);
+  const u = db.users.find((x) => x.id === id && !x.deleted) ?? gone();
+  delete u.photo;
+  audit(db, actor, "update", "user", id, `حذف صورة ${u.name}`, `Removed the picture of ${u.name}`, now);
+  return u;
+}

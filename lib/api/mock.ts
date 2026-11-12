@@ -28,6 +28,7 @@ import type {
   SlowItem,
   Statement,
   StatementRow,
+  User,
 } from "./types";
 import { worksIn } from "./types";
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
@@ -102,6 +103,12 @@ import {
   saveStocktake,
   sellableQty,
   sweep,
+  setMyPhoto,
+  changeMyPassword,
+  removeMyShop,
+  deleteMyAccount,
+  deleteUser,
+  removeUserPhoto,
 } from "./mock/rules";
 import { makeSeed } from "./mock/seed";
 import { fullSite, ordered } from "./site-defaults";
@@ -354,6 +361,14 @@ function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | 
   return [...rows.values()].sort((a, b) => b.sales - a.sales);
 }
 
+/** A user as the pages get it: no password, nothing worked out per request. */
+function strip(u: DbUser): User {
+  const { password: _p, covering: _c, ...user } = u;
+  void _p;
+  void _c;
+  return user;
+}
+
 // ---------- the API ----------
 
 export const mockApi: Api = {
@@ -402,7 +417,7 @@ export const mockApi: Api = {
       warehouses: db.warehouses,
       vehicles: vehiclesOf(db),
       tiers: db.tiers,
-      reps: db.users.filter((u) => u.role === "rep").map((u) => ({ id: u.id, name: u.name, phone: u.phone, ...(u.rep_kinds?.length ? { kinds: u.rep_kinds } : {}) })),
+      reps: db.users.filter((u) => u.role === "rep" && !u.deleted).map((u) => ({ id: u.id, name: u.name, phone: u.phone, ...(u.rep_kinds?.length ? { kinds: u.rep_kinds } : {}) })),
       categories: ordered([...new Set(db.items.map((i) => i.category))], db.custom?.categories ?? [], (c) => c),
       settings: db.settings,
       usd_rate: usdRateOn(db, dayOf(new Date())) ?? null,
@@ -419,11 +434,19 @@ export const mockApi: Api = {
       return commissionLines(db, month, a.role === "rep" ? a.id : undefined);
     }),
 
+  // Your own account
+  setMyPhoto: (photo) => write((db, a) => strip(setMyPhoto(db, a, photo))),
+  changeMyPassword: (current, next) => write((db, a) => changeMyPassword(db, a, current, next)),
+  removeMyShop: (customerId, password) => write((db, a, now) => strip(removeMyShop(db, a, customerId, password, now))),
+  deleteMyAccount: (password) => write((db, a, now) => deleteMyAccount(db, a, password, now)),
+
   // Users
+  deleteUser: (id) => write((db, a, now) => deleteUser(db, a, id, now)),
+  removeUserPhoto: (id) => write((db, a, now) => strip(removeUserPhoto(db, a, id, now))),
   listUsers: () =>
     read((db, a) => {
       need(a, ["manager"]);
-      return db.users.map((u) => {
+      return db.users.filter((u) => !u.deleted).map((u) => {
         const { password: _p, ...rest } = u;
         void _p;
         return rest;

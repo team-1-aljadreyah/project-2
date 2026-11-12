@@ -25,6 +25,10 @@ export interface User {
   rep_kinds?: RepKind[];
   /** Rep: the item categories he may sell (set by the manager). Empty = all. Others don't even show to him. */
   rep_categories?: string[];
+  /** The person's picture (a small JPEG data URL). Each person changes their own; only the manager removes one. */
+  photo?: string;
+  /** A deleted login: it can't log in, and it is no longer listed; its name stays on the records it made. */
+  deleted?: boolean;
   active: boolean;
 }
 

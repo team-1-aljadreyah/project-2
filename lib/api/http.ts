@@ -98,6 +98,10 @@ export const httpApi = {
   register: (input: RegisterInput) => post<Session>("/auth/register", input),
   logout: () => post<void>("/auth/logout"),
   me: () => get<User>("/me"),
+  /** The manager deletes a login (not his own). Its name stays on its records. */
+  deleteUser: (id: number) => del<void>(`/users/${id}`),
+  /** The manager removes someone's picture. */
+  removeUserPhoto: (id: number) => del<User>(`/users/${id}/photo`),
   lookups: () => get<Lookups>("/lookups"),
 
   listUsers: () => get<User[]>("/users"),
@@ -200,6 +204,14 @@ export const httpApi = {
   /** Work on another of his shops; returns the user with the new customer_id. */
   switchShop: (customerId: number) => post<User>("/me/shop", { customer_id: customerId }),
   addShop: (input: NewShopInput) => post<MyShop>("/me/shops", input),
+  /** Your own picture (a small JPEG data URL). Everyone may change theirs; removing one is the manager's. */
+  setMyPhoto: (photo: string) => post<User>("/me/photo", { photo }),
+  /** The shop owner: the current password, then the new one. */
+  changeMyPassword: (current: string, next: string) => post<void>("/me/password", { current, next }),
+  /** The shop owner removes one of his shops (not the only one), after his password. Refused while money or orders are open. */
+  removeMyShop: (customerId: number, password: string) => post<User>(`/me/shops/${customerId}/remove`, { password }),
+  /** The shop owner deletes his whole account, after his password. Refused while money or orders are open. */
+  deleteMyAccount: (password: string) => post<void>("/me/delete", { password }),
   /** The delivery rep can't deliver (accident, shop closed...): marks the shipments and tells the manager. */
   reportDeliveryProblem: (input: ProblemInput) => post<Order[]>("/deliveries/problem", input),
   /** Manager / warehouse keeper: the shipment is back at the warehouse ("ready" again). */
