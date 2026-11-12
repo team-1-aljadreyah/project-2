@@ -55,8 +55,8 @@ export function buildMissions({
   const ourPartWaits = (o: Order) => !!o.prep_parts?.some((p) => p.warehouse_id === view.wh.id && !p.prepared_by);
   const open = orders.filter(
     (o) =>
-      (o.warehouse_id === view.wh.id && ((o.status === "approved" && !o.delivery && (!o.prep_parts || ourPartWaits(o))) || o.status === "pending" || o.status === "needs_approval")) ||
-      (o.warehouse_id !== view.wh.id && o.status === "approved" && !o.delivery && ourPartWaits(o)),
+      (o.warehouse_id === view.wh.id && ((o.status === "approved" && !o.delivery && !o.shipments?.length && (!o.prep_parts || ourPartWaits(o))) || o.status === "pending" || o.status === "needs_approval")) ||
+      (o.warehouse_id !== view.wh.id && o.status === "approved" && !o.delivery && !o.shipments?.length && ourPartWaits(o)),
   );
 
   const missions = open.map((order): Mission => {

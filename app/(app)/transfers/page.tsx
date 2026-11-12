@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ArrowLeftRight, Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/components/shell";
-import { useWarehouseFilter } from "@/components/warehouse-filter";
+import { useMyWarehouses, useWarehouseFilter } from "@/components/warehouse-filter";
 import {
   Badge,
   Button,
@@ -40,7 +40,8 @@ export default function TransfersPage() {
   const [open, setOpen] = useState(false);
   const wName = (id: number) => name(lookups.warehouses.find((w) => w.id === id));
   /** A transfer on the road that this person may receive (the manager, or the keeper it goes to). */
-  const canReceive = (t: Transfer) => t.status === "sent" && (user.role === "manager" || (user.role === "warehouse" && user.warehouse_id === t.to_warehouse_id));
+  const mine = useMyWarehouses();
+  const canReceive = (t: Transfer) => t.status === "sent" && (user.role === "manager" || (user.role === "warehouse" && (!mine || mine.includes(t.to_warehouse_id))));
   const columns: Column<Transfer>[] = [
     { key: "n", head: tr("الرقم", "No."), cell: (t) => <span className="num">{t.number}</span> },
     { key: "d", head: tr("الوقت", "Time"), cell: (t) => dateTime(t.created_at) },
@@ -126,6 +127,7 @@ function TransferDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
   const { tr, name, qty } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const toast = useToast();
+  const mine = useMyWarehouses();
   const [from, setFrom] = useState(user.warehouse_id ?? lookups.warehouses[0].id);
   const [to, setTo] = useState(lookups.warehouses.find((w) => w.id !== (user.warehouse_id ?? lookups.warehouses[0].id))?.id ?? lookups.warehouses[1].id);
   const [lines, setLines] = useState<{ item_id: number | ""; unit: Unit; qty: number }[]>([{ item_id: "", unit: "carton", qty: 1 }]);
@@ -175,8 +177,8 @@ function TransferDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={tr("من مخزن", "From")}>
-          <Select value={from} onChange={(e) => setFrom(Number(e.target.value))} disabled={user.role === "warehouse"}>
-            {lookups.warehouses.map((w) => (
+          <Select value={from} onChange={(e) => setFrom(Number(e.target.value))} disabled={!!mine && mine.length < 2}>
+            {lookups.warehouses.filter((w) => !mine || mine.includes(w.id)).map((w) => (
               <option key={w.id} value={w.id}>
                 {name(w)}
               </option>

@@ -20,6 +20,7 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
     pieces_per_carton: item?.pieces_per_carton ?? 12,
     min_stock: item?.min_stock ?? 120,
     commission_percent: item?.commission_percent ?? 2,
+    weight_kg: item?.weight_kg,
     prices: lookups.tiers.map((t) => item?.prices.find((p) => p.tier_id === t.id) ?? { tier_id: t.id, carton_price: 0, piece_price: 0 }),
     active: item?.active ?? true,
   }));
@@ -83,6 +84,9 @@ export function ItemForm({ open, onClose, item, onSaved }: { open: boolean; onCl
         </Field>
         <Field label={tr("الحد الأدنى (بالقطعة)", "Minimum stock (pieces)")} error={err.min_stock} hint={tr("إذا نزل المخزون عنه يصلك إشعار", "You get a notification below this")}>
           <NumberInput value={f.min_stock} onChange={(v) => set({ min_stock: v === "" ? 0 : v })} />
+        </Field>
+        <Field label={tr("وزن القطعة (كغم)", "Weight of one piece (kg)")} error={err.weight_kg} hint={tr("لحساب حمولة السيارات", "For the vehicles' loads")}>
+          <Input type="number" step="0.01" min={0} dir="ltr" value={f.weight_kg ?? ""} onChange={(e) => set({ weight_kg: e.target.value === "" ? undefined : Number(e.target.value) })} />
         </Field>
         <Field label={tr("عمولة المندوب %", "Rep commission %")} error={err.commission_percent} hint={tr("على المبلغ المدفوع فعلاً", "On money actually paid")}>
           <Input type="number" step="0.5" min={0} max={50} dir="ltr" value={f.commission_percent} onChange={(e) => set({ commission_percent: Number(e.target.value) })} />

@@ -39,8 +39,12 @@ import type {
   User,
   UserInput,
   Warehouse,
+  Vehicle,
+  VehicleInput,
+  ShipmentLoad,
   WarehouseInput,
   WarehouseLayout,
+  WarehouseCover,
   OnlinePayment,
   StartOnlinePayment,
   DeliverInput,
@@ -65,6 +69,7 @@ import type {
 
 export interface Lookups {
   warehouses: Warehouse[];
+  vehicles: Vehicle[];
   tiers: PriceTier[];
   reps: { id: number; name: string; phone: string; kinds?: RepKind[] }[];
   categories: string[];
@@ -105,6 +110,8 @@ export const httpApi = {
   saveWarehouse: (id: number, input: WarehouseInput) => patch<Warehouse>(`/warehouses/${id}`, input),
   /** The zones and the place of every item (the manager, or the keeper of this warehouse). */
   saveLayout: (id: number, layout: WarehouseLayout) => patch<Warehouse>(`/warehouses/${id}/layout`, layout),
+  /** An absent keeper's warehouse given to another keeper until a time (null = end it). The manager. */
+  setCover: (id: number, cover: Pick<WarehouseCover, "user_id" | "until"> | null) => post<Warehouse>(`/warehouses/${id}/cover`, { cover }),
   renameCategory: (from: string, to: string) => post<void>("/categories/rename", { from, to }),
   quickItem: (id: number, change: ItemQuick) => patch<Item>(`/items/${id}/quick`, change),
   saveTier: (id: number | null, name: string, name_en: string) => save<PriceTier>("/price-tiers", id, { name, name_en }),
@@ -176,6 +183,9 @@ export const httpApi = {
   /** At the shop: the photo and the PIN. A wrong PIN comes back as { ok: false, left, locked }. */
   deliverOrder: (id: number, input: DeliverInput) => post<{ ok: true; order: Order } | { ok: false; left: number; locked: boolean }>(`/orders/${id}/deliver`, input),
   unlockDelivery: (id: number) => post<Order>(`/orders/${id}/delivery/unlock`),
+  saveVehicle: (id: number | null, input: VehicleInput) => save<Vehicle>("/vehicles", id, input),
+  /** Put a prepared order on vehicles: one load = that vehicle; more = one shipment per vehicle (same order). */
+  planShipments: (id: number, loads: ShipmentLoad[]) => post<Order>(`/orders/${id}/shipments`, { loads }),
   /** The warehouse staff loaded the shipment into the delivery rep's van. */
   loadShipment: (id: number) => post<Order>(`/orders/${id}/delivery/load`),
   // Where the delivery rep is. His phone sends it every few seconds while he has shipments on the way;

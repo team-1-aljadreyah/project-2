@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutGrid, MapPin as MapPinIcon, Paintbrush, Pencil, Plus, Save } from "lucide-react";
+import { LayoutGrid, MapPin as MapPinIcon, Paintbrush, Pencil, Plus, Save, UserCheck } from "lucide-react";
 import { BrandDialog, EditText, SortArea, SortItem } from "@/components/customize";
 import { LogoMark } from "@/components/logo";
-import { LayoutEditor, WarehouseForm } from "@/components/warehouse-layout";
+import { CoverDialog, LayoutEditor, WarehouseForm, coverActive } from "@/components/warehouse-layout";
+import { VehiclesCard } from "@/components/vehicles";
 import { useApp } from "@/components/shell";
 import { Button, Card, CardHeader, Field, Input, NumberInput, errorText, useToast, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -13,7 +14,7 @@ import { useFmt } from "@/lib/i18n";
 import { saveSite, setCustomizing, useBrand } from "@/lib/site";
 
 export default function SettingsPage() {
-  const { tr, lang, name } = useFmt();
+  const { tr, lang, name, date } = useFmt();
   const { lookups, reloadItems } = useApp();
   const toast = useToast();
   const brand = useBrand();
@@ -21,6 +22,7 @@ export default function SettingsPage() {
   // The warehouse being added ("new") or edited, and the one whose inside is being arranged.
   const [whForm, setWhForm] = useState<Warehouse | "new" | null>(null);
   const [arranging, setArranging] = useState<Warehouse | null>(null);
+  const [covering, setCovering] = useState<Warehouse | null>(null);
   const fail = (e: unknown) => toast("danger", errorText(e, tr));
   const [s, setS] = useState<Settings>(lookups.settings);
   const [busy, setBusy] = useState(false);
@@ -51,6 +53,8 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        <VehiclesCard />
+
         <Card>
           <CardHeader
             title={tr("المخازن", "Warehouses")}
@@ -71,6 +75,11 @@ export default function SettingsPage() {
                   <span className="flex items-center gap-1 text-xs text-muted">
                     <span className="num">{w.capacity.toLocaleString("en")}</span> {tr("كارتون", "cartons")}
                     {w.layout && <> · {tr(`${w.layout.zones.length} مناطق`, `${w.layout.zones.length} zones`)}</>}
+                    {coverActive(w) && (
+                      <span className="flex items-center gap-0.5 font-semibold text-action">
+                        · <UserCheck className="size-3" /> {tr(`مكلّف: ${w.cover!.name} حتى ${date(w.cover!.until)}`, `Covered by ${w.cover!.name} until ${date(w.cover!.until)}`)}
+                      </span>
+                    )}
                     {w.lat === undefined && (
                       <span className="flex items-center gap-0.5 text-warning">
                         · <MapPinIcon className="size-3" /> {tr("بلا موقع", "no location")}
@@ -78,6 +87,9 @@ export default function SettingsPage() {
                     )}
                   </span>
                 </span>
+                <Button size="sm" variant="ghost" onClick={() => setCovering(w)} title={tr("تكليف مؤقت عند غياب الأمين", "Temporary cover while the keeper is away")}>
+                  <UserCheck className="size-4" /> <span className="max-sm:hidden">{tr("تكليف مؤقت", "Cover")}</span>
+                </Button>
                 <Button size="sm" onClick={() => setArranging(w)}>
                   <LayoutGrid className="size-4" /> {tr("ترتيب", "Arrange")}
                 </Button>
@@ -189,6 +201,7 @@ export default function SettingsPage() {
       {brandOpen && <BrandDialog onClose={() => setBrandOpen(false)} />}
       {whForm && <WarehouseForm warehouse={whForm === "new" ? undefined : whForm} onClose={() => setWhForm(null)} onSaved={(w) => whForm === "new" && setArranging(w)} />}
       {arranging && <LayoutEditor warehouse={arranging} onClose={() => setArranging(null)} />}
+      {covering && <CoverDialog warehouse={covering} onClose={() => setCovering(null)} />}
     </>
   );
 }

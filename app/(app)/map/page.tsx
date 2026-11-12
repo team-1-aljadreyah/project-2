@@ -145,7 +145,7 @@ export default function MapPage() {
             <Button href="/orders">
               <ClipboardList className="size-4" /> {tr("طلبات تنتظر", "Waiting orders")} <span className="num rounded-md bg-primary-soft px-1.5 text-xs text-primary-ink">{waiting}</span>
             </Button>
-            {current && canArrange(user, current.wh.id) && (
+            {current && canArrange(user, current.wh.id, lookups.warehouses) && (
               <Button onClick={() => setArranging(true)}>
                 <LayoutGrid className="size-4" /> {tr("ترتيب المخزن", "Arrange the warehouse")}
               </Button>

@@ -35,7 +35,7 @@ import {
 import { useApp } from "@/components/shell";
 import { Dialog, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import { SHOP_MAX_QTY, orderCount, type Customer, type Item, type NewOrder, type Unit } from "@/lib/api/types";
+import { type Customer, type Item, type NewOrder, type Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { enqueue, isNetworkError, newClientRef } from "@/lib/offline";
 import { cn, matches, piecesOf, priceOf } from "@/lib/utils";
@@ -179,15 +179,12 @@ export function ShopStore({ customer }: { customer: Customer }) {
   const pg = usePages(shown, 12);
 
   const lineOf = (id: number) => bag.lines.find((l) => l.item_id === id);
-  /** Change one line of the bag: null or 0 removes it, a new item goes at the end, an old one keeps its place. */
-  const tooBig = () =>
-    toast("danger", tr(`الحد الأعلى للطلب الواحد ${SHOP_MAX_QTY} (كل المواد معاً). للكميات الأكبر تواصل مع مندوبك.`, `Up to ${SHOP_MAX_QTY} in one order (all items together). For more, contact your rep.`));
-  /** Change one line of the bag: null or 0 removes it. More than the order limit in all is refused. */
+  /**
+   * Change one line of the bag: null or 0 removes it, a new item goes at the end, an old one keeps its place.
+   * No limit on the size of an order (the company's decision): a big order is carried by more than one
+   * vehicle, and stays one order for the shop.
+   */
   const setLine = (id: number, line: Omit<Line, "item_id"> | null) => {
-    if (line && line.qty > 0 && orderCount(bag.lines.filter((l) => l.item_id !== id)) + line.qty > SHOP_MAX_QTY) {
-      tooBig();
-      return false;
-    }
     setBag((b) => {
       if (!line || line.qty <= 0) return { ...b, lines: b.lines.filter((l) => l.item_id !== id) };
       const exists = b.lines.some((l) => l.item_id === id);
@@ -408,7 +405,6 @@ export function ShopStore({ customer }: { customer: Customer }) {
           available={available(open)}
           price={(u) => price(open, u)}
           onClose={() => setOpen(null)}
-          room={SHOP_MAX_QTY - orderCount(bag.lines.filter((l) => l.item_id !== open.id))}
           onSave={(line) => {
             if (setLine(open.id, line)) setOpen(null);
           }}
@@ -531,7 +527,6 @@ function ItemSheet({
   index,
   line,
   available,
-  room,
   price,
   onClose,
   onSave,
@@ -541,7 +536,6 @@ function ItemSheet({
   line?: Line;
   available: number;
   /** How much more the order can take (the limit minus the other lines). */
-  room: number;
   price: (u: Unit) => number;
   onClose: () => void;
   onSave: (line: Omit<Line, "item_id"> | null) => void;
@@ -550,7 +544,7 @@ function ItemSheet({
   const [unit, setUnit] = useState<Unit>(line?.unit ?? "carton");
   const [n, setN] = useState(line?.qty ?? 1);
   // What is in stock, and never more than what is left of the order's limit.
-  const max = Math.min(Math.max(0, room), unit === "carton" ? Math.floor(available / item.pieces_per_carton) : available);
+  const max = unit === "carton" ? Math.floor(available / item.pieces_per_carton) : available;
   const tooMuch = piecesOf(item, unit, n) > available;
   return (
     <Dialog
@@ -606,7 +600,6 @@ function ItemSheet({
         <p className="text-sm font-bold">{tr("الكمية", "Quantity")}</p>
         <Stepper value={n} onChange={setN} min={1} max={Math.max(1, max)} />
       </div>
-      <p className="mt-1 text-end text-[11px] text-faint">{tr(`الطلب كله حتى ${SHOP_MAX_QTY} · باقٍ لك ${Math.max(0, room)}`, `The whole order up to ${SHOP_MAX_QTY} · ${Math.max(0, room)} left`)}</p>
       {line && (
         <button type="button" onClick={() => onSave(null)} className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-danger">
           <Trash2 className="size-3.5" /> {tr("احذف من السلة", "Remove from bag")}

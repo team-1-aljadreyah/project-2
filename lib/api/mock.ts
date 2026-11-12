@@ -7,8 +7,10 @@ import { ApiError, NETWORK_ERROR } from "./errors";
 import type { Api } from "./http";
 import type {
   AuditEntry,
+  Order,
   Warehouse,
   WarehouseInput,
+  WarehouseCover,
   OnlineStatus,
   Batch,
   Customer,
@@ -27,6 +29,7 @@ import type {
   Statement,
   StatementRow,
 } from "./types";
+import { worksIn } from "./types";
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
 import {
   approveOrder,
@@ -86,6 +89,8 @@ import {
   switchShop,
   returnToWarehouse,
   unlockDelivery,
+  planShipments,
+  vehiclesOf,
   deliveryRepId,
   notify,
   person,
@@ -100,6 +105,7 @@ import {
 } from "./mock/rules";
 import { makeSeed } from "./mock/seed";
 import { fullSite, ordered } from "./site-defaults";
+import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -117,6 +123,12 @@ function actorOf(db: Db): DbUser {
   const id = s?.token?.startsWith("mock.") ? Number(s.token.slice(5)) : NaN;
   const u = db.users.find((x) => x.id === id);
   if (!u || !u.active) throw new ApiError(401, msg("انتهت الجلسة، سجّل الدخول من جديد", "Your session ended. Log in again"), undefined, "UNAUTHENTICATED");
+  // A keeper who covers another warehouse now (temporary cover): known once for the whole request.
+  if (u.role === "warehouse") {
+    const nowIso = new Date().toISOString();
+    const covering = db.warehouses.filter((w) => w.cover?.user_id === u.id && w.cover.until > nowIso).map((w) => w.id);
+    if (covering.length) return { ...u, covering };
+  }
   return u;
 }
 
@@ -166,6 +178,7 @@ function liveMarks(db: Db) {
 // ---------- views: what each role may see ----------
 
 function itemView(db: Db, it: DbItem, actor: DbUser, now: Date): Item {
+  it = { ...it, weight_kg: it.weight_kg ?? guessWeight(it.name_en) };
   const today = dayOf(now);
   const by_warehouse = db.warehouses.map((w) => ({ warehouse_id: w.id, qty: sellableQty(db, it.id, w.id, now) }));
   const live = db.batches.filter((b) => b.item_id === it.id && b.qty_left > 0 && b.expiry_date >= today);
@@ -228,7 +241,7 @@ function checkWarehouse(db: Db, input: WarehouseInput, id: number): Omit<Warehou
 
 /** A keeper / staff: batches, expiry dates and movements of their own warehouse only. */
 function ownWarehouse(actor: DbUser, warehouseId: number) {
-  return (actor.role !== "warehouse" && actor.role !== "staff") || !actor.warehouse_id || actor.warehouse_id === warehouseId;
+  return worksIn(actor, warehouseId);
 }
 
 /** A delivery rep sees the shops he has shipments for (name, area, phone), even if they aren't his. */
@@ -240,7 +253,7 @@ function canSeeOrder(actor: DbUser, o: { customer_id: number; rep_id: number; wa
   // A rep sees his shops' orders, and the ones he delivers.
   if (actor.role === "rep") return o.rep_id === actor.id || o.delivery?.rep?.id === actor.id;
   if (actor.role === "shop") return o.customer_id === actor.customer_id;
-  if (actor.role === "warehouse" || actor.role === "staff") return !actor.warehouse_id || actor.warehouse_id === o.warehouse_id || !!o.prep_parts?.some((p) => p.warehouse_id === actor.warehouse_id);
+  if (actor.role === "warehouse" || actor.role === "staff") return worksIn(actor, o.warehouse_id) || !!o.prep_parts?.some((p) => worksIn(actor, p.warehouse_id));
   return true;
 }
 
@@ -376,7 +389,9 @@ export const mockApi: Api = {
   },
   me: () =>
     read((_db, a) => {
-      const { password: _p, ...user } = a;
+      // `covering` is worked out per request (the warehouses' covers are the truth): not part of the user.
+      const { password: _p, covering: _c, ...user } = a;
+      void _c;
       void _p;
       return user;
     }),
@@ -385,6 +400,7 @@ export const mockApi: Api = {
   lookups: () =>
     read((db) => ({
       warehouses: db.warehouses,
+      vehicles: vehiclesOf(db),
       tiers: db.tiers,
       reps: db.users.filter((u) => u.role === "rep").map((u) => ({ id: u.id, name: u.name, phone: u.phone, ...(u.rep_kinds?.length ? { kinds: u.rep_kinds } : {}) })),
       categories: ordered([...new Set(db.items.map((i) => i.category))], db.custom?.categories ?? [], (c) => c),
@@ -524,7 +540,7 @@ export const mockApi: Api = {
       need(a, ["manager", "warehouse"]);
       const w = db.warehouses.find((x) => x.id === id) ?? notFound();
       // A keeper arranges his own warehouse only.
-      if (a.role === "warehouse" && a.warehouse_id && a.warehouse_id !== id) fail(403, "FORBIDDEN", "ترتّب مخزنك فقط", "You arrange your own warehouse only");
+      if (a.role === "warehouse" && !worksIn(a, id)) fail(403, "FORBIDDEN", "ترتّب مخزنك فقط", "You arrange your own warehouse only");
       const zones = layout.zones.map((z) => ({ code: z.code.trim().toUpperCase(), name: z.name.trim() }));
       if (!zones.length) fail(422, "VALIDATION", "يحتاج المخزن منطقة واحدة على الأقل", "A warehouse needs at least one zone");
       if (zones.some((z) => !z.name)) fail(422, "VALIDATION", "لكل منطقة اسم", "Every zone needs a name");
@@ -559,6 +575,28 @@ export const mockApi: Api = {
       );
       return w;
     }),
+  saveVehicle: (id, input) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const list = vehiclesOf(db);
+      const errors: Record<string, string> = {};
+      if (!input.name.trim()) errors.name = msg("الاسم مطلوب", "Name is required");
+      if (!(input.capacity_kg >= 50) || input.capacity_kg > 40_000) errors.capacity_kg = msg("بين 50 و 40,000 كغم", "Between 50 and 40,000 kg");
+      if (input.driver_id && !db.users.some((u) => u.id === input.driver_id && u.role === "rep")) errors.driver_id = msg("اختر مندوب توصيل", "Choose a delivery rep");
+      if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
+      const clean = { name: input.name.trim(), plate: input.plate?.trim() || undefined, capacity_kg: Math.round(input.capacity_kg), driver_id: input.driver_id || undefined, active: input.active };
+      if (id) {
+        const v = list.find((x) => x.id === id) ?? notFound();
+        Object.assign(v, clean);
+        audit(db, a, "update", "settings", v.id, `تعديل السيارة ${v.name}: حمولة ${v.capacity_kg} كغم`, `Vehicle ${v.name}: ${v.capacity_kg} kg`, now);
+        return v;
+      }
+      const v = { id: Math.max(0, ...list.map((x) => x.id)) + 1, ...clean };
+      list.push(v);
+      audit(db, a, "create", "settings", v.id, `إضافة السيارة ${v.name}: حمولة ${v.capacity_kg} كغم`, `New vehicle ${v.name}: ${v.capacity_kg} kg`, now);
+      return v;
+    }),
+  planShipments: (id, loads) => write((db, a, now) => orderView(planShipments(db, a, id, loads, now), a)),
   loadShipment: (id) =>
     write((db, a, now) => {
       need(a, ["staff", "warehouse", "manager"]);
@@ -567,6 +605,26 @@ export const mockApi: Api = {
       if (!ownWarehouse(a, o.warehouse_id)) fail(403, "FORBIDDEN", "هذه الشحنة من مخزن آخر", "This shipment is from another warehouse");
       if (d.status !== "ready") fail(409, "BAD_STATE", "خرجت الشحنة من المخزن", "The shipment already left");
       if (d.loaded_at) return orderView(o, a); // pressed twice: nothing changes
+      // The vehicle's maximum load: what is already in it, and this shipment.
+      if (d.vehicle) {
+        const v = vehiclesOf(db).find((x) => x.id === d.vehicle!.id);
+        const itemOf = (iid: number) => db.items.find((i) => i.id === iid);
+        const inside = vehicleLoad(d.vehicle.id, db.orders as Order[], itemOf, o.id);
+        const kg = linesWeight(o.lines, itemOf);
+        if (v && inside + kg > v.capacity_kg) {
+          // The suggestion: the other vehicle with the most room left now.
+          const room = (x: { id: number; capacity_kg: number }) => x.capacity_kg - vehicleLoad(x.id, db.orders as Order[], itemOf);
+          const other = vehiclesOf(db)
+            .filter((x) => x.active && x.id !== v.id && room(x) >= kg)
+            .sort((x, y) => room(y) - room(x))[0];
+          fail(
+            409,
+            "BAD_STATE",
+            `${v.name} امتلأت: فيها ${Math.round(inside)} كغم وهذه الشحنة ${Math.round(kg)} كغم (الحمولة ${v.capacity_kg} كغم).${other ? ` اقتراح: ${other.name}.` : ""} غيّر السيارة من صفحة الطلب.`,
+            `${v.name} is full: ${Math.round(inside)} kg in it plus ${Math.round(kg)} kg (max ${v.capacity_kg} kg).${other ? ` Try ${other.name}.` : ""}`,
+          );
+        }
+      }
       d.loaded_at = now.toISOString();
       d.loaded_by = person(a);
       const customer = db.customers.find((c) => c.id === o.customer_id);
@@ -587,6 +645,34 @@ export const mockApi: Api = {
         now,
       );
       return orderView(o, a);
+    }),
+  setCover: (warehouseId, cover) =>
+    write((db, a, now) => {
+      need(a, ["manager"]);
+      const w = db.warehouses.find((x) => x.id === warehouseId) ?? notFound();
+      if (!cover) {
+        if (!w.cover) return w;
+        const was = w.cover;
+        delete w.cover;
+        audit(db, a, "update", "user", was.user_id, `إنهاء تكليف ${was.name} بمخزن ${w.name}`, `${was.name}'s cover of ${w.name_en} ended`, now);
+        notify(db, { type: "order_accepted", roles: ["warehouse"], user_id: was.user_id, title: `انتهى تكليفك بمخزن ${w.name}`, title_en: `Your cover of ${w.name_en} ended`, body: "يعود عملك إلى مخزنك فقط.", body_en: "You work in your own warehouse only again.", link: "/hall" }, now);
+        return w;
+      }
+      const u = db.users.find((x) => x.id === cover.user_id && x.active && x.role === "warehouse") ?? fail(422, "VALIDATION", "اختر أمين مخزن فعّالاً", "Pick an active warehouse keeper", { user_id: msg("مطلوب", "Required") });
+      if (u.warehouse_id === w.id) fail(422, "VALIDATION", "هذا أمين المخزن نفسه", "That is this warehouse's own keeper", { user_id: msg("اختر أميناً آخر", "Pick another keeper") });
+      const until = new Date(cover.until);
+      if (!(until.getTime() > now.getTime())) fail(422, "VALIDATION", "اختر وقت انتهاء بعد الآن", "Pick an end time after now", { until: msg("بعد الآن", "After now") });
+      if (until.getTime() - now.getTime() > 31 * 86_400_000) fail(422, "VALIDATION", "التكليف المؤقت حتى شهر واحد", "A cover lasts at most one month", { until: msg("شهر واحد كحد أعلى", "One month at most") });
+      const c: WarehouseCover = { user_id: u.id, name: u.name, until: until.toISOString(), by: a.name, at: now.toISOString() };
+      w.cover = c;
+      const day = c.until.slice(0, 10);
+      audit(db, a, "update", "user", u.id, `تكليف ${u.name} مؤقتاً بمخزن ${w.name} حتى ${day}`, `${u.name} covers ${w.name_en} until ${day}`, now);
+      notify(
+        db,
+        { type: "order_accepted", roles: ["warehouse"], user_id: u.id, title: `كُلّفت مؤقتاً بمخزن ${w.name}`, title_en: `You cover ${w.name_en} for now`, body: `حتى ${day}: تجهّز وتستلم وتحوّل لهذا المخزن أيضاً.`, body_en: `Until ${day}: you prepare, receive and transfer for it too.`, link: "/hall" },
+        now,
+      );
+      return w;
     }),
   renameWarehouse: (id, name, name_en) =>
     write((db, a, now) => {
@@ -701,6 +787,7 @@ export const mockApi: Api = {
       if (!input.name.trim()) errors.name = msg("الاسم مطلوب", "Name is required");
       if (!(input.pieces_per_carton >= 1) || !Number.isInteger(input.pieces_per_carton)) errors.pieces_per_carton = msg("عدد صحيح من 1", "A whole number from 1");
       if (input.min_stock < 0) errors.min_stock = msg("لا يكون سالباً", "Can't be negative");
+      if (input.weight_kg !== undefined && !(input.weight_kg > 0 && input.weight_kg <= 100)) errors.weight_kg = msg("بين 0.01 و 100 كغم", "Between 0.01 and 100 kg");
       if (input.commission_percent < 0 || input.commission_percent > 50) errors.commission_percent = msg("بين 0 و 50", "Between 0 and 50");
       input.prices.forEach((p) => {
         if (!(p.carton_price > 0)) errors[`prices.${p.tier_id}.carton_price`] = msg("مطلوب", "Required");
@@ -770,7 +857,7 @@ export const mockApi: Api = {
     read((db, a) => {
       need(a, ["manager", "warehouse", "accountant", "staff"]);
       return db.receipts
-        .filter((r) => (a.role !== "warehouse" && a.role !== "staff") || !a.warehouse_id || r.warehouse_id === a.warehouse_id)
+        .filter((r) => worksIn(a, r.warehouse_id))
         .map((r) => receiptView(r, a))
         .reverse();
     }),
