@@ -17,6 +17,32 @@ import { cn } from "@/lib/utils";
 
 export type AppKind = "client" | "driver";
 
+/**
+ * The apps' visual identity (هوية بصرية). Each app has exactly two colors on the dark graphite of the
+ * Al-Nahrain logo: `main` (buttons, icons, numbers) and `soft` (tints, second lines, highlights).
+ * - Shop owners: the brand's orange (the sun of the logo) and a warm sand.
+ * - Reps: a river teal and a light mint.
+ * The shared motif is the logo's two rivers: two waving lines (Rivers) behind the heroes and between sections.
+ * See docs/app-identity.md.
+ */
+export const IDENTITY = {
+  client: { main: "#e1692b", soft: "#f6c7a1" },
+  driver: { main: "#1fb5a5", soft: "#a8ede3" },
+} as const;
+
+/** The two rivers of the logo, drawn wide: the main line, and the soft one flowing under it. */
+export function Rivers({ app, className }: { app: AppKind; className?: string }) {
+  const { main, soft } = IDENTITY[app];
+  // One wave, repeated across: smooth curves ("T" continues the curve).
+  const wave = (y: number, a: number) => `M0 ${y} Q 60 ${y - a} 120 ${y} ${Array.from({ length: 19 }, (_, i) => `T ${240 + i * 120} ${y}`).join(" ")}`;
+  return (
+    <svg viewBox="0 0 1200 90" preserveAspectRatio="none" className={cn("pointer-events-none block h-16 w-full sm:h-20", className)} aria-hidden>
+      <path d={wave(34, 22)} fill="none" stroke={main} strokeWidth="5" strokeLinecap="round" opacity="0.9" />
+      <path className="river-flow" d={wave(60, 14)} fill="none" stroke={soft} strokeWidth="4" strokeLinecap="round" opacity="0.7" />
+    </svg>
+  );
+}
+
 /** Who is here: logged in to this app (then "open the app"), to another job, or not logged in. */
 export function useAppEntry(app: AppKind) {
   const router = useRouter();

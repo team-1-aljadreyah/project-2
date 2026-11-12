@@ -398,6 +398,10 @@ html[data-vt="fade"]::view-transition-new(root) {
 .shine { position: relative; overflow: hidden; }
 .shine::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent); animation: shine 3.2s ease-in-out infinite; }
 
+/* The soft river of the apps' identity flows (dashes moving along the wave). */
+@keyframes river-flow { to { stroke-dashoffset: -60; } }
+.river-flow { stroke-dasharray: 18 12; animation: river-flow 2.4s linear infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .blob, .text-gradient-pan, .scan-line, .shine::after { animation: none; }
+  .blob, .text-gradient-pan, .scan-line, .shine::after, .river-flow { animation: none; }
 }
