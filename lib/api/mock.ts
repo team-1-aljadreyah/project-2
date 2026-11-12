@@ -30,12 +30,15 @@ import type {
   StatementRow,
   User,
   ProfileAction,
+  Health,
+  HealthCheck,
+  LoginFail,
   SiteCustom,
   CustomField,
   CustomObject,
   CustomValue,
 } from "./types";
-import { inHours, worksIn } from "./types";
+import { EXPENSE_APPROVAL_ABOVE, inHours, worksIn } from "./types";
 import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, type DbCustomer, type DbItem, type DbReturn, type DbUser } from "./mock/db";
 import {
   approveOrder,
@@ -505,12 +508,20 @@ export const mockApi: Api = {
       (db, _a, now): Session => {
         const clean = phone.replace(/\s/g, "");
         const u = db.users.find((x) => x.phone === clean);
-        if (!u || u.password !== password) {
-          fail(401, "UNAUTHENTICATED", "رقم الهاتف أو كلمة المرور غير صحيحة", "Wrong phone number or password");
-        }
-        if (!u.active) fail(403, "FORBIDDEN", "هذا الحساب موقوف، راجع المدير", "This account is disabled. Contact the manager");
+        // A failed attempt is written down for the health page (outside this request, which is thrown away).
+        const refuse = (reason: LoginFail, status: number, code: "UNAUTHENTICATED" | "FORBIDDEN", ar: string, en: string): never => {
+          const live = db0();
+          (live.login_log ??= []).push({ phone: clean, ...(u ? { user_id: u.id } : {}), ok: false, reason, at: now.toISOString() });
+          live.login_log = live.login_log.slice(-2000);
+          saveDb(live);
+          return fail(status, code, ar, en);
+        };
+        if (!u || u.password !== password) return refuse("wrong", 401, "UNAUTHENTICATED", "رقم الهاتف أو كلمة المرور غير صحيحة", "Wrong phone number or password");
+        if (!u.active) return refuse("stopped", 403, "FORBIDDEN", "هذا الحساب موقوف، راجع المدير", "This account is disabled. Contact the manager");
         const hours = profileFor(u)?.hours;
-        if (hours && !inHours(hours, now)) fail(403, "FORBIDDEN", `لا يمكنك الدخول الآن: ساعات دخولك ${hours.from} – ${hours.to}`, `You can't log in now: your hours are ${hours.from}–${hours.to}`);
+        if (hours && !inHours(hours, now)) return refuse("hours", 403, "FORBIDDEN", `لا يمكنك الدخول الآن: ساعات دخولك ${hours.from} – ${hours.to}`, `You can't log in now: your hours are ${hours.from}–${hours.to}`);
+        (db.login_log ??= []).push({ phone: clean, user_id: u.id, ok: true, at: now.toISOString() });
+        db.login_log = db.login_log.slice(-2000);
         audit(db, u, "login", "user", u.id, `تسجيل دخول ${u.name}`, `${u.name} logged in`, now);
         const { password: _p, ...user } = u;
         void _p;
@@ -583,6 +594,112 @@ export const mockApi: Api = {
   changeMyPassword: (current, next) => write((db, a) => changeMyPassword(db, a, current, next), { self: true }),
   removeMyShop: (customerId, password) => write((db, a, now) => strip(removeMyShop(db, a, customerId, password, now)), { self: true }),
   deleteMyAccount: (password) => write((db, a, now) => deleteMyAccount(db, a, password, now), { self: true }),
+
+  // Health and security (the manager)
+  health: () =>
+    read((db, a, now): Health => {
+      need(a, ["manager"]);
+      const day = now.getTime() - 86_400_000;
+      const log = (db.login_log ?? []).filter((x) => new Date(x.at).getTime() >= day);
+      const failed = log.filter((x) => !x.ok);
+      const reasons: Record<LoginFail, number> = { wrong: 0, stopped: 0, hours: 0 };
+      for (const f of failed) reasons[f.reason ?? "wrong"]++;
+      const live = db.users.filter((u) => !u.deleted);
+      const active = live.filter((u) => u.active);
+      // The last login of each person (from the logins written down, or the activity log).
+      const last = new Map<number, string>();
+      for (const x of db.login_log ?? []) if (x.ok && x.user_id) last.set(x.user_id, x.at);
+      for (const e of db.audit) if (e.action === "login" && (!last.has(e.user.id) || last.get(e.user.id)! < e.at)) last.set(e.user.id, e.at);
+      const person = (u: DbUser) => ({ id: u.id, name: u.name, role: u.role });
+      const never = active.filter((u) => !last.has(u.id)).map(person);
+      const idle = active.filter((u) => last.has(u.id) && now.getTime() - new Date(last.get(u.id)!).getTime() > 30 * 86_400_000).map((u) => ({ ...person(u), last: last.get(u.id)! }));
+      const weak = active.filter((u) => u.password.length < 8 || /^(\d)\1+$/.test(u.password) || ["123456", "12345678", "password", "000000"].includes(u.password) || u.password === u.phone).map(person);
+      const managers = active.filter((u) => u.role === "manager").length;
+      const by_role = { manager: 0, accountant: 0, warehouse: 0, staff: 0, rep: 0, shop: 0 } as Record<Role, number>;
+      for (const u of active) by_role[u.role]++;
+      const site = fullSite(db.custom);
+      const limit = db.settings.expense_approval_above ?? EXPENSE_APPROVAL_ABOVE;
+      const rate = log.length ? failed.length / log.length : 0;
+      const checks: HealthCheck[] = [
+        {
+          key: "passwords",
+          ok: weak.length === 0,
+          weight: 30,
+          title: "كلمات مرور قوية",
+          title_en: "Strong passwords",
+          detail: weak.length ? `${weak.length} حساب بكلمة مرور سهلة التخمين (مثل 123456 أو رقم الهاتف). غيّرها من صفحة المستخدمين.` : "لا أحد يستعمل كلمة مرور سهلة.",
+          detail_en: weak.length ? `${weak.length} accounts use an easy password.` : "Nobody uses an easy password.",
+          fix: "/users",
+        },
+        {
+          key: "managers",
+          ok: managers <= 2,
+          weight: 15,
+          title: "عدد قليل من المدراء",
+          title_en: "Few managers",
+          detail: managers <= 2 ? `${managers} حساب مدير فقط.` : `${managers} حسابات مدير: المدير يرى ويغيّر كل شيء، فاجعلهم أقل ما يمكن.`,
+          detail_en: `${managers} manager accounts.`,
+          fix: "/users",
+        },
+        {
+          key: "logins",
+          ok: rate < 0.2 && failed.length < 10,
+          weight: 20,
+          title: "محاولات دخول فاشلة قليلة",
+          title_en: "Few failed logins",
+          detail: failed.length ? `${failed.length} محاولة فاشلة من ${log.length} في آخر 24 ساعة.` : "لا محاولات فاشلة في آخر 24 ساعة.",
+          detail_en: `${failed.length} failed of ${log.length} in 24 hours.`,
+          fix: "/settings/advanced?s=health",
+        },
+        {
+          key: "idle",
+          ok: idle.length === 0,
+          weight: 15,
+          title: "لا حسابات خاملة",
+          title_en: "No idle accounts",
+          detail: idle.length ? `${idle.length} حساب فعّال لم يدخل منذ أكثر من 30 يوماً: أوقفه إن لم يعد يعمل.` : "كل الحسابات الفعّالة مستعملة.",
+          detail_en: `${idle.length} active accounts unused for 30+ days.`,
+          fix: "/users",
+        },
+        {
+          key: "expenses",
+          ok: limit > 0 && limit <= 5_000_000,
+          weight: 10,
+          title: "حد موافقة الصرفيات",
+          title_en: "Expense approval limit",
+          detail: `الصرفيات فوق ${limit.toLocaleString("en-US")} د.ع تنتظر موافقتك${limit > 5_000_000 ? "، والحد مرتفع" : ""}.`,
+          detail_en: `Expenses above ${limit} IQD wait for you.`,
+          fix: "/settings",
+        },
+        {
+          key: "profiles",
+          ok: site.profiles.length > 0,
+          weight: 10,
+          title: "صلاحيات على قدر العمل",
+          title_en: "Access fits the work",
+          detail: site.profiles.length ? `${site.profiles.length} ملف صلاحيات مستعمل.` : "لا ملفات صلاحيات بعد: كل شخص يرى كل ما تسمح به وظيفته.",
+          detail_en: `${site.profiles.length} permission profiles.`,
+          fix: "/settings/advanced?s=profiles",
+        },
+      ];
+      const total = checks.reduce((s, c) => s + c.weight, 0);
+      const score = Math.round((checks.filter((c) => c.ok).reduce((s, c) => s + c.weight, 0) / total) * 100);
+      const nameOf = (id?: number) => (id ? db.users.find((u) => u.id === id)?.name : undefined);
+      return {
+        logins: {
+          ok: log.length - failed.length,
+          failed: failed.length,
+          reasons,
+          recent: failed
+            .slice(-10)
+            .reverse()
+            .map((f) => ({ phone: f.phone, ...(nameOf(f.user_id) ? { name: nameOf(f.user_id) } : {}), reason: f.reason ?? "wrong", at: f.at })),
+        },
+        score,
+        checks,
+        users: { active: active.length, stopped: live.length - active.length, managers, in_profiles: active.filter((u) => u.profile_id).length, by_role, never, idle, weak },
+      };
+    }),
 
   // Users
   setUserProfile: (id, profileId) =>

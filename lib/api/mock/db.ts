@@ -54,6 +54,8 @@ export interface Db {
   expenses?: Expense[];
   /** Values of the manager's own fields, by record ("customer:12" → field id → value). */
   custom_values?: Record<string, Record<string, CustomValue>>;
+  /** Every login attempt (the health page counts the failed ones). */
+  login_log?: { phone: string; user_id?: number; ok: boolean; reason?: "wrong" | "stopped" | "hours"; at: string }[];
   customers: DbCustomer[];
   orders: Order[];
   invoices: DbInvoice[];

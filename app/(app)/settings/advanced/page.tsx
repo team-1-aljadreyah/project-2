@@ -4,9 +4,10 @@
 // and the part chosen on the other side. ?s=home | profiles | profiles:<id> | apps
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppWindow, Boxes, ChevronDown, History, Home, Palette, Search, ShieldCheck, Users } from "lucide-react";
+import { AppWindow, Boxes, ChevronDown, HeartPulse, History, Home, Palette, Search, ShieldCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { AppsSection, ObjectsSection, ProfilesSection, SetupHome } from "@/components/advanced";
+import { HealthSection } from "@/components/health";
 import { Card, LoadingRows, PageHeader } from "@/components/ui";
 import { useAppRouter } from "@/lib/app-path";
 import { useFmt } from "@/lib/i18n";
@@ -38,7 +39,14 @@ function Setup() {
   const go = (to: string) => router.push(to === "home" ? "/settings/advanced" : `/settings/advanced?s=${to}`);
 
   const tree: { ar: string; en: string; leaves: Leaf[] }[] = [
-    { ar: "", en: "", leaves: [{ key: "home", ar: "الرئيسية", en: "Setup home", icon: Home }] },
+    {
+      ar: "",
+      en: "",
+      leaves: [
+        { key: "home", ar: "الرئيسية", en: "Setup home", icon: Home },
+        { key: "health", ar: "الصحة والأمان", en: "Health and security", icon: HeartPulse },
+      ],
+    },
     {
       ar: "الإدارة",
       en: "Administration",
@@ -105,7 +113,7 @@ function Setup() {
           </nav>
         </Card>
         <div className="min-w-0">
-          {part === "profiles" ? <ProfilesSection openId={id} go={go} /> : part === "apps" ? <AppsSection /> : part === "objects" ? <ObjectsSection openObj={id} go={go} /> : <SetupHome go={go} />}
+          {part === "profiles" ? <ProfilesSection openId={id} go={go} /> : part === "apps" ? <AppsSection /> : part === "objects" ? <ObjectsSection openObj={id} go={go} /> : part === "health" ? <HealthSection /> : <SetupHome go={go} />}
         </div>
       </div>
     </>

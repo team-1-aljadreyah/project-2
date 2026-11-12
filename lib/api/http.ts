@@ -69,6 +69,7 @@ import type {
   NewExpense,
   CustomObject,
   CustomValue,
+  Health,
 } from "./types";
 
 export interface Lookups {
@@ -104,6 +105,8 @@ export const httpApi = {
   me: () => get<User>("/me"),
   /** The values of the manager's own fields on one record (only the ones this person may change). */
   saveCustomValues: (object: CustomObject, id: number, values: Record<string, CustomValue | null>) => patch<Record<string, CustomValue>>(`/custom/${object}/${id}`, values),
+  /** Health and security (the manager): login errors of the last 24 hours, the security score and its checks, the users' access. */
+  health: () => get<Health>("/setup/health"),
   /** The manager puts someone in a permission profile of their job (null = the job's usual access). */
   setUserProfile: (id: number, profileId: string | null) => post<User>(`/users/${id}/profile`, { profile_id: profileId }),
   /** The manager deletes a login (not his own). Its name stays on its records. */
