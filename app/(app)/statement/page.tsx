@@ -1,5 +1,7 @@
 "use client";
 
+import { ShareWhatsApp, pageLink } from "@/components/share";
+
 import { Suspense } from "react";
 import { OnlineReturn, PayOnlineCard } from "@/components/online-pay";
 import { useApp } from "@/components/shell";
@@ -11,13 +13,30 @@ import { useLoad } from "@/lib/use-load";
 
 // The shop owner's own account: what he owes, his limit, every movement, and paying online with Qi Card.
 export default function MyStatementPage() {
-  const { tr } = useFmt();
+  const { tr, money } = useFmt();
   const { user } = useApp();
   const id = user.customer_id ?? 0;
   const c = useLoad(() => api.getCustomer(id), [id]);
   return (
     <>
-      <PageHeader title={tr("كشف حسابي", "My statement")} subtitle={c.data?.name} />
+      <PageHeader
+        title={tr("كشف حسابي", "My statement")}
+        subtitle={c.data?.name}
+        actions={
+          c.data && (
+            <ShareWhatsApp
+              text={() =>
+                [
+                  tr(`كشف حساب ${c.data!.name}`, `Statement of ${c.data!.name}`),
+                  `${tr("الدين الحالي", "Owed now")}: ${money(c.data!.balance ?? 0)}`,
+                  `${tr("سقف الدين", "Limit")}: ${money(c.data!.debt_limit ?? 0)}`,
+                  pageLink("/client/statement"),
+                ].join("\n")
+              }
+            />
+          )
+        }
+      />
       {/* Back from the Qi gateway: the result of the online payment */}
       <Suspense fallback={null}>
         <OnlineReturn />

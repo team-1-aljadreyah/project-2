@@ -1,4 +1,7 @@
 "use client";
+
+import { ShareWhatsApp, pageLink } from "@/components/share";
+import { useBrand } from "@/lib/site";
 import { CustomFieldsCard } from "@/components/custom-fields";
 
 import { useAppRouter } from "@/lib/app-path";
@@ -8,7 +11,7 @@ import { useApp } from "@/components/shell";
 import { OrderStatusBadge, SourceBadge } from "@/components/status";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, RefLink, Textarea, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import { worksIn, type Batch } from "@/lib/api/types";
+import { worksIn, type Batch, type OrderStatus } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
@@ -27,6 +30,7 @@ export default function OrderView() {
   const router = useAppRouter();
   const toast = useToast();
   const order = useLoad(() => api.getOrder(id), [id]);
+  const brand = useBrand();
   const locations = useRepLocations();
   useRealtime(["orders"], () => order.reload());
   const o = order.data;
@@ -103,6 +107,21 @@ export default function OrderView() {
         subtitle={`${dateTime(o.created_at)} · ${tr("سجّله", "by")} ${o.created_by.name}`}
         actions={
           <>
+            {/* The order's state for the shop, in one tap (the rep, the warehouse or the office sends it). */}
+            {user.role !== "shop" && (
+              <ShareWhatsApp
+                phone={c?.phone}
+                text={() =>
+                  [
+                    `${brand.company}`,
+                    tr(`طلبكم ${o.number}`, `Your order ${o.number}`),
+                    `${tr("الحالة", "Status")}: ${orderStateText(o.status, o.delivery?.status, tr)}`,
+                    `${tr("المجموع", "Total")}: ${money(o.total)}`,
+                    pageLink(`/client/orders/${o.id}`),
+                  ].join("\n")
+                }
+              />
+            )}
             {o.invoice_id && (
               <Button href={`/invoices/${o.invoice_id}`}>
                 <FileText className="size-4" /> {tr("الفاتورة", "Invoice")}
@@ -415,4 +434,20 @@ function Countdown({ until }: { until: string }) {
       </span>
     </div>
   );
+}
+
+/** The order's state in words, for a message. */
+function orderStateText(status: OrderStatus, delivery: string | undefined, tr: (a: string, b: string) => string) {
+  if (delivery === "out") return tr("في الطريق إليكم", "On the way to you");
+  if (delivery === "ready") return tr("جاهز في المخزن", "Ready at the warehouse");
+  return (
+    {
+      pending: tr("بانتظار الاعتماد", "Waiting approval"),
+      needs_approval: tr("بانتظار موافقة المدير", "Waiting for the manager"),
+      approved: tr("معتمد ويُجهَّز", "Approved, being prepared"),
+      confirmed: tr("سُلِّم", "Delivered"),
+      cancelled: tr("ملغي", "Cancelled"),
+      expired: tr("انتهى الحجز", "Hold expired"),
+    } as Record<string, string>
+  )[status];
 }

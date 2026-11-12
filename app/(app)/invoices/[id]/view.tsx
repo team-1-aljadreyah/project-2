@@ -1,5 +1,7 @@
 "use client";
 
+import { openWhatsApp, pageLink } from "@/components/share";
+
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAppRouter } from "@/lib/app-path";
@@ -56,7 +58,7 @@ export default function InvoiceView() {
   const share = () => {
     const lines = i.lines.map((l) => `- ${itemById.get(l.item_id)?.name}: ${l.qty} ${l.unit === "carton" ? "كارتون" : "قطعة"} = ${money(l.total)}`).join("\n");
     const text = `${brand.company}\nفاتورة ${i.number}\n${c?.name ?? ""}\n${lines}\nالمجموع: ${money(i.total)}\nالباقي: ${money(Math.max(0, i.remaining))}`;
-    window.open(`https://wa.me/${c?.phone ? "964" + c.phone.slice(1) : ""}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    openWhatsApp(`${text}\n${pageLink(`/client/invoices/${i.id}`)}`, c?.phone);
   };
 
   return (
