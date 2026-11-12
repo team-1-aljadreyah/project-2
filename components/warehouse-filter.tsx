@@ -35,9 +35,11 @@ export const hasWarehouseFilter = (u: Pick<User, "role">) => u.role === "manager
 
 /** The chosen warehouse id, or null for both. Always null for roles without the filter. */
 export function useWarehouseFilter(): number | null {
-  const { user } = useApp();
+  const { user, lookups } = useApp();
   const raw = useSyncExternalStore(subscribe, read, () => "");
-  return hasWarehouseFilter(user) ? Number(raw) || null : null;
+  const id = Number(raw) || null;
+  // A warehouse chosen here and deleted since: back to all of them.
+  return hasWarehouseFilter(user) && id && lookups.warehouses.some((w) => w.id === id) ? id : null;
 }
 
 export function setWarehouseFilter(id: number | null) {

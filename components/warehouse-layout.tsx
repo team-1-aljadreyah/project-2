@@ -422,3 +422,62 @@ export function CoverDialog({ warehouse, onClose }: { warehouse: Warehouse; onCl
     </Dialog>
   );
 }
+
+// ---------- deleting a warehouse ----------
+
+/**
+ * "Delete this warehouse?" with what it means. The server refuses (and says why) while the warehouse still has
+ * goods, open orders, transfers, supply orders or counts, staff, or past records; a new, empty one goes.
+ */
+export function DeleteWarehouse({ warehouse, onClose }: { warehouse: Warehouse; onClose: () => void }) {
+  const { tr, name } = useFmt();
+  const { reloadLookups, reloadItems } = useApp();
+  const toast = useToast();
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [why, setWhy] = useState<string | null>(null);
+  const sure = typed.trim() === warehouse.name.trim() || typed.trim() === warehouse.name_en.trim();
+  async function remove() {
+    setBusy(true);
+    setWhy(null);
+    try {
+      await api.deleteWarehouse(warehouse.id);
+      toast("success", tr(`حُذف ${warehouse.name}`, `${warehouse.name_en} deleted`));
+      reloadLookups();
+      reloadItems();
+      onClose();
+    } catch (e) {
+      setWhy(errorText(e, tr));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={tr(`حذف ${warehouse.name}`, `Delete ${warehouse.name_en}`)}
+      footer={
+        <>
+          <Button onClick={onClose}>{tr("إلغاء", "Cancel")}</Button>
+          <Button variant="danger" loading={busy} disabled={!sure} onClick={remove}>
+            <Trash2 className="size-4" /> {tr("حذف نهائياً", "Delete for good")}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Notice tone="danger" title={tr("لا يمكن التراجع عن الحذف", "This can't be undone")}>
+          {tr(
+            "يُحذف المخزن ومناطقه وترتيبه. يُسمح بذلك فقط إذا كان فارغاً: بلا بضاعة ولا طلبات مفتوحة ولا تحويلات ولا موظفين، وبلا فواتير أو حركات سابقة.",
+            "The warehouse, its zones and layout go. Only an empty one: no goods, no open orders or transfers, no staff, and no past invoices or movements.",
+          )}
+        </Notice>
+        <Field label={tr(`للتأكيد اكتب اسم المخزن: ${warehouse.name}`, `To confirm, type its name: ${warehouse.name_en}`)}>
+          <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={name(warehouse)} autoComplete="off" />
+        </Field>
+        {why && <Notice tone="warning" title={tr("لم يُحذف", "Not deleted")}>{why}</Notice>}
+      </div>
+    </Dialog>
+  );
+}

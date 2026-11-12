@@ -85,8 +85,9 @@ export interface ShelfRow {
 
 export type SalesGroup = "rep" | "item" | "warehouse" | "customer";
 
-// Helpers: GET / POST / PATCH that return only the data part of the answer.
+// Helpers: GET / POST / PATCH / DELETE that return only the data part of the answer.
 const get = <T>(url: string, params?: object) => http.get<T>(url, { params }).then((r) => r.data);
+const del = <T>(url: string) => http.delete<T>(url).then((r) => r.data);
 const post = <T>(url: string, body?: unknown, key?: string) => http.post<T>(url, body, key ? { headers: { "Idempotency-Key": key } } : undefined).then((r) => r.data);
 const patch = <T>(url: string, body: unknown) => http.patch<T>(url, body).then((r) => r.data);
 const save = <T>(base: string, id: number | null, body: unknown) => (id ? patch<T>(`${base}/${id}`, body) : post<T>(base, body));
@@ -108,6 +109,8 @@ export const httpApi = {
   renameWarehouse: (id: number, name: string, name_en: string) => patch<Warehouse>(`/warehouses/${id}`, { name, name_en }),
   createWarehouse: (input: WarehouseInput) => post<Warehouse>("/warehouses", input),
   saveWarehouse: (id: number, input: WarehouseInput) => patch<Warehouse>(`/warehouses/${id}`, input),
+  /** Only a warehouse with no goods, no open work, nobody in it and no past records (the manager). */
+  deleteWarehouse: (id: number) => del<void>(`/warehouses/${id}`),
   /** The zones and the place of every item (the manager, or the keeper of this warehouse). */
   saveLayout: (id: number, layout: WarehouseLayout) => patch<Warehouse>(`/warehouses/${id}/layout`, layout),
   /** An absent keeper's warehouse given to another keeper until a time (null = end it). The manager. */
