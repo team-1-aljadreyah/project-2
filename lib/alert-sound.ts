@@ -4,12 +4,18 @@
 // Each person can turn it off on his own device (the account menu); the choice is kept in the browser.
 //
 // Browsers don't let a page play sound before the person touched it. So the sound "wakes up" at the first
-// click or key press, and a notification that comes before that is shown without its sound.
+// touch, click or key press, and a sound that came before that plays then (once), so nothing is missed.
+// Two sounds: the notification (two rising notes) and a chat message (a short soft "pop", different on purpose).
 import { useEffect, useSyncExternalStore } from "react";
 
 const KEY = "nahrain.sound";
 const subs = new Set<() => void>();
 let ctx: AudioContext | null = null;
+/** A sound that came before the page was touched: it plays at the first touch. */
+let pending: Kind | null = null;
+type Kind = "alert" | "message";
+/** Two sounds in the same second (a shop's first message also makes a notification): one is enough. */
+let lastAt = 0;
 
 function readOn() {
   try {
@@ -44,19 +50,24 @@ export function useSoundOn() {
 function wake() {
   try {
     ctx ??= new AudioContext();
-    if (ctx.state === "suspended") void ctx.resume();
+    const go = () => {
+      if (pending && ctx?.state === "running") {
+        const k = pending;
+        pending = null;
+        tones(k);
+      }
+    };
+    if (ctx.state === "suspended") void ctx.resume().then(go);
+    else go();
   } catch {}
 }
 
 /** Wake the sound up at the person's first click or key press on the page. */
 export function useWakeSound() {
   useEffect(() => {
-    window.addEventListener("pointerdown", wake);
-    window.addEventListener("keydown", wake);
-    return () => {
-      window.removeEventListener("pointerdown", wake);
-      window.removeEventListener("keydown", wake);
-    };
+    const evs = ["pointerdown", "keydown", "touchstart"] as const;
+    evs.forEach((e) => window.addEventListener(e, wake, { passive: true }));
+    return () => evs.forEach((e) => window.removeEventListener(e, wake));
   }, []);
 }
 
@@ -80,13 +91,38 @@ function note(c: AudioContext, freq: number, at: number, length: number) {
  * Returns false when it could not play (turned off, or the page was not touched yet).
  */
 export function playAlert(force = false): boolean {
+  return play("alert", force);
+}
+
+/** The chat message sound (a new message in the support chat): one soft "pop", shorter than a notification. */
+export function playMessage(force = false): boolean {
+  return play("message", force);
+}
+
+function tones(kind: Kind) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  if (kind === "alert") {
+    note(ctx, 880, t, 0.22);
+    note(ctx, 1174.66, t + 0.16, 0.36);
+  } else {
+    note(ctx, 587.33, t, 0.12);
+    note(ctx, 783.99, t + 0.07, 0.2);
+  }
+}
+
+function play(kind: Kind, force: boolean): boolean {
   if (!force && !readOn()) return false;
   try {
-    navigator.vibrate?.([80, 60, 80]);
+    navigator.vibrate?.(kind === "alert" ? [80, 60, 80] : [40]);
   } catch {}
-  if (!ctx || ctx.state !== "running") return false;
-  const t = ctx.currentTime;
-  note(ctx, 880, t, 0.22);
-  note(ctx, 1174.66, t + 0.16, 0.36);
+  if (!ctx || ctx.state !== "running") {
+    // Not touched yet: it plays at the first touch (a notification wins over a message).
+    if (pending !== "alert") pending = kind;
+    return false;
+  }
+  if (!force && Date.now() - lastAt < 1200) return true;
+  lastAt = Date.now();
+  tones(kind);
   return true;
 }

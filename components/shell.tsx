@@ -11,6 +11,7 @@ import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
 import { NotificationAlerts } from "@/components/notification-alerts";
+import { ChatAlerts } from "@/components/chat-alerts";
 import dynamic from "next/dynamic";
 // The support chat is for shop owners only: loaded only for them (not in everyone's first load).
 const ChatWidget = dynamic(() => import("@/components/support/chat-widget").then((m) => m.ChatWidget), { ssr: false });
@@ -24,7 +25,7 @@ import { UnsavedGuard } from "@/components/unsaved-guard";
 import { Tour, startTour } from "@/components/tour";
 import { setTextSize, useTextSize } from "@/lib/text-size";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
-import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
+import { playAlert, playMessage, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
 import { inApp, useAppPath, useAppRouter } from "@/lib/app-path";
 import { setCurrency, setCurrencyContext, subscribeCurrency, currencyVersion, wantedCurrency } from "@/lib/currency";
@@ -430,6 +431,8 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
       <AppLauncher user={user} />
       {user.role === "manager" && <CustomizeToggle />}
       <Bell2 user={user} />
+      {/* Who answers the support chat hears each new message from a shop, on every page. */}
+      {(user.role === "staff" || user.role === "manager") && <ChatAlerts key={user.id} userId={user.id} />}
       {(user.role === "manager" || user.role === "accountant") && <CurrencySwitch rate={usdRate} />}
       <div className="hidden items-center gap-1.5 2xl:flex">
         <LanguageSwitch />
@@ -497,10 +500,21 @@ function AccountMenu({ user, onClose, onAccount }: { user: User; onClose: () => 
           }}
           label={
             <span className="flex items-center gap-2">
-              {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />} {tr("صوت الإشعارات", "Notification sound")}
+              {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />} {tr("صوت الإشعارات والرسائل", "Notification and message sound")}
             </span>
           }
         />
+        {/* Hear both sounds now: the notification, then a chat message a moment later. */}
+        <button
+          type="button"
+          onClick={() => {
+            playAlert(true);
+            setTimeout(() => playMessage(true), 900);
+          }}
+          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line py-1.5 text-xs font-semibold hover:bg-card"
+        >
+          <Volume2 className="size-3.5" /> {tr("جرّب الصوتين", "Try both sounds")}
+        </button>
       </div>
       {/* Language and day/night: here when the top bar has no room for them. */}
       <div className="mx-1 my-1 flex items-center justify-between gap-2 rounded-xl bg-card-2 px-3 py-2 2xl:hidden">

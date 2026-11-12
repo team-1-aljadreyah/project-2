@@ -14,6 +14,7 @@ import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
+import { playMessage, useWakeSound } from "@/lib/alert-sound";
 import { cn, matches } from "@/lib/utils";
 import { FAQ } from "./faq";
 import { Bubbles, SendBox } from "./messages";
@@ -43,6 +44,22 @@ export function ChatWidget() {
 
   useRealtime(["chat"], () => chat.reload());
   const lastStaff = [...(chat.data?.messages ?? [])].reverse().find((m) => m.from === "staff");
+
+  // An answer from the company plays the message sound (also with the chat open); the first load rings nothing.
+  useWakeSound();
+  const [heard, setHeard] = useState<number | null>(null);
+  const [rings, setRings] = useState(0);
+  if (chat.data) {
+    const id = lastStaff?.id ?? 0;
+    if (heard === null) setHeard(id);
+    else if (id > heard) {
+      setHeard(id);
+      setRings((r) => r + 1);
+    }
+  }
+  useEffect(() => {
+    if (rings) playMessage();
+  }, [rings]);
 
   return (
     <>
