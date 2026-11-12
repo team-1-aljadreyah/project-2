@@ -17,6 +17,7 @@ import { Avatar, MyAccountDialog } from "@/components/my-account";
 import { deniedOf, profileOf, useCurrentApp, useDenied } from "@/lib/access";
 import { setExportBlocked } from "@/lib/utils";
 import { AppLauncher, AppBanner } from "@/components/app-launcher";
+import { QuickSearch } from "@/components/quick-search";
 import { WarehouseFilterSwitch, hasWarehouseFilter } from "@/components/warehouse-filter";
 import { playAlert, setSoundOn, useSoundOn } from "@/lib/alert-sound";
 import { USE_MOCK } from "@/lib/config";
@@ -388,6 +389,8 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
   const { prefix } = useAppPath();
   const [menu, setMenu] = useState(false);
   const [account, setAccount] = useState(false);
+  // The quick search offers this person's own pages, with the names the manager gave them.
+  const searchPages = useNav(user);
   return (
     <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-1.5 border-b border-line bg-card/95 px-2 backdrop-blur sm:h-16 sm:px-4">
       {/* On a narrow phone the shop owner's bar is full (his shop switcher shows where he is): no logo there.
@@ -409,6 +412,7 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
           <ShopSwitcher user={user} />
         </div>
       )}
+      <QuickSearch pages={searchPages} />
       <NetworkDot />
       <AppLauncher user={user} />
       {user.role === "manager" && <CustomizeToggle />}
