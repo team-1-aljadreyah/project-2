@@ -45,6 +45,20 @@ The server must filter and hide, not only the pages:
   categories the manager gave him (`rep_categories`, empty = all). His monthly target (`sales_target`, set by
   the manager on the user) is counted by `GET /reps/targets`: the month's invoices with his `rep_id` less the
   returns on them; he gets only his own row (with his rank), the manager and accountant get every marketing rep.
+- **ZainCash** (the shop pays its debt from its wallet; `provider: "zaincash"` on `POST /payments/online`, from
+  1,000 IQD; Qi Card stays the default). Payment gateway API v2: keep `client_id` / `client_secret` in the
+  server's environment only (the demo uses ZainCash's public UAT test keys in `lib/zaincash.ts`, never real ones).
+  1) `POST {base}/oauth2/token` (form: `grant_type=client_credentials`, the id and secret, `scope=payment:read
+  payment:write`) → `access_token` (~24 h, cache it). 2) `POST {base}/api/v2/payment-gateway/transaction/init`
+  (Bearer) with `{language, externalReferenceId (uuid), orderId: our payment_id, amount: {value, currency:
+  "IQD"}, serviceType, redirectUrls: {successUrl, failureUrl}}` → save `transactionDetails.transactionId` as
+  `gateway_id`, send the customer to `redirectUrl` (our `form_url`). 3) The way back has `?token=` (JWT HS256
+  signed with the client secret): verify it, read `data.currentStatus` / `transactionId`. 4) Before recording,
+  ask `GET {base}/api/v2/payment-gateway/transaction/inquiry/{transactionId}` (`status`: SUCCESS, FAILED,
+  PENDING, EXPIRED…). SUCCESS → one payment, method `online`, `gateway: {provider: "zaincash", payment_id:
+  transactionId, card: the wallet hidden}`, on the oldest invoices (only what is still owed); FAILED → failed;
+  EXPIRED / CANCELLED → canceled; PENDING → keep asking (the payment page lives 15 minutes). Refunds: ZainCash's
+  full / partial reverse. Base: UAT `https://pg-api-uat.zaincash.iq`, live `https://pg-api.zaincash.iq`.
 - **Road routes** (`lib/road.ts`): the maps draw the trip along the real streets with its km and minutes from
   an OSRM server. The demo calls the free public `router.project-osrm.org` straight from the browser; it has no
   guarantee and sends the shops' points to a third party, so before launch host OSRM (Iraq extract of

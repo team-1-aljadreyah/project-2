@@ -141,7 +141,7 @@ function NewPaymentForm({ pre }: { pre?: number }) {
           )}
           <Field
             label={tr("طريقة الدفع المحلي", "Local payment method")}
-            hint={tr("الدفع الأونلاين ببطاقة Qi يقوم به صاحب المحل من «كشف حسابي»، ويُسجَّل تلقائياً.", "Online Qi Card payments are made by the shop owner from “My statement” and recorded by themselves.")}
+            hint={tr("الدفع الأونلاين (زين كاش أو بطاقة Qi) يقوم به صاحب المحل من «كشف حسابي»، ويُسجَّل تلقائياً.", "Online payments (ZainCash or Qi Card) are made by the shop owner from “My statement” and recorded by themselves.")}
           >
             <Segmented
               value={method}

@@ -1,14 +1,15 @@
 "use client";
 
 // How a payment method and an online payment's status look, the same on every page.
-// Local payments: cash (نقداً) and transfer / Zain Cash (تحويل). Online: by card through Qi Card.
+// Local payments: cash (نقداً) and transfer (تحويل). Online: through Qi Card (a card) or ZainCash (a wallet).
 import { Banknote, CreditCard, Landmark } from "lucide-react";
 import type { OnlineStatus, PayMethod } from "@/lib/api/types";
 import type { Tr } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-export function methodLabel(m: PayMethod, tr: Tr) {
-  return { cash: tr("نقداً", "Cash"), transfer: tr("تحويل / زين كاش", "Transfer"), online: tr("أونلاين · Qi", "Online · Qi") }[m];
+export function methodLabel(m: PayMethod, tr: Tr, gateway?: "qi" | "zaincash") {
+  const online = gateway === "zaincash" ? tr("أونلاين · زين كاش", "Online · ZainCash") : tr("أونلاين · Qi", "Online · Qi");
+  return { cash: tr("نقداً", "Cash"), transfer: tr("تحويل", "Transfer"), online }[m];
 }
 
 /** The method's icon. A switch with fixed icons, because React wants every component known before rendering. */
@@ -30,10 +31,10 @@ export const methodTone: Record<PayMethod, string> = {
   online: "bg-[#f7c600]/20 text-[#7a5f00] dark:text-[#f7d24a]",
 };
 
-export function MethodChip({ m, tr, className }: { m: PayMethod; tr: Tr; className?: string }) {
+export function MethodChip({ m, tr, className, gateway }: { m: PayMethod; tr: Tr; className?: string; gateway?: "qi" | "zaincash" }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold", methodTone[m], className)}>
-      <MethodIcon m={m} className="size-3" /> {methodLabel(m, tr)}
+    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold", gateway === "zaincash" ? "bg-[#6b2a8c]/15 text-[#6b2a8c] dark:text-[#d3a6ec]" : methodTone[m], className)}>
+      <MethodIcon m={m} className="size-3" /> {methodLabel(m, tr, gateway)}
     </span>
   );
 }

@@ -6,6 +6,7 @@ import { isOffline } from "../offline";
 import { ApiError, NETWORK_ERROR } from "./errors";
 import type { Api } from "./http";
 import type {
+  OnlinePayment,
   AuditEntry,
   Order,
   Warehouse,
@@ -43,6 +44,7 @@ import { clearDb, emitChange, loadDb, nextId, saveDb, type Db, type DbBatch, typ
 import {
   approveOrder,
   counterSale,
+  settleZainCash,
   setOrderDiscount,
   updateOrder,
   approveShop,
@@ -130,6 +132,8 @@ import { fullSite, ordered } from "./site-defaults";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
 import { unitName } from "../units";
+import { zcInit, zcInquiry, zcReadReturn, zcToOurs } from "../zaincash";
+import { currentLocale } from "../boot";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const db0 = () => loadDb(() => makeSeed());
@@ -1690,13 +1694,53 @@ export const mockApi: Api = {
     }),
 
   // Online payment (Qi Card, demo gateway)
-  startOnlinePayment: (input) => write((db, a, now) => startOnline(db, a, input, now)),
-  getOnlinePayment: (id) =>
-    read((db, a) => {
-      const o = db.online_payments.find((x) => x.payment_id === id);
-      if (!o || (a.role === "shop" && a.customer_id !== o.customer_id)) notFound();
+  startOnlinePayment: async (input) => {
+    const made = await write((db, a, now) => startOnline(db, a, input, now));
+    if (made.provider !== "zaincash" || made.gateway_id || made.status !== "created") return made;
+    // ZainCash: opened at ZainCash (its sandbox) — what the real backend does on the server. The customer comes
+    // back to our page with the payment's id (ZainCash adds its own ?token=… after it).
+    const back = `${window.location.origin}${input.return_url.startsWith("/") && !input.return_url.startsWith("//") ? input.return_url : "/"}`;
+    let opened: { transactionId: string; redirectUrl: string };
+    try {
+      opened = await zcInit({
+        amount: made.amount,
+        orderId: made.payment_id,
+        reference: crypto.randomUUID(),
+        back: `${back}${back.includes("?") ? "&" : "?"}payment=${encodeURIComponent(made.payment_id)}&via=zaincash`,
+        lang: currentLocale() === "en" ? "en" : "ar",
+        service: "تسديد دين - النهرين",
+      });
+    } catch {
+      await write((db) => {
+        const o = db.online_payments.find((x) => x.payment_id === made.payment_id);
+        if (o) o.status = "failed";
+      });
+      fail(502, "NETWORK", "تعذّر فتح الدفع في زين كاش. حاول بعد قليل", "Couldn't open the payment at ZainCash. Try again shortly");
+    }
+    return write((db) => {
+      const o = db.online_payments.find((x) => x.payment_id === made.payment_id) ?? notFound();
+      Object.assign(o, { gateway_id: opened.transactionId, gateway_url: opened.redirectUrl });
       return onlineView(o);
-    }),
+    });
+  },
+  getOnlinePayment: async (id) => {
+    const o = await read((db, a) => {
+      const x = db.online_payments.find((y) => y.payment_id === id);
+      if (!x || (a.role === "shop" && a.customer_id !== x.customer_id)) notFound();
+      return onlineView(x);
+    });
+    if (o.provider !== "zaincash" || o.status !== "created" || !o.gateway_id) return o;
+    // ZainCash: the token on the way back (signature checked) for a quick answer, and ZainCash's own status.
+    // One question at a time per payment, and not more than every 3 s (the page asks every second).
+    const busy = zcAsking.get(id);
+    if (busy) return busy;
+    if (Date.now() - (zcChecked.get(id) ?? 0) < 3000) return o;
+    zcChecked.set(id, Date.now());
+    const asking = askZainCash(id, o).finally(() => zcAsking.delete(id));
+    zcAsking.set(id, asking);
+    return asking;
+  },
+
   listOnlinePayments: () =>
     read((db, a) => {
       need(a, ["manager", "accountant", "shop"]);
@@ -1913,6 +1957,23 @@ export const mockApi: Api = {
     emitChange();
   },
 };
+
+/** When each ZainCash payment was last asked about, and the question still on its way. */
+const zcChecked = new Map<string, number>();
+const zcAsking = new Map<string, Promise<OnlinePayment>>();
+
+/** Ask ZainCash about one payment (and read its token on the way back); a final answer is kept. */
+async function askZainCash(id: string, o: OnlinePayment): Promise<OnlinePayment> {
+  const jwt = new URLSearchParams(window.location.search).get("token");
+  const back = jwt ? await zcReadReturn(jwt) : null;
+  const asked = await zcInquiry(o.gateway_id!).catch(() => null);
+  const final = asked && zcToOurs(asked.status) !== "created" ? zcToOurs(asked.status) : back && back.transactionId === o.gateway_id ? zcToOurs(back.status) : "created";
+  if (final === "created") return o;
+  return write((db, _a, at) => {
+    settleZainCash(db, id, final, asked?.phone, at);
+    return onlineView(db.online_payments.find((y) => y.payment_id === id)!);
+  });
+}
 
 // ---------- The demo Qi Card gateway ----------
 // A stand-in for the gateway's own website, only in the demo. With the real backend the customer goes to

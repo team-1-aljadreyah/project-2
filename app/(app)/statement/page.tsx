@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 
-// The shop owner's own account: what he owes, his limit, every movement, and paying online with Qi Card.
+// The shop owner's own account: what he owes, his limit, every movement, and paying online (ZainCash or Qi Card).
 export default function MyStatementPage() {
   const { tr, money } = useFmt();
   const { user } = useApp();
