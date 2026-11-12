@@ -39,6 +39,7 @@ function recordHref(e: AuditEntry): string | undefined {
     receipt: "/receipts",
     stocktake: "/stocktakes",
     customer: "/customers",
+    expense: "/expenses",
   };
   const list: Partial<Record<AuditEntity, string>> = { transfer: "/transfers", user: "/users", commission: "/commissions", settings: "/settings", batch: "/stock" };
   return own[e.entity] && e.entity_id ? `${own[e.entity]}/${e.entity_id}` : (list[e.entity] ?? own[e.entity]);
@@ -74,6 +75,7 @@ export default function AuditPage() {
       commission: tr("العمولات", "Commission"),
       settings: tr("الإعدادات", "Settings"),
       batch: tr("الدفعات", "Batches"),
+      expense: tr("الصرفيات", "Expenses"),
     })[x];
 
   return (

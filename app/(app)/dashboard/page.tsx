@@ -114,6 +114,24 @@ export default function DashboardPage() {
               <Stat label={T("s_month_sales", "مبيعات الشهر", "Sales this month")} value={<Money value={x.month_sales} />} href="/reports" />
             ),
         },
+        // The profit after this month's expenses (rent, salaries, fuel…): what really stays.
+        ...(x.month_net !== undefined
+          ? [
+              {
+                id: "s_net",
+                el: (
+                  <Stat
+                    label={T("s_net", "صافي الربح بعد الصرفيات", "Net profit after expenses")}
+                    value={<Money value={x.month_net} />}
+                    hint={`${tr("صرفيات الشهر", "Expenses this month")} ${money(x.month_expenses ?? 0)}`}
+                    icon={<Banknote className="size-4" />}
+                    tone={x.month_net < 0 ? "danger" : "success"}
+                    href="/expenses"
+                  />
+                ),
+              },
+            ]
+          : []),
         { id: "s_pending", el: <Stat label={T("s_pending", "طلبات بانتظار التثبيت", "Orders waiting")} value={x.pending_orders} icon={<ClipboardList className="size-4" />} href="/orders" /> },
         {
           id: "s_low",

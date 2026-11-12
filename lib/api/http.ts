@@ -65,6 +65,8 @@ import type {
   ChatMessage,
   ChatThread,
   MyChat,
+  Expense,
+  NewExpense,
 } from "./types";
 
 export interface Lookups {
@@ -143,6 +145,15 @@ export const httpApi = {
   getStocktake: (id: number) => get<Stocktake>(`/stocktakes/${id}`),
   /** category: count only that category (only those items stop selling there meanwhile). */
   createStocktake: (warehouseId: number, category?: string) => post<Stocktake>("/stocktakes", { warehouse_id: warehouseId, ...(category ? { category } : {}) }),
+  // Expenses (صرفيات): payment vouchers for rent, salaries, fuel… Above the limit they wait for the manager.
+  listExpenses: () => get<Expense[]>("/expenses"),
+  getExpense: (id: number) => get<Expense>(`/expenses/${id}`),
+  createExpense: (input: NewExpense) => post<Expense>("/expenses", input),
+  /** The manager: yes, or no with a reason. */
+  decideExpense: (id: number, ok: boolean, reason?: string) => post<Expense>(`/expenses/${id}/decide`, { ok, reason }),
+  /** Never deleted: cancelled with a reason (it stays, struck out). */
+  cancelExpense: (id: number, reason: string) => post<Expense>(`/expenses/${id}/cancel`, { reason }),
+
   // Supply orders: the accountant orders goods for a warehouse; its keeper receives them (a receipt with supply_order_id).
   listSupplyOrders: () => get<SupplyOrder[]>("/supply-orders"),
   getSupplyOrder: (id: number) => get<SupplyOrder>(`/supply-orders/${id}`),

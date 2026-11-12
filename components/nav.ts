@@ -28,6 +28,7 @@ import {
   Users,
   UserCog,
   Wallet,
+  Banknote,
   type LucideIcon,
 } from "lucide-react";
 import { ordered } from "@/lib/api/site-defaults";
@@ -81,6 +82,7 @@ export const NAV: NavItem[] = [
   { href: "/customers", ar: "الزبائن والديون", en: "Customers", icon: Users, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["accountant"], kind: "sales" },
   { href: "/statement", ar: "كشف حسابي", en: "My statement", icon: FileText, roles: ["shop"], group: "money", mobile: ["shop"] },
   { href: "/payments", ar: "التسديدات", en: "Payments", icon: Wallet, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["rep", "manager", "accountant"] },
+  { href: "/expenses", ar: "الصرفيات", en: "Expenses", icon: Banknote, roles: ["accountant", "manager"], group: "money", mobile: ["accountant"] },
   { href: "/commissions", ar: "العمولات", en: "Commission", icon: Percent, roles: ["manager", "accountant", "rep"], group: "money", kind: "sales" },
   { href: "/stock", ar: "المخزون", en: "Stock", icon: Boxes, roles: ["manager", "warehouse", "accountant", "staff"], group: "stock", mobile: ["warehouse"] },
   { href: "/items", ar: "المواد والأسعار", en: "Items & prices", icon: Package, roles: ["manager", "warehouse", "accountant", "rep", "staff"], group: "stock" },

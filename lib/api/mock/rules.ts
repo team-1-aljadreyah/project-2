@@ -3,7 +3,7 @@
 // The real backend must do the same things (see the client's requirements).
 import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
-import { DISCOUNT_MAX, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type ShipmentLoad, type Vehicle } from "../types";
+import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type ShipmentLoad, type Vehicle } from "../types";
 import { linesWeight } from "../vehicles";
 import { missingValue, supplyGaps } from "../supply";
 import type {
@@ -2861,4 +2861,155 @@ export function removeUserPhoto(db: Db, actor: DbUser, id: number, now: Date): D
   delete u.photo;
   audit(db, actor, "update", "user", id, `حذف صورة ${u.name}`, `Removed the picture of ${u.name}`, now);
   return u;
+}
+
+// ---------- expenses (صرفيات) ----------
+
+/** The limit above which an expense waits for the manager (the manager sets it in Settings). */
+export const expenseLimit = (db: Db) => db.settings.expense_approval_above ?? EXPENSE_APPROVAL_ABOVE;
+
+/** The expenses, with a few examples in a demo copy that never had any. */
+export function expensesOf(db: Db): Expense[] {
+  if (!db.expenses) {
+    const now = new Date();
+    const day = (back: number) => dayOf(new Date(now.getTime() - back * 86_400_000));
+    const acc = db.users.find((u) => u.role === "accountant") ?? db.users[0];
+    const by = { id: acc.id, name: acc.name, role: acc.role };
+    const wh1 = db.warehouses[0]?.id;
+    const wh2 = db.warehouses[1]?.id ?? wh1;
+    const v = vehiclesOf(db);
+    const rows: Omit<Expense, "id" | "number" | "status" | "created_by" | "created_at">[] = [
+      { date: day(1), category: "وقود السيارات", amount: 85_000, method: "cash", paid_to: "محطة وقود الحر", vehicle_id: v[0]?.id, warehouse_id: wh2 },
+      { date: day(2), category: "أجور تحميل وتنزيل", amount: 60_000, method: "cash", paid_to: "عمال التحميل (4 أشخاص)", warehouse_id: wh1, note: "تنزيل حمولة طلب التوريد" },
+      { date: day(3), category: "كهرباء ومولدة", amount: 450_000, method: "cash", paid_to: "صاحب المولدة الأهلية", warehouse_id: wh1, note: "اشتراك الشهر، 20 أمبير" },
+      { date: day(5), category: "صيانة السيارات", amount: 175_000, method: "cash", paid_to: "ورشة أبو علي", vehicle_id: v[2]?.id ?? v[0]?.id, note: "تبديل زيت وفلاتر" },
+      { date: day(6), category: "ضيافة", amount: 25_000, method: "cash", paid_to: "سوبرماركت الحي", warehouse_id: wh1 },
+      { date: day(8), category: "إنترنت واتصالات", amount: 70_000, method: "transfer", paid_to: "شركة الإنترنت", note: "اشتراك شهري" },
+      { date: day(10), category: "وقود السيارات", amount: 95_000, method: "cash", paid_to: "محطة وقود الصناعة", vehicle_id: v[1]?.id, warehouse_id: wh1 },
+      { date: day(12), category: "إيجار", amount: 2_500_000, method: "transfer", paid_to: "مالك مخزن الحر", warehouse_id: wh2, note: "إيجار الشهر" },
+      { date: day(15), category: "قرطاسية ومطبوعات", amount: 40_000, method: "cash", paid_to: "مكتبة الرافدين", note: "ورق طباعة الفواتير وأحبار" },
+      { date: day(33), category: "إيجار", amount: 2_500_000, method: "transfer", paid_to: "مالك مخزن الحر", warehouse_id: wh2, note: "إيجار الشهر الماضي" },
+      { date: day(35), category: "كهرباء ومولدة", amount: 430_000, method: "cash", paid_to: "صاحب المولدة الأهلية", warehouse_id: wh1 },
+      { date: day(40), category: "وقود السيارات", amount: 180_000, method: "cash", paid_to: "محطة وقود الحر", vehicle_id: v[0]?.id },
+    ];
+    db.expenses = rows.map((r, i) => ({
+      ...r,
+      id: i + 1,
+      number: `EXP-${String(i + 1).padStart(4, "0")}`,
+      status: "approved",
+      created_by: by,
+      created_at: `${r.date}T09:30:00.000Z`,
+      ...(r.amount > EXPENSE_APPROVAL_ABOVE ? { decided_by: { id: db.users[0].id, name: db.users[0].name }, decided_at: `${r.date}T11:00:00.000Z` } : {}),
+    }));
+    db.seq.expense = db.expenses.length;
+  }
+  return db.expenses;
+}
+
+export function createExpense(db: Db, actor: DbUser, input: NewExpense, now: Date): Expense {
+  need(actor, ["accountant", "manager"]);
+  const list = expensesOf(db);
+  const errors: Record<string, string> = {};
+  const amount = Math.round(Number(input.amount));
+  if (!(amount > 0)) errors.amount = msg("اكتب المبلغ", "Enter the amount");
+  else if (amount > 10_000_000_000) errors.amount = msg("المبلغ كبير جداً", "The amount is too big");
+  const category = (input.category ?? "").trim();
+  if (!category) errors.category = msg("اختر البند", "Choose the category");
+  const paidTo = (input.paid_to ?? "").trim();
+  if (paidTo.length < 2) errors.paid_to = msg("لمن دُفع المبلغ؟", "Who got the money?");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date ?? "")) errors.date = msg("اختر التاريخ", "Choose the date");
+  else if (input.date > dayOf(now)) errors.date = msg("لا يُسجَّل صرف بتاريخ قادم", "An expense can't be in the future");
+  if (input.method !== "cash" && input.method !== "transfer") errors.method = msg("اختر طريقة الدفع", "Choose how it was paid");
+  if (input.warehouse_id && !db.warehouses.some((w) => w.id === input.warehouse_id)) errors.warehouse_id = msg("مخزن غير موجود", "No such warehouse");
+  if (input.vehicle_id && !vehiclesOf(db).some((v) => v.id === input.vehicle_id)) errors.vehicle_id = msg("سيارة غير موجودة", "No such vehicle");
+  if (input.photo && (!/^data:image\/(jpeg|png|webp);base64,/.test(input.photo) || input.photo.length > 700_000))
+    errors.photo = msg("صورة غير صالحة أو كبيرة جداً", "Not a valid picture, or too big");
+  if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
+  // Above the limit the manager says yes first (his own expenses don't wait).
+  const waits = actor.role !== "manager" && amount > expenseLimit(db);
+  const id = nextId(db, "expense");
+  const e: Expense = {
+    id,
+    number: `EXP-${String(id).padStart(4, "0")}`,
+    date: input.date,
+    category,
+    amount,
+    method: input.method,
+    paid_to: paidTo,
+    ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+    ...(input.warehouse_id ? { warehouse_id: input.warehouse_id } : {}),
+    ...(input.vehicle_id ? { vehicle_id: input.vehicle_id } : {}),
+    ...(input.photo ? { photo: input.photo } : {}),
+    status: waits ? "pending" : "approved",
+    created_by: { id: actor.id, name: actor.name, role: actor.role },
+    created_at: now.toISOString(),
+  };
+  list.push(e);
+  audit(db, actor, "create", "expense", id, `صرف ${e.number}: ${category} ${amount.toLocaleString("en-US")} د.ع إلى ${paidTo}`, `Expense ${e.number}: ${amount} IQD`, now);
+  if (waits)
+    notify(
+      db,
+      {
+        type: "expense",
+        roles: ["manager"],
+        title: `صرف يحتاج موافقتك: ${amount.toLocaleString("en-US")} د.ع`,
+        title_en: `An expense needs your OK: ${amount.toLocaleString("en-US")} IQD`,
+        body: `${e.number} · ${category} · إلى ${paidTo} · ${actor.name}`,
+        body_en: `${e.number} · ${actor.name}`,
+        link: `/expenses/${id}`,
+      },
+      now,
+    );
+  return e;
+}
+
+/** The manager's answer to an expense above the limit. */
+export function decideExpense(db: Db, actor: DbUser, id: number, ok: boolean, reason: string, now: Date): Expense {
+  need(actor, ["manager"]);
+  const e = expensesOf(db).find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "السند غير موجود", "Not found");
+  if (e.status !== "pending") fail(409, "BAD_STATE", "هذا السند لا ينتظر موافقة", "This expense isn't waiting");
+  if (!ok && reason.trim().length < 3) fail(422, "VALIDATION", "اكتب سبب الرفض", "Write why", { reason: msg("اكتب سبب الرفض", "Write why") });
+  e.status = ok ? "approved" : "rejected";
+  e.decided_by = { id: actor.id, name: actor.name };
+  e.decided_at = now.toISOString();
+  if (!ok) e.reject_reason = reason.trim();
+  audit(db, actor, ok ? "approve" : "cancel", "expense", id, ok ? `وافق على الصرف ${e.number}` : `رفض الصرف ${e.number}: ${reason.trim()}`, ok ? `Approved ${e.number}` : `Rejected ${e.number}`, now);
+  notify(
+    db,
+    {
+      type: "expense",
+      roles: [e.created_by.role],
+      user_id: e.created_by.id,
+      title: ok ? `وافق المدير على الصرف ${e.number}` : `رفض المدير الصرف ${e.number}`,
+      title_en: ok ? `${e.number} approved` : `${e.number} rejected`,
+      body: ok ? `${e.amount.toLocaleString("en-US")} د.ع · ${e.category}` : reason.trim(),
+      body_en: ok ? `${e.amount} IQD` : reason.trim(),
+      link: `/expenses/${id}`,
+    },
+    now,
+  );
+  return e;
+}
+
+/** Cancel a voucher written by mistake: it stays in the list (struck out) with who, when and why. */
+export function cancelExpense(db: Db, actor: DbUser, id: number, reason: string, now: Date): Expense {
+  need(actor, ["accountant", "manager"]);
+  const e = expensesOf(db).find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "السند غير موجود", "Not found");
+  if (e.status === "cancelled" || e.status === "rejected") fail(409, "BAD_STATE", "السند ملغي أو مرفوض أصلاً", "Already cancelled or rejected");
+  if (reason.trim().length < 3) fail(422, "VALIDATION", "اكتب سبب الإلغاء", "Write why", { reason: msg("اكتب سبب الإلغاء", "Write why") });
+  // The manager approved it: only he cancels it now.
+  if (actor.role !== "manager" && e.decided_by) fail(403, "FORBIDDEN", "وافق عليه المدير: إلغاؤه من المدير فقط", "The manager approved it: only he can cancel it");
+  e.status = "cancelled";
+  e.cancelled_by = { id: actor.id, name: actor.name };
+  e.cancelled_at = now.toISOString();
+  e.cancel_reason = reason.trim();
+  audit(db, actor, "cancel", "expense", id, `ألغى الصرف ${e.number}: ${reason.trim()}`, `Cancelled ${e.number}`, now);
+  return e;
+}
+
+/** What the company paid out this month (approved only), for one warehouse or all. */
+export function monthExpenses(db: Db, month: string, warehouseId?: number) {
+  return expensesOf(db)
+    .filter((e) => e.status === "approved" && e.date.startsWith(month) && (!warehouseId || e.warehouse_id === warehouseId))
+    .reduce((s, e) => s + e.amount, 0);
 }

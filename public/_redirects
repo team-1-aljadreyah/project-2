@@ -71,6 +71,9 @@
 /payments/:id/*  /payments/_/:splat  200
 /payments/:id/  /payments/_/  200
 /payments/:id  /payments/_/  200
+/expenses/:id/*  /expenses/_/:splat  200
+/expenses/:id/  /expenses/_/  200
+/expenses/:id  /expenses/_/  200
 /receipts/:id/*  /receipts/_/:splat  200
 /receipts/:id/  /receipts/_/  200
 /receipts/:id  /receipts/_/  200

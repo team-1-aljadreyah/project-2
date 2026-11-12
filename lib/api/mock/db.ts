@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
+import type { Expense, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -50,6 +50,8 @@ export interface Db {
   batches: DbBatch[];
   receipts: Receipt[];
   supply_orders?: SupplyOrder[];
+  /** Expenses (صرفيات). None (an older copy) = the demo ones (see expensesOf). */
+  expenses?: Expense[];
   customers: DbCustomer[];
   orders: Order[];
   invoices: DbInvoice[];
