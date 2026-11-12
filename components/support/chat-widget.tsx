@@ -53,7 +53,7 @@ export function ChatWidget() {
         whileTap={{ scale: 0.9 }}
         aria-label={open ? tr("إغلاق المساعدة", "Close help") : tr("المساعدة والدعم", "Help and support")}
         aria-expanded={open}
-        className="no-print fixed bottom-36 end-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-xl lg:bottom-6 lg:end-6"
+        className="no-print fixed bottom-36 end-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-xl lg:end-6"
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span key={open ? "x" : "chat"} initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
@@ -75,7 +75,7 @@ export function ChatWidget() {
             exit={{ opacity: 0, y: 16, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
             style={{ transformOrigin: "bottom" }}
-            className="no-print fixed bottom-52 end-4 z-40 flex h-[min(540px,calc(100dvh-15rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-2xl lg:bottom-24 lg:end-6 lg:h-[min(560px,calc(100dvh-8rem))]"
+            className="no-print fixed bottom-52 end-4 z-40 flex h-[min(540px,calc(100dvh-15rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-2xl lg:end-6"
           >
             {/* Header */}
             <header className="brand-panel relative flex items-center gap-3 px-4 py-3">

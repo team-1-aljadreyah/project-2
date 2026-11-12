@@ -8,6 +8,7 @@ import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import { ArrowLeft, ArrowRight, MapPin, Phone, Store, UserPlus, Warehouse } from "lucide-react";
 import { Bento, Roles } from "@/components/landing/features";
 import { Hero } from "@/components/landing/hero";
+import { PhoneApps } from "@/components/landing/phone-apps";
 import { CategoryStrip, Platform, Problems } from "@/components/landing/sections";
 import { Stars, WordReveal, rise } from "@/components/landing/shared";
 import { BrandName, LogoMark } from "@/components/logo";
@@ -44,6 +45,7 @@ export default function LandingPage() {
         <Platform />
         <Bento enter={enter} />
         <Roles />
+        <PhoneApps />
 
         {/* Last call */}
         <section id="contact" className="scroll-mt-24 px-4 pb-16 pt-10">
@@ -128,6 +130,9 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
           </a>
           <a href="#features" className="transition hover:text-text">
             {tr("المميزات", "Features")}
+          </a>
+          <a href="#apps" className="transition hover:text-text">
+            {tr("التطبيقات", "Apps")}
           </a>
           <a href="#contact" className="transition hover:text-text">
             {tr("تواصل معنا", "Contact")}

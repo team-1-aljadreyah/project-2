@@ -66,7 +66,7 @@ export const NAV: NavItem[] = [
     group: "sales",
     mobile: ["manager", "warehouse", "accountant", "shop", "staff"],
   },
-  { href: "/invoices", ar: "الفواتير", en: "Invoices", icon: ReceiptText, roles: ["manager", "accountant", "rep", "shop"], group: "sales" },
+  { href: "/invoices", ar: "الفواتير", en: "Invoices", icon: ReceiptText, roles: ["manager", "accountant", "rep", "shop"], group: "sales", mobile: ["shop"] },
   { href: "/returns", ar: "المرتجعات", en: "Returns", icon: Undo2, roles: ["manager", "accountant", "rep", "warehouse"], group: "sales" },
   {
     href: "/deliveries",
@@ -93,6 +93,15 @@ export const NAV: NavItem[] = [
   { href: "/users", ar: "المستخدمون", en: "Users", icon: UserCog, roles: ["manager"], group: "admin" },
   { href: "/settings", ar: "الإعدادات", en: "Settings", icon: Settings, roles: ["manager"], group: "admin" },
 ];
+
+/**
+ * The jobs that work from a phone (the shop owner, the reps) get the phone frame: no side menu, a big tab bar
+ * at the bottom on every screen size, and their own app (landing page and icon) at /client or /driver.
+ */
+export const isPhoneApp = (role: Role) => role === "shop" || role === "rep";
+
+/** The phone app of a job: its landing page (opened from the main site in a new tab). */
+export const phoneAppOf = (role: Role) => (role === "shop" ? "/client" : role === "rep" ? "/driver" : null);
 
 export const GROUPS: Record<NavItem["group"], [string, string]> = {
   main: ["", ""],

@@ -25,7 +25,7 @@ import { setCustomizing, useCustomizing, useLabel, useSite } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { Logo } from "./logo";
 import { CustomizeBar, CustomizeToggle, EditText, SortArea, SortItem, toggleIn, useSaveSite } from "./customize";
-import { canOpen, customNav, GROUPS, NAV, navFor } from "./nav";
+import { canOpen, customNav, GROUPS, isPhoneApp, NAV, navFor } from "./nav";
 import { jobName } from "./status";
 import { LanguageSwitch, ThemeToggle } from "./switches";
 import { Button, Empty, IconButton, Skeleton, Switch, useToast } from "./ui";
@@ -98,6 +98,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
   }, [user, lookups.data, items.data, items.reload, lookups.reload]);
 
   const allowed = canOpen(user.role, path, user.rep_kinds);
+  const phone = isPhoneApp(user.role);
 
   // Amounts in dollars: only the manager and the accountant, at the day's rate.
   const usdRate = lookups.data?.usd_rate?.rate ?? 0;
@@ -112,12 +113,13 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
 
   return (
     <div className="min-h-dvh md:flex">
-      <Sidebar user={user} />
+      {/* Shop owners and reps work from a phone: no side menu, the tab bar at the bottom on every screen size. */}
+      {!phone && <Sidebar user={user} />}
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar user={user} warehouses={lookups.data?.warehouses ?? []} usdRate={usdRate} />
+        <TopBar user={user} warehouses={lookups.data?.warehouses ?? []} usdRate={usdRate} phone={phone} />
         <OfflineBar />
         {user.role === "manager" && <CustomizeBar />}
-        <main className="mx-auto w-full max-w-7xl flex-1 px-3 pt-4 pb-28 sm:px-5 md:pb-10">
+        <main className={cn("mx-auto w-full flex-1 px-3 pt-4 pb-28 sm:px-5", phone ? "max-w-5xl" : "max-w-7xl md:pb-10")}>
           {!allowed ? (
             <Empty
               icon={<ShieldAlert className="size-6" />}
@@ -140,7 +142,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
           )}
         </main>
       </div>
-      <BottomBar user={user} />
+      <BottomBar user={user} phone={phone} />
       <QueueSender />
     </div>
   );
@@ -252,7 +254,8 @@ function Sidebar({ user }: { user: User }) {
   );
 }
 
-function BottomBar({ user }: { user: User }) {
+/** The tab bar: on phones for everyone; on every screen size in the phone frame (bigger buttons there). */
+function BottomBar({ user, phone }: { user: User; phone: boolean }) {
   const { tr } = useFmt();
   const path = usePathname();
   const nav = useNav(user);
@@ -264,30 +267,42 @@ function BottomBar({ user }: { user: User }) {
   const rest = nav.filter((n) => !main.includes(n));
   return (
     <>
-      <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      <nav className={cn("no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur", !phone && "md:hidden")}>
         <div className="mx-auto grid max-w-lg grid-cols-5">
           {main.map((n) => {
             const active = isActive(path, n.href);
             return (
-              <Link key={n.href} href={n.href} className={cn("flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium", active ? "text-primary-ink" : "text-muted")}>
-                <span className={cn("flex h-7 w-12 items-center justify-center rounded-full transition", active && "bg-primary-soft")}>
-                  <n.icon className="size-5" aria-hidden />
+              <Link
+                key={n.href}
+                href={n.href}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 font-medium transition active:scale-95",
+                  phone ? "h-[68px] text-xs" : "h-16 text-[11px]",
+                  active ? "text-primary-ink" : "text-muted",
+                )}
+              >
+                <span className={cn("flex items-center justify-center rounded-full transition", phone ? "h-8 w-14" : "h-7 w-12", active && (phone ? "bg-action/15 text-action" : "bg-primary-soft"))}>
+                  <n.icon className={phone ? "size-6" : "size-5"} aria-hidden />
                 </span>
                 <span className="max-w-full truncate px-1">{tr(n.ar, n.en)}</span>
               </Link>
             );
           })}
-          <button type="button" onClick={() => setOpen(true)} className="flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium text-muted">
-            <span className="flex h-7 w-12 items-center justify-center">
-              <MoreHorizontal className="size-5" aria-hidden />
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className={cn("flex flex-col items-center justify-center gap-1 font-medium text-muted transition active:scale-95", phone ? "h-[68px] text-xs" : "h-16 text-[11px]")}
+          >
+            <span className={cn("flex items-center justify-center", phone ? "h-8 w-14" : "h-7 w-12")}>
+              <MoreHorizontal className={phone ? "size-6" : "size-5"} aria-hidden />
             </span>
             {tr("المزيد", "More")}
           </button>
         </div>
       </nav>
       {open && (
-        <div className="no-print fixed inset-0 z-50 flex items-end bg-black/40 md:hidden" onClick={() => setOpen(false)}>
-          <div className="max-h-[80dvh] w-full overflow-y-auto rounded-t-2xl bg-card p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]" onClick={(e) => e.stopPropagation()}>
+        <div className={cn("no-print fixed inset-0 z-50 flex items-end justify-center bg-black/40", !phone && "md:hidden")} onClick={() => setOpen(false)}>
+          <div className="max-h-[80dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-card p-3 pb-[calc(env(safe-area-inset-bottom)+12px)]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between px-1">
               <p className="font-semibold">{tr("كل الصفحات", "All pages")}</p>
               <IconButton label={tr("إغلاق", "Close")} onClick={() => setOpen(false)}>
@@ -317,15 +332,17 @@ function BottomBar({ user }: { user: User }) {
 }
 
 // The top bar sits outside the pages' data (useApp), so it gets the dollar rate from the frame.
-function TopBar({ user, warehouses, usdRate }: { user: User; warehouses: Lookups["warehouses"]; usdRate: number }) {
+function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: Lookups["warehouses"]; usdRate: number; phone: boolean }) {
   const { tr } = useFmt();
   const [menu, setMenu] = useState(false);
   return (
     <header className="no-print sticky top-0 z-30 flex h-14 items-center gap-1.5 border-b border-line bg-card/95 px-2 backdrop-blur sm:h-16 sm:px-4">
-      <div className="flex min-w-0 flex-1 items-center gap-2 md:hidden">
-        <Logo small href="/" />
+      {/* On a narrow phone the shop owner's bar is full (his shop switcher shows where he is): no logo there.
+          overflow-hidden: a logo squeezed to nothing must not stick out and make the page scroll sideways. */}
+      <div className={cn("flex min-w-0 flex-1 items-center gap-2 overflow-hidden", !phone && "md:hidden", phone && user.role === "shop" && "max-sm:invisible")}>
+        <Logo small href={phone ? homeOf(user.role, user.rep_kinds) : "/"} />
       </div>
-      <div className="hidden flex-1 md:block">
+      <div className={cn("hidden flex-1", !phone && "md:block")}>
         {user.role === "shop" && <ShopSwitcher user={user} />}
         {hasWarehouseFilter(user) && <WarehouseFilterSwitch warehouses={warehouses} />}
       </div>
@@ -335,7 +352,7 @@ function TopBar({ user, warehouses, usdRate }: { user: User; warehouses: Lookups
         </div>
       )}
       {user.role === "shop" && (
-        <div className="min-w-0 md:hidden">
+        <div className={cn("min-w-0", !phone && "md:hidden")}>
           <ShopSwitcher user={user} />
         </div>
       )}
