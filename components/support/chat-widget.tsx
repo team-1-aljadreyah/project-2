@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, ArrowRight, ChevronDown, HelpCircle, Headset, MessageCircle, Search, X } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { useApp } from "@/components/shell";
+import { useAppPath } from "@/lib/app-path";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -43,7 +44,18 @@ export function ChatWidget() {
   }, [open, view, unread, user.customer_id]);
 
   useRealtime(["chat"], () => chat.reload());
+  // «المساعدة والدعم» in «حسابي» opens the conversation.
+  useEffect(() => {
+    const go = () => {
+      setOpen(true);
+      setView("chat");
+    };
+    window.addEventListener("nahrain:open-chat", go);
+    return () => window.removeEventListener("nahrain:open-chat", go);
+  }, []);
   const lastStaff = [...(chat.data?.messages ?? [])].reverse().find((m) => m.from === "staff");
+  // «منتجاتنا» is full screen: the circle would sit on the product (help is in «حسابي» there).
+  const onShowcase = useAppPath().path.startsWith("/showcase");
 
   // An answer from the company plays the message sound (also with the chat open); the first load rings nothing.
   useWakeSound();
@@ -70,7 +82,7 @@ export function ChatWidget() {
         whileTap={{ scale: 0.9 }}
         aria-label={open ? tr("إغلاق المساعدة", "Close help") : tr("المساعدة والدعم", "Help and support")}
         aria-expanded={open}
-        className="no-print fixed bottom-36 end-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-xl lg:end-6"
+        className={cn("no-print fixed bottom-36 end-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-xl lg:end-6", onShowcase && !open && "hidden")}
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span key={open ? "x" : "chat"} initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>

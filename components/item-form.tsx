@@ -16,7 +16,7 @@ import { PACK_NAMES, PIECE_NAMES } from "@/lib/units";
 
 export function ItemForm({ open, onClose, item, onSaved, onDeleted }: { open: boolean; onClose: () => void; item?: Item; onSaved?: (i: Item) => void; onDeleted?: () => void }) {
   const { tr, name } = useFmt();
-  const { lookups, reloadItems } = useApp();
+  const { lookups, reloadItems, items } = useApp();
   const toast = useToast();
   const [f, setF] = useState<ItemInput>(() => ({
     name: item?.name ?? "",
@@ -30,6 +30,7 @@ export function ItemForm({ open, onClose, item, onSaved, onDeleted }: { open: bo
     min_stock: item?.min_stock ?? 120,
     commission_percent: item?.commission_percent ?? 2,
     weight_kg: item?.weight_kg,
+    brand: item?.brand ?? "",
     prices: lookups.tiers.map((t) => item?.prices.find((p) => p.tier_id === t.id) ?? { tier_id: t.id, carton_price: 0, piece_price: 0 }),
     active: item?.active ?? true,
   }));
@@ -129,6 +130,14 @@ export function ItemForm({ open, onClose, item, onSaved, onDeleted }: { open: bo
           <datalist id="cats">
             {lookups.categories.map((c) => (
               <option key={c} value={c} />
+            ))}
+          </datalist>
+        </Field>
+        <Field label={tr("العلامة التجارية", "Brand")} error={err.brand} hint={tr("تظهر للمحلات في صف العلامات وفي البحث", "Shops see it in the brands row and in search")}>
+          <Input list="brands" value={f.brand ?? ""} onChange={(e) => set({ brand: e.target.value })} invalid={!!err.brand} />
+          <datalist id="brands">
+            {[...new Set(items.map((i) => i.brand).filter(Boolean))].map((b) => (
+              <option key={b} value={b} />
             ))}
           </datalist>
         </Field>

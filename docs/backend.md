@@ -45,6 +45,12 @@ The server must filter and hide, not only the pages:
   categories the manager gave him (`rep_categories`, empty = all). His monthly target (`sales_target`, set by
   the manager on the user) is counted by `GET /reps/targets`: the month's invoices with his `rep_id` less the
   returns on them; he gets only his own row (with his rank), the manager and accountant get every marketing rep.
+- **Brands and the store's ads.** An item may have `brand` (≤ 40 letters, saved with the item; also in
+  `GET /catalog`): the shop owners' app shows a brands row and filters by it. The manager's ads live in the
+  site settings (`SiteCustom.banners`, saved with `PUT /site`): up to 12, each `{id, image (JPEG/PNG/WebP,
+  ≤ 600 KB as a data URL — keep a file link instead), title ≤ 60, sub?, link: {kind: category|brand|item|search,
+  value}, active}`; check them like the rest of the site settings. The store's automatic slides (new arrivals,
+  last order, big sections, paying the debt) are made by the app from data it already has.
 - **The public catalog** (`GET /catalog`, no sign-in): every active item that isn't deleted, with only `id`,
   the names, category, picture, packing (`pieces_per_carton`, the unit names, `sells`) and `in_stock` (sellable
   pieces > 0 anywhere). Never a price, a quantity, a cost or a barcode: the shop owners' landing page shows it

@@ -185,6 +185,8 @@ export interface Item extends ItemUnits {
   name_en: string;
   category: string;
   barcode?: string;
+  /** The maker's name (Pepsi, Lay's, النخلة…): a row of brands and a filter in the shop owners' app. */
+  brand?: string;
   pieces_per_carton: number;
   min_stock: number;
   commission_percent: number;
@@ -901,6 +903,20 @@ export interface SiteCustom {
   fields: CustomField[];
   /** Advanced settings: automation rules ("when this happens, if …, do that"). */
   rules: AutoRule[];
+  /** The manager's own ads at the top of the shop owners' store (before the automatic ones). */
+  banners: ShopBanner[];
+}
+
+/** An ad in the shop owners' store: a picture with a title, opening a category, a brand, an item or a search. */
+export interface ShopBanner {
+  id: string;
+  /** A JPEG / PNG / WebP data URL (the real backend keeps a link). */
+  image: string;
+  title: string;
+  title_en?: string;
+  sub?: string;
+  link: { kind: "category" | "brand" | "item" | "search"; value: string };
+  active: boolean;
 }
 
 /** What starts a rule. */
@@ -1274,6 +1290,7 @@ export interface CatalogItem extends ItemUnits {
   name: string;
   name_en: string;
   category: string;
+  brand?: string;
   image?: string;
   pieces_per_carton: number;
   in_stock: boolean;
@@ -1281,6 +1298,7 @@ export interface CatalogItem extends ItemUnits {
 
 export interface ItemInput extends ItemUnits {
   weight_kg?: number;
+  brand?: string;
   name: string;
   name_en: string;
   category: string;

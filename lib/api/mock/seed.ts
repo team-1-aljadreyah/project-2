@@ -486,6 +486,20 @@ export function makeSeed(now = new Date()): Db {
   // عباس (marketing) sells only grains, sugar, oils and canned food; أسواق الكوثر has its own price for basmati rice.
   const abbas = db.users.find((u) => u.id === 5);
   if (abbas) abbas.rep_categories = ["حبوب ورز", "سكر وطحين", "زيوت وسمن", "معلبات"];
+  // Brands (the shop owners' app shows a brands row and filters by brand).
+  const BRANDS: [RegExp, string][] = [
+    [/رز|عدس|حمص|فول/, "حقول دجلة"],
+    [/سكر|طحين|ملح/, "الأسرة"],
+    [/زيت|سمن/, "زيوت الفرات"],
+    [/معجون|تونة|معلب/, "سفرة"],
+    [/شاي|قهوة/, "بيت الشاي"],
+    [/معكرونة|شعرية/, "سنبلة"],
+    [/حليب|جبن|لبن/, "ألبان النخيل"],
+    [/ماء|عصير|غازي/, "نبع كربلاء"],
+    [/بسكويت|شيبس|شوكولاتة/, "مقرمش"],
+    [/دبس|بهارات/, "بيت التوابل"],
+  ];
+  for (const it of db.items) it.brand = BRANDS.find(([re]) => re.test(it.name))?.[1];
   // Each item's own units: basmati rice comes in a «شوال» of 4 «أكياس» (both sold); anbar rice by the bag only.
   const basmati = db.items.find((i) => i.id === 1);
   if (basmati) Object.assign(basmati, { pack_name: "شوال", piece_name: "كيس" });

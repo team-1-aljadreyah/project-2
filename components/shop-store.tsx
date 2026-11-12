@@ -7,13 +7,12 @@
 // Orders go through the same api.createOrder as everywhere else, and keep working without internet.
 import Link from "next/link";
 import { useAppRouter } from "@/lib/app-path";
-import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   AlertTriangle,
   CreditCard,
   FileText,
   Heart,
-  RotateCcw,
   Loader2,
   MapPin,
   Minus,
@@ -33,92 +32,13 @@ import { type Customer, type Item, type NewOrder, type Order, type Unit } from "
 import { useFmt } from "@/lib/i18n";
 import { firstUnit, soldUnits } from "@/lib/units";
 import { Art, CatIcon } from "@/components/product-art";
-import { enqueue, isNetworkError, newClientRef } from "@/lib/offline";
-import { cn, matches, piecesOf, priceOf } from "@/lib/utils";
-
-// ---------- The bag (saved on the phone, so nothing is lost if the page closes) ----------
-interface Line {
-  item_id: number;
-  unit: Unit;
-  qty: number;
-}
-interface Bag {
-  lines: Line[];
-  note: string;
-  client_ref: string;
-  /** Changing an order that was sent but isn't confirmed yet: "send" saves the change to it. */
-  edit?: { id: number; number: string };
-}
-
-/** From the order page: put the order's lines into the bag, to change them in the store. */
-export function editOrderInBag(userId: number, customerId: number, order: { id: number; number: string; lines: Line[]; note?: string }) {
-  const bag: Bag = { lines: order.lines.map(({ item_id, unit, qty }) => ({ item_id, unit, qty })), note: order.note ?? "", client_ref: newClientRef(), edit: { id: order.id, number: order.number } };
-  writeBag(userId, customerId, bag);
-}
-
-// The bag lives on the phone (localStorage) and the page only reads it, so it is the same everywhere: after
-// "change the order" on the order page, and when Next shows a store page it kept in memory.
-const BAG_EVENT = "nahrain-bag";
-// One bag per shop: an owner of two shops fills each one on its own (their prices can differ too).
-const bagKey = (userId: number, customerId: number) => `nahrain.shopbag.${userId}.${customerId}`;
-const EMPTY = "";
-function readRaw(userId: number, customerId: number) {
-  try {
-    return localStorage.getItem(bagKey(userId, customerId)) ?? EMPTY;
-  } catch {
-    return EMPTY;
-  }
-}
-function parseBag(raw: string): Bag {
-  try {
-    if (raw) return JSON.parse(raw) as Bag;
-  } catch {}
-  return { lines: [], note: "", client_ref: "" };
-}
-function writeBag(userId: number, customerId: number, bag: Bag) {
-  // The order's id for "sent twice" is made with the bag's first line, and kept until it is sent.
-  const next = bag.lines.length && !bag.client_ref ? { ...bag, client_ref: newClientRef() } : bag;
-  try {
-    if (next.lines.length || next.note || next.edit) localStorage.setItem(bagKey(userId, customerId), JSON.stringify(next));
-    else localStorage.removeItem(bagKey(userId, customerId));
-  } catch {}
-  window.dispatchEvent(new Event(BAG_EVENT));
-}
-function subscribeBag(cb: () => void) {
-  window.addEventListener(BAG_EVENT, cb);
-  window.addEventListener("storage", cb);
-  return () => {
-    window.removeEventListener(BAG_EVENT, cb);
-    window.removeEventListener("storage", cb);
-  };
-}
-
-// Favourite items: a heart on each card, kept on the phone (per owner and shop). They come first in the store.
-const FAV_EVENT = "nahrain-fav";
-const favKey = (userId: number, customerId: number) => `nahrain.fav.${userId}.${customerId}`;
-function readFav(userId: number, customerId: number) {
-  try {
-    return localStorage.getItem(favKey(userId, customerId)) ?? "";
-  } catch {
-    return "";
-  }
-}
-function subscribeFav(cb: () => void) {
-  window.addEventListener(FAV_EVENT, cb);
-  window.addEventListener("storage", cb);
-  return () => {
-    window.removeEventListener(FAV_EVENT, cb);
-    window.removeEventListener("storage", cb);
-  };
-}
-function toggleFav(userId: number, customerId: number, itemId: number) {
-  const now = readFav(userId, customerId).split(",").filter(Boolean).map(Number);
-  const next = now.includes(itemId) ? now.filter((x) => x !== itemId) : [...now, itemId];
-  try {
-    localStorage.setItem(favKey(userId, customerId), next.join(","));
-  } catch {}
-  window.dispatchEvent(new Event(FAV_EVENT));
-}
+import { EMPTY, parseBag, readFav, readRaw, subscribeBag, subscribeFav, toggleFav, writeBag, type Bag, type Line } from "@/lib/shop-bag";
+import { Banners, BrandRow, CategoryTiles, type Slide } from "@/components/shop/home-sections";
+import { ProductCard, RowHead, orderedCounts } from "@/components/shop/kit";
+import { useSite } from "@/lib/site";
+import { SlidersHorizontal } from "lucide-react";
+import { enqueue, isNetworkError } from "@/lib/offline";
+import { cn, piecesOf, priceOf } from "@/lib/utils";
 
 export function ShopStore({ customer, orders }: { customer: Customer; orders: Order[] }) {
   const { tr, money, name, unit: unitOf } = useFmt();
@@ -132,10 +52,16 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
     (u: Bag | ((b: Bag) => Bag)) => writeBag(user.id, customer.id, typeof u === "function" ? u(parseBag(readRaw(user.id, customer.id))) : u),
     [user.id, customer.id],
   );
-  const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [open, setOpen] = useState<Item | null>(null);
   const [bagOpen, setBagOpen] = useState(false);
+  // From another page's bag button (/shop?bag=1): the bag opens here.
+  useEffect(() => {
+    // Reading the address once, after the page shows (the static page has no address of its own).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (new URLSearchParams(window.location.search).get("bag") === "1") setBagOpen(true);
+  }, []);
+  const site = useSite();
   const [busy, setBusy] = useState(false);
 
   // Orders come from the main warehouse (the shop doesn't choose; the company does).
@@ -154,7 +80,7 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
   const catIndex = (c: string) => Math.max(0, categories.indexOf(c));
   // His favourites first (in "all"), or only them (the ♥ chip).
   const shown = active
-    .filter((i) => (cat === "all" || (cat === "fav" ? favs.has(i.id) : i.category === cat)) && matches(q, i.name, i.name_en, i.barcode))
+    .filter((i) => cat === "all" || (cat === "fav" ? favs.has(i.id) : i.category === cat))
     .sort((a, b) => Number(favs.has(b.id)) - Number(favs.has(a.id)));
 
   /** «اطلب مثل آخر مرة»: the last order's items into the bag (what is there now; less if less is left). */
@@ -266,6 +192,49 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
     }
   }
 
+  // ----- the home's parts -----
+  const catCounts = new Map(categories.map((c) => [c, active.filter((i) => i.category === c).length]));
+  const brands = [...new Set(active.map((i) => i.brand).filter((b): b is string => !!b))];
+  const inStock = active.filter((i) => available(i) > 0);
+  const counts = orderedCounts(orders, customer.id);
+  const newest = [...inStock].sort((a, b) => b.id - a.id).slice(0, 10);
+  const mostOrdered = [...active].filter((i) => counts.has(i.id)).sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0)).slice(0, 10);
+  const picked = [...active.filter((i) => favs.has(i.id)), ...mostOrdered.filter((i) => !favs.has(i.id))].slice(0, 10);
+  const rows = [
+    { key: "picked", title: tr("مختارات لك", "Picked for you"), href: "/search?fav=1", list: picked },
+    { key: "new", title: tr("وصل حديثاً", "Just arrived"), href: "/search?sort=new", list: newest },
+    { key: "top", title: tr("الأكثر طلباً عندك", "What you order most"), href: "/search?sort=top", list: mostOrdered },
+  ];
+  const owed = Math.max(0, customer.balance ?? 0);
+  const bigCats = [...categories].sort((a, b) => (catCounts.get(b) ?? 0) - (catCounts.get(a) ?? 0)).slice(0, 2);
+  const slides: Slide[] = [
+    ...site.banners.filter((b) => b.active).map((banner) => ({ kind: "manager" as const, banner })),
+    ...(newest.length ? [{ kind: "new" as const, items: newest.slice(0, 3) }] : []),
+    ...(last && !bag.edit ? [{ kind: "last" as const, number: last.number, count: last.lines.length, onClick: orderLikeLast }] : []),
+    ...bigCats.map((c) => ({ kind: "category" as const, category: c, count: catCounts.get(c) ?? 0, index: catIndex(c), items: inStock.filter((i) => i.category === c).slice(0, 3) })),
+    ...(owed > 0 ? [{ kind: "pay" as const, owed }] : []),
+  ];
+  const card = (it: Item, i: number, className?: string) => {
+    const l = lineOf(it.id);
+    return (
+      <ProductCard
+        key={it.id}
+        it={it}
+        index={catIndex(it.category)}
+        price={price(it, firstUnit(it))}
+        out={available(it) <= 0}
+        qty={l?.qty}
+        fav={favs.has(it.id)}
+        onOpen={() => setOpen(it)}
+        onAdd={() => addOne(it)}
+        onLess={() => l && setLine(it.id, { unit: l.unit, qty: l.qty - 1 })}
+        onFav={() => toggleFav(user.id, customer.id, it.id)}
+        className={className}
+        delay={Math.min(i, 12) * 0.03}
+      />
+    );
+  };
+
   return (
     <div className="mx-auto max-w-5xl pb-28">
       {/* Greeting, like the design's "Hey, …" header */}
@@ -294,11 +263,19 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
         </div>
       )}
 
-      {/* Search */}
-      <div className="mt-4 flex h-12 items-center gap-2 rounded-2xl border border-line-strong bg-card px-4 focus-within:border-action focus-within:ring-4 focus-within:ring-action/15">
-        <Search className="size-5 text-faint" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("ابحث عن مادة", "Search for an item")} className="h-full flex-1 bg-transparent text-base outline-none placeholder:text-faint" />
+      {/* Search: the search page (with its filters) */}
+      <div className="mt-4 flex gap-2">
+        <Link href="/search" className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-2xl border border-line-strong bg-card px-4 text-faint transition hover:border-action">
+          <Search className="size-5" />
+          <span className="truncate text-base">{tr("ابحث عن مادة أو علامة تجارية", "Search an item or a brand")}</span>
+        </Link>
+        <Link href="/search?filters=1" aria-label={tr("تصفية البحث", "Search filters")} className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-line-strong bg-card text-muted transition hover:border-action hover:text-action">
+          <SlidersHorizontal className="size-5" />
+        </Link>
       </div>
+
+      {/* The ads: the manager's own first, then ours (new arrivals, last order, a category, paying online) */}
+      <Banners slides={slides} catIndex={catIndex} />
 
       {/* The banner: in the design it's a discount; for a wholesale shop the useful thing is the credit left */}
       <div className="rise-item brand-panel relative mt-4 overflow-hidden rounded-3xl p-5 sm:p-6">
@@ -329,24 +306,39 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
         <div className="hazard absolute inset-x-0 bottom-0 h-1.5" aria-hidden />
       </div>
 
-      {/* Order like last time */}
-      {last && !bag.edit && (
-        <button type="button" onClick={orderLikeLast} className="box-row mt-4 flex w-full items-center gap-3 rounded-2xl border border-line bg-card p-3 text-start transition hover:border-action">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-action/15 text-action">
-            <RotateCcw className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block font-bold">{tr("اطلب مثل آخر مرة", "Order like last time")}</span>
-            <span className="block truncate text-xs text-muted">
-              <span className="num">{last.number}</span> · {tr(`${last.lines.length} مواد`, `${last.lines.length} items`)} · <span className="num">{money(last.total)}</span>
-            </span>
-          </span>
-          <span className="shrink-0 rounded-full bg-action px-3 py-1.5 text-xs font-bold text-on-action">{tr("إلى السلة", "To the bag")}</span>
-        </button>
+      <RowHead title={tr("تصفّح الأقسام", "Browse the sections")} />
+      <CategoryTiles
+        categories={categories}
+        counts={catCounts}
+        catIndex={catIndex}
+        onPick={(c) => {
+          setCat(c);
+          document.getElementById("all-items")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
+      />
+      {brands.length > 0 && (
+        <>
+          <RowHead title={tr("العلامات التجارية", "Brands")} href="/search?by=brand" />
+          <BrandRow brands={brands} />
+        </>
+      )}
+      {rows.map((r) =>
+        r.list.length ? (
+          <div key={r.key}>
+            <RowHead title={r.title} href={r.href} />
+            {/* A strip to swipe on phones; on a computer two full rows (nothing cut at the edge) */}
+            <div className="-mx-3 flex snap-x gap-3 overflow-x-auto px-3 pb-2 [scrollbar-width:none] sm:-mx-5 sm:px-5 md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 lg:grid-cols-5">
+              {r.list.map((it, i) => card(it, i, "w-44 shrink-0 snap-start sm:w-52 md:w-auto"))}
+            </div>
+          </div>
+        ) : null,
       )}
 
+      <div id="all-items" className="scroll-mt-20">
+        <RowHead title={tr("كل المواد", "All items")} href="/search" more={tr("ابحث وصفِّ", "Search and filter")} />
+      </div>
       {/* Category chips */}
-      <div className="-mx-4 mt-5 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+      <div className="-mx-3 sm:-mx-5 flex gap-2 overflow-x-auto px-3 pb-1 sm:px-5 [scrollbar-width:none]">
         {["all", ...(favs.size ? ["fav"] : []), ...categories].map((c) => {
           const on = cat === c;
           return (
@@ -365,53 +357,7 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
       </div>
 
       {/* Products */}
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {pg.shown.map((it, i) => {
-          const l = lineOf(it.id);
-          const out = available(it) <= 0;
-          return (
-            // A light CSS entrance (rise-item), one after another: the store is the shop owner's first page.
-            <div key={it.id} style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }} className="rise-item relative flex flex-col rounded-3xl border border-line bg-card p-2.5">
-              <button
-                type="button"
-                onClick={() => toggleFav(user.id, customer.id, it.id)}
-                aria-pressed={favs.has(it.id)}
-                aria-label={favs.has(it.id) ? tr("أزل من المفضلة", "Remove from favourites") : tr("أضف إلى المفضلة", "Add to favourites")}
-                className="absolute end-4 top-4 z-10 flex size-8 items-center justify-center rounded-full bg-card/90 shadow-sm backdrop-blur transition active:scale-90"
-              >
-                <Heart className={cn("size-4", favs.has(it.id) ? "fill-[#e11d48] text-[#e11d48]" : "text-muted")} />
-              </button>
-              <button type="button" onClick={() => setOpen(it)} className="text-start">
-                <Art category={it.category} index={catIndex(it.category)} image={it.image} />
-                <p className="mt-2 line-clamp-2 min-h-10 px-1 text-sm font-bold leading-5">{name(it)}</p>
-                <p className="px-1 text-[11px] text-muted">
-                  {firstUnit(it) === "carton" ? `${unitOf(it, "carton")} · ${it.pieces_per_carton} ${unitOf(it, "piece", true)}` : unitOf(it, "piece")}
-                </p>
-              </button>
-              <div className="mt-auto flex items-center justify-between gap-1 px-1 pt-2">
-                <span className="num text-sm font-bold">{money(price(it, firstUnit(it)))}</span>
-                {out ? (
-                  <span className="rounded-full bg-card-2 px-2 py-1 text-[11px] font-semibold text-faint">{tr("نفد", "Out")}</span>
-                ) : l ? (
-                  <span className="flex items-center gap-1" dir="ltr">
-                    <RoundBtn label={tr("أقل", "Less")} onClick={() => setLine(it.id, { unit: l.unit, qty: l.qty - 1 })}>
-                      <Minus className="size-3.5" />
-                    </RoundBtn>
-                    <span className="num w-5 text-center text-sm font-bold">{l.qty}</span>
-                    <RoundBtn label={tr("أكثر", "More")} onClick={() => addOne(it)} solid>
-                      <Plus className="size-3.5" />
-                    </RoundBtn>
-                  </span>
-                ) : (
-                  <RoundBtn label={tr("أضف إلى السلة", "Add to bag")} onClick={() => addOne(it)} solid>
-                    <Plus className="size-4" />
-                  </RoundBtn>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{pg.shown.map((it, i) => card(it, i))}</div>
       <Pager {...pg} sizes={[12, 24, 48]} className="mt-3" />
       {!shown.length && <p className="mt-10 text-center text-sm text-muted">{tr("لا توجد مادة بهذا الاسم", "No item by that name")}</p>}
 
@@ -566,7 +512,7 @@ function Row({ k, v, strong, tone }: { k: string; v: string; strong?: boolean; t
 /** The product sheet: like the design's detail screen, with carton / piece in place of S / M / L. A big
  *  picture (a tap shows it on the whole screen), the item's details, and items of the same kind under it
  *  (a tap opens one here). */
-function ItemSheet({
+export function ItemSheet({
   item,
   index,
   line,

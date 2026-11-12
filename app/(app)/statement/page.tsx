@@ -1,5 +1,7 @@
 "use client";
 
+import { ShopOrdersTabs } from "@/components/shop/orders-tabs";
+
 import { ShareWhatsApp, pageLink } from "@/components/share";
 
 import { Suspense } from "react";
@@ -19,6 +21,7 @@ export default function MyStatementPage() {
   const c = useLoad(() => api.getCustomer(id), [id]);
   return (
     <>
+      <ShopOrdersTabs />
       <PageHeader
         title={tr("كشف حسابي", "My statement")}
         subtitle={c.data?.name}
