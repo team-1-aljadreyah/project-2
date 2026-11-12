@@ -55,9 +55,9 @@ export default function LandingPage() {
             <div className="relative">
               <WordReveal text={tr("هل أنت مستعد لتوديع الدفاتر؟", "Ready to say goodbye to notebooks?")} className="text-3xl font-bold sm:text-5xl" />
               <p className="mx-auto mt-4 max-w-xl text-muted">{tr("صاحب محل؟ ادخل إلى حسابك، واطّلع على أسعارك الخاصة، واطلب، وتابع كشف حسابك في أي وقت.", "A shop owner? Log in, see your own prices, order, and follow your statement any time.")}</p>
-              <Link href="/shops" className="mx-auto mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-action hover:underline">
+              <a href="/client" target="_blank" rel="noopener" className="mx-auto mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-action hover:underline">
                 <Store className="size-4" /> {tr("لماذا يطلب أصحاب المحلات من النهرين؟", "Why do shop owners order from Al-Nahrain?")}
-              </Link>
+              </a>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 {/* New shops register by themselves; the company approves them before the first order. */}
                 {!session && (
@@ -137,11 +137,18 @@ function Header({ enter, enterLabel }: { enter: string; enterLabel: string }) {
           <a href="#contact" className="transition hover:text-text">
             {tr("تواصل معنا", "Contact")}
           </a>
-          <Link href="/shops" className="flex items-center gap-1.5 rounded-full border border-action/40 bg-action/10 px-3 py-1 font-semibold text-text transition hover:bg-action/20">
-            <Store className="size-4 text-action" /> {tr("لأصحاب المحلات", "For shop owners")}
-          </Link>
         </div>
         <div className="flex items-center gap-2">
+          {/* The shop owners' landing page is their app (/client), opened in a new tab. */}
+          <a
+            href="/client"
+            target="_blank"
+            rel="noopener"
+            aria-label={tr("لأصحاب المحلات", "For shop owners")}
+            className="flex h-10 items-center gap-1.5 rounded-full border border-action/40 bg-action/10 px-3 text-sm font-semibold text-text transition hover:bg-action/20 active:scale-[0.98]"
+          >
+            <Store className="size-4 shrink-0 text-action" /> <span className="hidden sm:inline">{tr("لأصحاب المحلات", "For shop owners")}</span>
+          </a>
           <LanguageSwitch onBrand />
           <Link href={enter} className="flex h-10 items-center rounded-full bg-white px-4 text-sm font-bold text-[#0b0c0e] transition hover:bg-white/90">
             {enterLabel}
