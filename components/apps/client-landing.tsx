@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { AppFooter, AppHeader, BigButton, Blobs, CountUp, GradientText, InstallCard, Marquee, PhoneDemo, Questions, Rivers, SectionHead, StickyActions, IDENTITY, useAppEntry } from "./kit";
+import { AppFooter, AppHeader, BigButton, Blobs, CountUp, GradientText, InstallButton, InstallCard, Marquee, PhoneDemo, Questions, Rivers, SectionHead, StickyActions, IDENTITY, useAppEntry } from "./kit";
 
 // The page's two colors (the identity of the shop owners' app, see IDENTITY in ./kit).
 const C = IDENTITY.client;
@@ -81,15 +81,16 @@ export function ClientLanding() {
                   "No endless calls, no notebooks, no waiting for the rep. Your shop's own wholesale prices, your order to your door followed on the map, and your statement in your pocket.",
                 )}
               </motion.p>
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="mt-8 hidden flex-wrap justify-center gap-3 sm:flex lg:justify-start">
-                <BigButton href={main.href} color={C.main}>
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="mt-8 flex flex-wrap justify-center gap-3 lg:justify-start">
+                <BigButton className="max-sm:hidden" href={main.href} color={C.main}>
                   {!session && <UserPlus className="size-5" />} {main.label} {session && <Forward className="size-5" />}
                 </BigButton>
                 {!session && (
-                  <BigButton href="/login" ghost>
+                  <BigButton className="max-sm:hidden" href="/login" ghost>
                     {tr("عندي حساب", "I have an account")}
                   </BigButton>
                 )}
+                <InstallButton app="client" variant="ghost" />
               </motion.div>
               <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }} className="mt-7 flex flex-wrap justify-center gap-2 text-sm lg:justify-start">
                 {[
@@ -171,7 +172,7 @@ export function ClientLanding() {
         </section>
 
         <section className="px-4 pb-10">
-          <InstallCard app="client" color={C.main} />
+          <InstallCard app="client" />
         </section>
 
         {/* ---------- Last call ---------- */}
@@ -211,6 +212,7 @@ export function ClientLanding() {
             {tr("دخول", "Log in")}
           </BigButton>
         )}
+        <InstallButton app="client" variant="icon" className="size-13 rounded-2xl" />
       </StickyActions>
     </div>
   );
