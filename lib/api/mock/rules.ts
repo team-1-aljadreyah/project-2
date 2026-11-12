@@ -9,6 +9,8 @@ import { fullSite } from "../site-defaults";
 import { missingValue, supplyGaps } from "../supply";
 import type {
   AppNotification,
+  CounterInfo,
+  CounterSaleInput,
   RegisterInput,
   AuditAction,
   AuditEntity,
@@ -456,6 +458,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     if (outside.length) fail(403, "FORBIDDEN", `خارج أصنافك: ${outside.map((i) => i.name).join("، ")}`, `Outside your categories: ${outside.map((i) => i.name_en).join(", ")}`);
   }
   if (actor.role === "shop" && actor.customer_id !== customer.id) fail(403, "FORBIDDEN", "لا تستطيع الطلب لمحل آخر", "You can't order for another shop");
+  if (customer.walk_in) fail(409, "BAD_STATE", "الزبون المباشر يُباع له من «بيع مباشر» في المخزن", "Walk-in buyers are sold to from the warehouse's counter sale");
   if (!customer.active) {
     if (customer.pending) fail(409, "BAD_STATE", "الحساب بانتظار موافقة الشركة، ويمكنك الطلب بعد الموافقة", "This account is waiting for approval. You can order after it is approved");
     fail(409, "BAD_STATE", "حساب هذا الزبون موقوف", "This customer is not active");
@@ -1192,19 +1195,22 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
     paid: 0,
     returned: 0,
     cost,
+    ...(o.counter ? { counter: o.counter } : {}),
     created_by: person(actor),
   };
   db.invoices.push(inv);
   o.status = "confirmed";
   o.invoice_id = invId;
   o.reserved_until = undefined;
+  for (const l of lines) checkLowStock(db, l.item_id, now);
+  // Sold at the counter: the buyer takes the goods himself (no trip, no rep to tell).
+  if (o.source === "counter") return inv;
   // The trip to the shop starts here: a QR code for the shipment label and a PIN for the shop owner,
   // and the delivery rep who takes it.
   o.delivery = newDelivery();
   const carrier = deliveryRepFor(db, o.rep_id);
   if (carrier) o.delivery.rep = person(carrier);
   audit(db, actor, "confirm", "order", o.id, `تثبيت الطلب ${o.number} وإصدار الفاتورة ${inv.number}`, `Confirmed ${o.number}, invoice ${inv.number}`, now);
-  for (const l of lines) checkLowStock(db, l.item_id, now);
   const customer = db.customers.find((c) => c.id === o.customer_id);
   notify(
     db,
@@ -1237,6 +1243,104 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
       now,
     );
   }
+  return inv;
+}
+
+// ---------- Counter sale (بيع مباشر): someone came to the warehouse and pays on the spot ----------
+
+/** The one «زبون مباشر» account every counter sale goes under (made the first time). */
+export function walkInCustomer(db: Db): DbCustomer {
+  const found = db.customers.find((c) => c.walk_in);
+  if (found) return found;
+  const c: DbCustomer = {
+    id: nextId(db, "customer"),
+    name: "زبون مباشر",
+    owner_name: "بيع مباشر من المخزن",
+    phone: "",
+    area: "",
+    address: "",
+    tier_id: db.tiers[db.tiers.length - 1]?.id ?? 1,
+    rep_id: 0,
+    debt_limit: 0,
+    active: true,
+    walk_in: true,
+  };
+  db.customers.push(c);
+  return c;
+}
+
+/** The keeper sells at the counter: checked like any sale (his warehouse, active items, enough sellable stock,
+ *  whole quantities), then at once: the order, the invoice (stock out, oldest expiry first) and the payment in
+ *  full. Nothing is held, nothing is owed, no rep earns from it. */
+export function counterSale(db: Db, actor: DbUser, input: CounterSaleInput, now: Date): DbInvoice {
+  need(actor, ["warehouse"]);
+  // Same request sent twice (weak internet): the first sale's invoice.
+  const same = db.orders.find((o) => o.client_ref === input.client_ref);
+  if (same) return db.invoices.find((i) => i.id === same.invoice_id) ?? fail(409, "BAD_STATE", "هذه العملية مسجّلة من قبل", "This was already recorded");
+  const errors: Record<string, string> = {};
+  if (!db.warehouses.some((w) => w.id === input.warehouse_id) || !worksIn(actor, input.warehouse_id)) fail(403, "FORBIDDEN", "تبيع من مخزنك فقط", "You sell only from your warehouse");
+  if (!db.tiers.some((t) => t.id === input.tier_id)) errors.tier_id = msg("اختر مستوى السعر", "Choose the price level");
+  if (input.method !== "cash" && input.method !== "transfer") errors.method = msg("اختر طريقة الدفع", "Choose how he pays");
+  const buyer_name = input.buyer_name?.trim().slice(0, 80) || undefined;
+  const phone = input.buyer_phone?.replace(/[\s-]/g, "") || undefined;
+  if (phone && !/^07\d{9}$/.test(phone)) errors.buyer_phone = msg("رقم عراقي من 11 رقماً يبدأ بـ 07", "An 11-digit Iraqi number starting 07");
+  if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
+
+  const customer = walkInCustomer(db);
+  const lines = orderLines(db, input.tier_id, input.lines);
+  checkStock(db, input.warehouse_id, lines, now);
+  const subtotal = lines.reduce((t, l) => t + l.total, 0);
+  const [total, rounding] = roundTotal(subtotal);
+  if (input.method === "cash" && input.received !== undefined && !(Number.isInteger(input.received) && input.received >= total)) {
+    fail(422, "VALIDATION", "المبلغ المستلم أقل من المجموع", "The cash handed over is less than the total", { received: msg(`المجموع ${total.toLocaleString("en")} د.ع`, `The total is ${total.toLocaleString("en")} IQD`) });
+  }
+  const counter: CounterInfo = {
+    ...(buyer_name ? { buyer_name } : {}),
+    ...(phone ? { buyer_phone: phone } : {}),
+    tier_id: input.tier_id,
+    method: input.method,
+    ...(input.method === "cash" && input.received ? { received: input.received } : {}),
+  };
+  const id = nextId(db, "order");
+  const order: Order = {
+    id,
+    number: `ORD-${pad(id)}`,
+    client_ref: input.client_ref,
+    customer_id: customer.id,
+    rep_id: 0,
+    warehouse_id: input.warehouse_id,
+    source: "counter",
+    status: "approved",
+    lines,
+    total,
+    ...(rounding ? { rounding } : {}),
+    counter,
+    note: input.note?.trim() || undefined,
+    accepted_by: person(actor),
+    accepted_at: now.toISOString(),
+    created_at: now.toISOString(),
+    created_by: person(actor),
+  };
+  db.orders.push(order);
+  const inv = confirmOrder(db, actor, id, now);
+  // Paid in full, now: straight on this invoice.
+  inv.paid = inv.total;
+  const payId = nextId(db, "payment");
+  db.payments.push({
+    id: payId,
+    number: `PAY-${pad(payId)}`,
+    client_ref: `${input.client_ref}-pay`,
+    customer_id: customer.id,
+    amount: inv.total,
+    method: input.method,
+    received_by: { ...person(actor), role: actor.role },
+    date: now.toISOString(),
+    note: buyer_name ? `بيع مباشر: ${buyer_name}` : "بيع مباشر",
+    allocations: [{ invoice_id: inv.id, number: inv.number, amount: inv.total }],
+    reversed: false,
+  });
+  const who = buyer_name ? ` لـ ${buyer_name}` : "";
+  audit(db, actor, "create", "invoice", inv.id, `بيع مباشر${who}: ${inv.number} بـ ${inv.total.toLocaleString("en")} د.ع (${input.method === "cash" ? "نقداً" : "تحويل"})`, `Counter sale ${inv.number}: ${inv.total.toLocaleString("en")} IQD`, now);
   return inv;
 }
 

@@ -74,5 +74,6 @@ export function SourceBadge({ source }: { source: OrderSource }) {
   const { tr } = useFmt();
   if (source === "shop") return <Badge tone="primary">{tr("من المحل", "Shop online")}</Badge>;
   if (source === "office") return <Badge>{tr("من المكتب", "Office")}</Badge>;
+  if (source === "counter") return <Badge tone="success">{tr("بيع مباشر", "Counter sale")}</Badge>;
   return <Badge>{tr("من المندوب", "Rep")}</Badge>;
 }

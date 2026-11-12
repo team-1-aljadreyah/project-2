@@ -96,7 +96,7 @@ function SearchBox({ pages, onClose }: { pages: SearchPage[]; onClose: () => voi
     let alive = true;
     const quiet = <T,>(p: Promise<T>, empty: T) => p.catch(() => empty);
     Promise.all([
-      may("/customers/1") ? quiet(api.listCustomers(), []) : Promise.resolve([]),
+      may("/customers/1") ? quiet(api.listCustomers().then((cs) => cs.filter((c) => !c.walk_in)), []) : Promise.resolve([]),
       may("/orders/1") ? quiet(api.listOrders(), []) : Promise.resolve([]),
       may("/invoices/1") ? quiet(api.listInvoices(), []) : Promise.resolve([]),
       may("/items/1") ? quiet(api.listItems(), [] as Item[]) : Promise.resolve([] as Item[]),

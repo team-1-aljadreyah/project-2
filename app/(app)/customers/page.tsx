@@ -19,7 +19,7 @@ type F = "all" | "debt" | "near" | "over" | "pending";
 export default function CustomersPage() {
   const { tr, name, ago, money } = useFmt();
   const { user, lookups } = useApp();
-  const list = useLoad(() => api.listCustomers(), []);
+  const list = useLoad(() => api.listCustomers().then((cs) => cs.filter((c) => !c.walk_in)), []);
   const [f, setF] = useState<F>("all");
   const [rep, setRep] = useState<number | "">("");
   const [q, setQ] = useRemembered("customers:q", "");

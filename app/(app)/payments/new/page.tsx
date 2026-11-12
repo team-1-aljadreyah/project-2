@@ -35,7 +35,7 @@ function NewPaymentForm({ pre }: { pre?: number }) {
   const router = useAppRouter();
   const toast = useToast();
   const offline = useOffline();
-  const customers = useLoad(() => api.listCustomers(), []);
+  const customers = useLoad(() => api.listCustomers().then((cs) => cs.filter((c) => !c.walk_in)), []);
   const [customerId, setCustomerId] = useState<number | "">(pre ?? "");
   const [amount, setAmount] = useState<number | "">("");
   const [method, setMethod] = useState<PayMethod>("cash");

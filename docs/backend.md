@@ -45,6 +45,14 @@ The server must filter and hide, not only the pages:
   categories the manager gave him (`rep_categories`, empty = all). His monthly target (`sales_target`, set by
   the manager on the user) is counted by `GET /reps/targets`: the month's invoices with his `rep_id` less the
   returns on them; he gets only his own row (with his rank), the manager and accountant get every marketing rep.
+- **Counter sale** (`POST /counter-sales`, the warehouse keeper only, from a warehouse he works in): someone
+  who came to the warehouse pays on the spot. One request does it all: the order (`source: "counter"`, no rep:
+  `rep_id` 0), the invoice (stock out, oldest expiry first, the price of the `tier_id` he chose, total rounded to
+  250) and the payment in full on that invoice (`cash` or `transfer`). Every counter sale goes under one customer
+  with `walk_in: true` («زبون مباشر», made the first time, debt limit 0); it is not a shop: hide it from the
+  customer lists and pickers, and refuse it in `POST /orders`. `counter` on the order and the invoice keeps the
+  buyer's optional name and phone (07 + 9 digits), the level, the method and the cash handed over (≥ total).
+  Same `client_ref` again = the same invoice back. No delivery trip, no notifications to a rep.
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -183,7 +191,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 `ChatMessage`, `RepTarget`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 132 endpoints, generated from lib/api/http.ts -->
+<!-- 133 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -380,5 +388,6 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 
 | Call | Method | Path | Takes | Returns | Notes |
 |---|---|---|---|---|---|
+| `counterSale` | POST | `/counter-sales` | `input: CounterSaleInput` | `Invoice` | The keeper's counter sale: the invoice, already paid in full (the goods left the warehouse). |
 | `repTargets` | GET | `/reps/targets` | `month: string` | `RepTarget[]` | Each marketing rep's month against his monthly target, ranked (a rep gets only his own row). |
 

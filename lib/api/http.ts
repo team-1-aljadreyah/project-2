@@ -5,6 +5,7 @@ import type {
   Allocation,
   Batch,
   CommissionRow,
+  CounterSaleInput,
   RepTarget,
   Customer,
   CustomerInput,
@@ -242,6 +243,8 @@ export const httpApi = {
   returnToWarehouse: (id: number) => post<Order>(`/orders/${id}/delivery/return`),
   getDeliveryPhoto: (id: number) => get<string | null>(`/orders/${id}/delivery/photo`),
   createOrder: (input: NewOrder) => post<Order>("/orders", input, input.client_ref),
+  /** The keeper's counter sale: the invoice, already paid in full (the goods left the warehouse). */
+  counterSale: (input: CounterSaleInput) => post<Invoice>("/counter-sales", input, input.client_ref),
   /** The accountant / manager approves the order (it stays held until delivered). */
   acceptOrder: (id: number) => post<Order>(`/orders/${id}/accept`),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */

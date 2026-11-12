@@ -287,6 +287,9 @@ export interface Customer {
   active: boolean;
   /** Signed up on the website and waiting for the manager to approve it. */
   pending?: boolean;
+  /** The one «زبون مباشر» account the counter sales go under (people who come to the warehouse and pay on
+   *  the spot). Not a shop: no rep, no debt, not listed with the customers. */
+  walk_in?: boolean;
   /** The full address with the map pin (newer shops). `address` stays the short text of it. */
   address_info?: ShopAddress;
   last_order_at?: string;
@@ -298,7 +301,33 @@ export interface Customer {
  *  confirmed: delivered to the shop: the invoice is made, the stock leaves, the debt counts.
  *  cancelled / expired: nothing held, nothing owed. */
 export type OrderStatus = "pending" | "needs_approval" | "approved" | "confirmed" | "cancelled" | "expired";
-export type OrderSource = "rep" | "shop" | "office";
+/** counter: sold at the warehouse to someone who came in and paid on the spot (بيع مباشر). */
+export type OrderSource = "rep" | "shop" | "office" | "counter";
+
+/** A counter sale's own details (on its order and invoice): who bought (if he gave it), the price level the
+ *  keeper chose, how it was paid (in full, at once) and the cash handed over (for the change). */
+export interface CounterInfo {
+  buyer_name?: string;
+  buyer_phone?: string;
+  tier_id: number;
+  method: "cash" | "transfer";
+  /** Cash handed over by the buyer (≥ the total); the change is received - total. */
+  received?: number;
+}
+
+/** The warehouse keeper sells to someone who came in: the goods leave now (oldest expiry first), the invoice is
+ *  made and paid in full at once. Sent again with the same client_ref (weak internet): the first sale comes back. */
+export interface CounterSaleInput {
+  client_ref: string;
+  warehouse_id: number;
+  tier_id: number;
+  lines: { item_id: number; unit: Unit; qty: number }[];
+  buyer_name?: string;
+  buyer_phone?: string;
+  method: "cash" | "transfer";
+  received?: number;
+  note?: string;
+}
 
 export interface OrderLine {
   /** The warehouse this line is taken from (the keeper chooses it when preparing; else the order's). */
@@ -337,6 +366,8 @@ export interface Order {
   discount?: OrderDiscount;
   /** Why the order waits for the manager: over the debt limit, a discount above 3%, or both. */
   approval_for?: ("debt" | "discount" | "rule")[];
+  /** A counter sale (source "counter"): the buyer, price level and payment. */
+  counter?: CounterInfo;
   /** The automation rules that hold this order for the manager (their names). */
   rule_note?: string;
   /** The shop owner changed it after sending (before it was confirmed). */
@@ -475,6 +506,8 @@ export interface Invoice {
   returned: number;
   remaining: number;
   status: InvoiceStatus;
+  /** A counter sale (paid at the warehouse): the buyer, price level and payment. No rep. */
+  counter?: CounterInfo;
   cost?: number;
   profit?: number;
   created_by: Person;
