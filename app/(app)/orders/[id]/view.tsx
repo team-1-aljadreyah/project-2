@@ -131,7 +131,8 @@ export default function OrderView() {
                 loading={busy === "approve"}
                 onClick={() => act("approve", () => api.approveOrder(o.id), tr("تمت الموافقة، وأصبح الطلب بانتظار التثبيت", "Approved. The order now waits to be confirmed"))}
               >
-                <ShieldCheck className="size-4" /> {waitsFor.includes("debt") ? tr("موافقة على تجاوز السقف", "Approve over limit") : tr("موافقة على الخصم", "Approve the discount")}
+                <ShieldCheck className="size-4" />{" "}
+                {waitsFor.includes("debt") ? tr("موافقة على تجاوز السقف", "Approve over limit") : waitsFor.includes("discount") ? tr("موافقة على الخصم", "Approve the discount") : tr("موافقة", "Approve")}
               </Button>
             )}
             {canAccept && (
@@ -175,7 +176,9 @@ export default function OrderView() {
             <Notice
               tone="warning"
               title={
-                waitsFor.includes("debt") && waitsFor.includes("discount")
+                waitsFor.includes("rule") && !waitsFor.includes("debt") && !waitsFor.includes("discount")
+                  ? tr(`ينتظر موافقة المدير بحسب قاعدة: ${o.rule_note ?? ""}`, `Held for the manager by the rule: ${o.rule_note ?? ""}`)
+                  : waitsFor.includes("debt") && waitsFor.includes("discount")
                   ? tr(`يتجاوز سقف دين الزبون، وفيه خصم ${o.discount?.percent}%`, `Over the debt limit, with a ${o.discount?.percent}% discount`)
                   : waitsFor.includes("discount")
                     ? tr(`فيه خصم ${o.discount?.percent}%: أكثر مما يعطيه المندوب أو المحاسب وحده (3%)`, `It has a ${o.discount?.percent}% discount: more than a rep or accountant gives alone (3%)`)

@@ -70,6 +70,7 @@ import type {
   CustomObject,
   CustomValue,
   Health,
+  RuleRun,
 } from "./types";
 
 export interface Lookups {
@@ -105,6 +106,8 @@ export const httpApi = {
   me: () => get<User>("/me"),
   /** The values of the manager's own fields on one record (only the ones this person may change). */
   saveCustomValues: (object: CustomObject, id: number, values: Record<string, CustomValue | null>) => patch<Record<string, CustomValue>>(`/custom/${object}/${id}`, values),
+  /** What the automation rules did lately (the manager). */
+  ruleRuns: () => get<RuleRun[]>("/setup/rule-runs"),
   /** Health and security (the manager): login errors of the last 24 hours, the security score and its checks, the users' access. */
   health: () => get<Health>("/setup/health"),
   /** The manager puts someone in a permission profile of their job (null = the job's usual access). */

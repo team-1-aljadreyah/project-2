@@ -3,8 +3,9 @@
 // The real backend must do the same things (see the client's requirements).
 import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
-import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type ShipmentLoad, type Vehicle } from "../types";
+import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type RuleOp, type RuleTrigger, type ShipmentLoad, type Vehicle } from "../types";
 import { linesWeight } from "../vehicles";
+import { fullSite } from "../site-defaults";
 import { missingValue, supplyGaps } from "../supply";
 import type {
   AppNotification,
@@ -627,12 +628,13 @@ export function approveOrder(db: Db, actor: DbUser, id: number, now: Date): Orde
   o.accepted_at = now.toISOString();
   o.reserved_until = undefined;
   const why = o.approval_for ?? ["debt"];
+  const ruleNote = o.rule_note;
   if (o.discount?.needs_approval) {
     delete o.discount.needs_approval;
     o.discount.approved_by = person(actor);
   }
   delete o.approval_for;
-  const ar = why.map((w) => (w === "debt" ? "تجاوز سقف الدين" : `خصم ${o.discount?.percent ?? ""}%`)).join(" و");
+  const ar = why.map((w) => (w === "debt" ? "تجاوز سقف الدين" : w === "rule" ? `قاعدة «${ruleNote ?? ""}»` : `خصم ${o.discount?.percent ?? ""}%`)).join(" و");
   audit(db, actor, "approve", "order", o.id, `موافقة على ${ar} للطلب ${o.number}`, `Approved ${why.join(" + ")} for ${o.number}`, now);
   return o;
 }
@@ -3012,4 +3014,68 @@ export function monthExpenses(db: Db, month: string, warehouseId?: number) {
   return expensesOf(db)
     .filter((e) => e.status === "approved" && e.date.startsWith(month) && (!warehouseId || e.warehouse_id === warehouseId))
     .reduce((s, e) => s + e.amount, 0);
+}
+
+// ---------- automation rules (advanced settings): "when this happens, if …, do that" ----------
+
+const OPS: Record<RuleOp, (a: number | string, b: number | string) => boolean> = {
+  gt: (a, b) => Number(a) > Number(b),
+  gte: (a, b) => Number(a) >= Number(b),
+  lt: (a, b) => Number(a) < Number(b),
+  eq: (a, b) => String(a) === String(b),
+  neq: (a, b) => String(a) !== String(b),
+};
+
+/**
+ * Run the manager's rules for something just made. Each matching rule sends its notification and is written in
+ * the rules' log; the names of the matching rules that ask for the manager's approval are returned.
+ */
+export function runRules(
+  db: Db,
+  trigger: RuleTrigger,
+  values: Record<string, number | string>,
+  ctx: { number: string; link: string; by: string; customer?: string },
+  now: Date,
+): string[] {
+  const rules = fullSite(db.custom).rules.filter((r) => r.active && r.trigger === trigger);
+  const approvals: string[] = [];
+  for (const r of rules) {
+    const ok = r.conditions.every((c) => c.field in values && OPS[c.op](values[c.field], c.value));
+    if (!ok) continue;
+    const amount = Number(values.total ?? values.amount ?? 0);
+    const text = (r.message?.trim() || "{number}: {amount} د.ع")
+      .replace(/\{number\}/g, ctx.number)
+      .replace(/\{amount\}/g, amount.toLocaleString("en-US"))
+      .replace(/\{customer\}/g, ctx.customer ?? "")
+      .replace(/\{by\}/g, ctx.by);
+    const wantsOk = !!r.approval && (trigger === "order_created" || trigger === "expense_created");
+    const roles = [...new Set([...r.notify, ...(wantsOk ? (["manager"] as Role[]) : [])])];
+    if (roles.length)
+      notify(
+        db,
+        {
+          type: wantsOk ? "needs_approval" : "rule",
+          roles,
+          title: wantsOk ? `قاعدة «${r.name}»: ${ctx.number} ينتظر موافقتك` : `قاعدة «${r.name}»`,
+          title_en: wantsOk ? `Rule ${r.name}: ${ctx.number} waits for you` : `Rule ${r.name}`,
+          body: text,
+          body_en: text,
+          link: ctx.link,
+        },
+        now,
+      );
+    if (wantsOk) approvals.push(r.name);
+    db.rule_runs ??= [];
+    db.rule_runs.push({
+      id: nextId(db, "rule_run"),
+      rule_id: r.id,
+      rule: r.name,
+      at: now.toISOString(),
+      record: ctx.number,
+      link: ctx.link,
+      did: [roles.length ? `إشعار إلى ${roles.length} وظيفة` : "", wantsOk ? "ينتظر موافقة المدير" : ""].filter(Boolean).join(" · "),
+    });
+    db.rule_runs = db.rule_runs.slice(-300);
+  }
+  return approvals;
 }

@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { CustomValue, Expense, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
+import type { CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -55,6 +55,8 @@ export interface Db {
   /** Values of the manager's own fields, by record ("customer:12" → field id → value). */
   custom_values?: Record<string, Record<string, CustomValue>>;
   /** Every login attempt (the health page counts the failed ones). */
+  /** The automation rules' log (the last 300 runs). */
+  rule_runs?: RuleRun[];
   login_log?: { phone: string; user_id?: number; ok: boolean; reason?: "wrong" | "stopped" | "hours"; at: string }[];
   customers: DbCustomer[];
   orders: Order[];

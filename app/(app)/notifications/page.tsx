@@ -19,6 +19,7 @@ import {
   Truck,
   UserPlus,
   Banknote,
+  Zap,
 } from "lucide-react";
 import { Button, Card, Empty, ErrorBox, LoadingRows, PageHeader, Pager, usePages } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -58,6 +59,8 @@ const icon = (t: NotificationType) => {
       return <Truck className="size-5 text-action" />;
     case "expense":
       return <Banknote className="size-5 text-warning" />;
+    case "rule":
+      return <Zap className="size-5 text-action" />;
     case "refund":
       return <RotateCcw className="size-5 text-success" />;
     case "commission_earned":
