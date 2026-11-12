@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { useMyWarehouses } from "@/components/warehouse-filter";
 import { Button, Card, Field, Input, LoadingRows, Money, NumberInput, Notice, PageHeader, Segmented, Select, errorText, useToast } from "@/components/ui";
@@ -11,6 +11,7 @@ import type { SupplyOrder, Unit } from "@/lib/api/types";
 import { useLoad } from "@/lib/use-load";
 import { useFmt } from "@/lib/i18n";
 import { cn, today } from "@/lib/utils";
+import { toUnit } from "@/lib/api/supply";
 
 interface Row {
   key: number;
@@ -19,6 +20,8 @@ interface Row {
   qty: number | "";
   expiry_date: string;
   price: number | ""; // per carton or per piece, following unit
+  /** From a supply order: how much of this item is still expected, in the order's unit. */
+  ordered?: { qty: number; unit: Unit };
 }
 
 let k = 0;
@@ -41,26 +44,44 @@ function FromSupply() {
 }
 
 function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
-  const { tr, name, money } = useFmt();
+  const { tr, name, money, num } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useRouter();
   const toast = useToast();
   const mine = useMyWarehouses();
   const [warehouse, setWarehouse] = useState<number>(supply?.warehouse_id ?? user.warehouse_id ?? lookups.warehouses[0].id);
   const [supplier, setSupplier] = useState(supply?.supplier ?? "");
-  // From a supply order: one line per item still missing (the keeper adds the expiry date and checks the count).
+  // From a supply order: one line per item still expected. The keeper counts what really came and writes it
+  // (empty = not counted yet, 0 = didn't come); the difference with the order shows on each line and below.
   const [rows, setRows] = useState<Row[]>(() =>
     supply
       ? supply.lines
           .filter((l) => l.received_qty < l.qty)
-          .map((l) => ({ key: ++k, item_id: l.item_id, unit: l.unit, qty: Math.round((l.qty - l.received_qty) * 100) / 100, expiry_date: "", price: l.price }))
+          .map((l) => {
+            const left = Math.round((l.qty - l.received_qty) * 100) / 100;
+            return { key: ++k, item_id: l.item_id, unit: l.unit, qty: "" as const, expiry_date: "", price: l.price, ordered: { qty: left, unit: l.unit } };
+          })
       : [blank()],
   );
+  // "The rest will not come": the order closes with what arrived (only asked when something is short).
+  const [closeShort, setCloseShort] = useState(false);
   const [err, setErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const set = (key: number, p: Partial<Row>) => setRows((r) => r.map((x) => (x.key === key ? { ...x, ...p } : x)));
 
-  const filled = rows.filter((r) => r.item_id);
+  // Sent: every chosen item, except the order's lines that didn't come (0 or not written).
+  const filled = rows.filter((r) => r.item_id && (!r.ordered || (typeof r.qty === "number" && r.qty > 0)));
+  // Each order line: what came, in the order's unit, and the difference (negative = less came).
+  const arrivedOf = (r: Row) => {
+    const it = r.item_id ? itemById.get(r.item_id) : undefined;
+    return r.ordered ? toUnit(it, typeof r.qty === "number" ? r.qty : 0, r.unit, r.ordered.unit) : 0;
+  };
+  const diffOf = (r: Row) => (r.ordered ? Math.round((arrivedOf(r) - r.ordered.qty) * 100) / 100 : 0);
+  const orderRows = rows.filter((r) => r.ordered);
+  const counted = orderRows.every((r) => r.qty !== "");
+  const shortRows = orderRows.filter((r) => diffOf(r) < 0);
+  const overRows = orderRows.filter((r) => diffOf(r) > 0);
+  const extraRows = supply ? rows.filter((r) => !r.ordered && r.item_id) : [];
   const perPiece = (r: Row) => {
     const it = r.item_id ? itemById.get(r.item_id) : undefined;
     if (!it || r.price === "") return 0;
@@ -75,7 +96,7 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
       const rec = await api.createReceipt({
         warehouse_id: warehouse,
         supplier,
-        ...(supply ? { supply_order_id: supply.id } : {}),
+        ...(supply ? { supply_order_id: supply.id, ...(closeShort && shortRows.length ? { close_supply: true } : {}) } : {}),
         lines: filled.map((r) => ({
           item_id: r.item_id as number,
           unit: r.unit,
@@ -86,7 +107,8 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
       });
       toast("success", tr(`تم حفظ الاستلام ${rec.number} وأُضيفت الدفعات إلى المخزون`, `Saved ${rec.number}. Batches added to stock`));
       reloadItems();
-      router.push(`/receipts/${rec.id}`);
+      // From a supply order: back to the order, which now shows ordered against arrived.
+      router.push(supply ? `/supply?open=${supply.id}` : `/receipts/${rec.id}`);
     } catch (e) {
       if (e instanceof ApiError && e.errors) setErr(e.errors);
       toast("danger", errorText(e, tr));
@@ -101,7 +123,10 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
       {supply && (
         <div className="mb-4">
           <Notice tone="primary" title={tr(`استلام طلب التوريد ${supply.number}`, `Receiving supply order ${supply.number}`)}>
-            {tr("املأ تاريخ الصلاحية، وعدّل الكمية إذا وصل أقل. ما لا يصل يبقى في الطلب لاستلام لاحق.", "Fill in the expiry dates, and change the quantity if less arrived. What doesn't come stays on the order for later.")}
+            {tr(
+              "عُدّ ما وصل فعلاً واكتب كميته في كل سطر (0 إذا لم يصل)، مع تاريخ الصلاحية. يظهر الفرق عن الطلب تحت كل سطر وفي الملخص قبل الحفظ.",
+              "Count what really came and write it on each line (0 if it didn't come), with the expiry date. The difference from the order shows on each line and in the summary before saving.",
+            )}
           </Notice>
         </div>
       )}
@@ -131,7 +156,8 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
                 <span className="text-sm font-semibold text-muted">
                   {tr("سطر", "Line")} {i + 1}
                 </span>
-                {rows.length > 1 && (
+                {r.ordered && <OrderedChip row={r} diff={diffOf(r)} />}
+                {!r.ordered && rows.length > 1 && (
                   <button type="button" aria-label={tr("حذف", "Remove")} onClick={() => setRows((x) => x.filter((y) => y.key !== r.key))} className="flex size-8 items-center justify-center rounded-lg text-faint hover:bg-danger-soft hover:text-danger">
                     <Trash2 className="size-4" />
                   </button>
@@ -139,7 +165,7 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
               </div>
               <div className="grid gap-3 md:grid-cols-[2fr_auto_1fr_1fr_1.2fr]">
                 <Field label={tr("المادة", "Item")} error={e("item_id")}>
-                  <Select value={r.item_id} onChange={(ev) => set(r.key, { item_id: Number(ev.target.value) || "" })}>
+                  <Select value={r.item_id} disabled={!!r.ordered} onChange={(ev) => set(r.key, { item_id: Number(ev.target.value) || "" })}>
                     <option value="">{tr("اختر المادة", "Choose item")}</option>
                     {items
                       .filter((x) => x.active)
@@ -160,8 +186,17 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
                     ]}
                   />
                 </Field>
-                <Field label={tr("الكمية", "Quantity")} error={e("qty")} hint={it && r.unit === "carton" && typeof r.qty === "number" ? `= ${r.qty * it.pieces_per_carton} ${tr("قطعة", "pcs")}` : undefined}>
-                  <NumberInput value={r.qty} onChange={(v) => set(r.key, { qty: v })} invalid={!!e("qty")} />
+                <Field
+                  label={r.ordered ? tr("الواصل فعلاً", "Really arrived") : tr("الكمية", "Quantity")}
+                  error={e("qty")}
+                  hint={it && r.unit === "carton" && typeof r.qty === "number" ? `= ${r.qty * it.pieces_per_carton} ${tr("قطعة", "pcs")}` : undefined}
+                >
+                  <NumberInput value={r.qty} onChange={(v) => set(r.key, { qty: v })} invalid={!!e("qty")} placeholder={r.ordered ? tr("عُدّ واكتب", "Count it") : undefined} />
+                  {r.ordered && r.qty === "" && (
+                    <button type="button" className="mt-1 text-xs font-semibold text-primary-ink hover:underline" onClick={() => set(r.key, { qty: toUnit(it, r.ordered!.qty, r.ordered!.unit, r.unit) })}>
+                      {tr("وصل كما طُلب", "Came as ordered")}
+                    </button>
+                  )}
                 </Field>
                 <Field label={tr("تاريخ الصلاحية", "Expiry date")} error={e("expiry_date")}>
                   <Input type="date" min={today(1)} value={r.expiry_date} onChange={(ev) => set(r.key, { expiry_date: ev.target.value })} invalid={!!e("expiry_date")} />
@@ -181,6 +216,65 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
         <Plus className="size-4" /> {tr("أضف سطر", "Add line")}
       </Button>
 
+      {supply && (
+        <Card className="mt-4 p-4">
+          <h3 className="mb-3 flex items-center gap-2 font-bold">
+            <ClipboardCheck className="size-5" /> {tr("المطلوب مقابل الواصل", "Ordered vs arrived")}
+          </h3>
+          <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line text-sm">
+            {orderRows.map((r) => {
+              const it = r.item_id ? itemById.get(r.item_id) : undefined;
+              const d = diffOf(r);
+              return (
+                <li key={r.key} className="flex items-center gap-3 px-3 py-2">
+                  <span className="min-w-0 flex-1 truncate font-medium">{it ? name(it) : ""}</span>
+                  <span className="text-xs text-muted">
+                    {tr("طُلب", "Ordered")} <span className="num font-semibold text-text">{num(r.ordered!.qty)}</span> · {tr("وصل", "Arrived")}{" "}
+                    <span className="num font-semibold text-text">{r.qty === "" ? "؟" : num(arrivedOf(r))}</span>
+                  </span>
+                  <DiffBadge diff={r.qty === "" ? null : d} unit={r.ordered!.unit} />
+                </li>
+              );
+            })}
+            {extraRows.map((r) => {
+              const it = r.item_id ? itemById.get(r.item_id) : undefined;
+              return (
+                <li key={r.key} className="flex items-center gap-3 px-3 py-2">
+                  <span className="min-w-0 flex-1 truncate font-medium">{it ? name(it) : ""}</span>
+                  <span className="rounded-md bg-warning-soft px-1.5 py-0.5 text-[11px] font-bold text-warning">{tr("غير مطلوب في الطلب", "Not on the order")}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-sm">
+            {!counted
+              ? tr("اكتب الواصل في كل السطور لترى الفرق كاملاً.", "Write what arrived on every line to see the whole difference.")
+              : !shortRows.length && !overRows.length && !extraRows.length
+                ? tr("✓ وصل مطابقاً للطلب تماماً.", "✓ Arrived exactly as ordered.")
+                : [
+                    shortRows.length ? tr(`ناقص ${shortRows.length} من المواد`, `${shortRows.length} items short`) : "",
+                    overRows.length ? tr(`زائد ${overRows.length}`, `${overRows.length} over`) : "",
+                    extraRows.length ? tr(`${extraRows.length} غير مطلوبة`, `${extraRows.length} not ordered`) : "",
+                  ]
+                    .filter(Boolean)
+                    .join(tr("، ", ", "))}
+          </p>
+          {shortRows.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-1.5 text-xs font-medium text-muted">{tr("الناقص:", "What's short:")}</p>
+              <Segmented
+                value={closeShort ? "close" : "later"}
+                onChange={(v) => setCloseShort(v === "close")}
+                options={[
+                  { value: "later", label: tr("يصل لاحقاً (يبقى الطلب مفتوحاً)", "Comes later (order stays open)") },
+                  { value: "close", label: tr("لن يصل: أغلق الطلب بالنقص", "Won't come: close it short") },
+                ]}
+              />
+            </div>
+          )}
+        </Card>
+      )}
+
       {err.lines && (
         <div className="mt-3">
           <Notice tone="danger">{err.lines}</Notice>
@@ -193,10 +287,37 @@ function NewReceipt({ supply }: { supply: SupplyOrder | null }) {
           </p>
           <Money value={total} className="text-xl font-bold" />
         </div>
-        <Button variant="action" size="lg" loading={busy} disabled={!filled.length} onClick={save}>
+        <Button variant="action" size="lg" loading={busy} disabled={!filled.length || (!!supply && !counted)} onClick={save}>
           <CheckCircle2 className="size-5" /> {tr("حفظ الاستلام", "Save receipt")}
         </Button>
       </Card>
     </>
+  );
+}
+
+/** The difference of one order line: short (red), over (amber) or as ordered (green). */
+function DiffBadge({ diff, unit }: { diff: number | null; unit: Unit }) {
+  const { tr, num } = useFmt();
+  const u = unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc");
+  if (diff === null) return <span className="rounded-md bg-card-2 px-1.5 py-0.5 text-[11px] font-bold text-muted">{tr("لم يُعدّ", "Not counted")}</span>;
+  if (diff === 0) return <span className="rounded-md bg-success-soft px-1.5 py-0.5 text-[11px] font-bold text-success">{tr("مطابق", "Matches")}</span>;
+  return (
+    <span className={cn("rounded-md px-1.5 py-0.5 text-[11px] font-bold", diff < 0 ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning")}>
+      {diff < 0 ? tr(`ناقص ${num(-diff)} ${u}`, `${num(-diff)} ${u} short`) : tr(`زائد ${num(diff)} ${u}`, `${num(diff)} ${u} over`)}
+    </span>
+  );
+}
+
+/** On an order line: "ordered N" and, once counted, the difference. */
+function OrderedChip({ row, diff }: { row: Row; diff: number }) {
+  const { tr, num } = useFmt();
+  const u = row.ordered!.unit === "carton" ? tr("كارتون", "ctn") : tr("قطعة", "pc");
+  return (
+    <span className="flex items-center gap-1.5 text-xs">
+      <span className="text-muted">
+        {tr("المطلوب", "Ordered")}: <span className="num font-semibold text-text">{num(row.ordered!.qty)}</span> {u}
+      </span>
+      <DiffBadge diff={row.qty === "" ? null : diff} unit={row.ordered!.unit} />
+    </span>
   );
 }

@@ -5,6 +5,7 @@ import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
 import { DISCOUNT_MAX, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type ShipmentLoad, type Vehicle } from "../types";
 import { linesWeight } from "../vehicles";
+import { missingValue, supplyGaps } from "../supply";
 import type {
   AppNotification,
   RegisterInput,
@@ -383,7 +384,7 @@ export function createReceipt(db: Db, actor: DbUser, input: NewReceipt, now: Dat
   };
   db.receipts.push(receipt);
   for (const l of lines) checkLowStock(db, l.item_id, now);
-  if (input.supply_order_id) receiveSupply(db, actor, input.supply_order_id, receipt, now);
+  if (input.supply_order_id) receiveSupply(db, actor, input.supply_order_id, receipt, now, !!input.close_supply);
   audit(db, actor, "create", "receipt", id, `استلام بضاعة ${receipt.number} (${lines.length} مواد)`, `Received goods ${receipt.number} (${lines.length} items)`, now);
   return receipt;
 }
@@ -1642,7 +1643,7 @@ export function cancelSupplyOrder(db: Db, actor: DbUser, id: number, reason: str
 }
 
 /** A receipt brought goods of this supply order: count them, and say if it is now complete. */
-function receiveSupply(db: Db, actor: DbUser, id: number, receipt: Receipt, now: Date) {
+function receiveSupply(db: Db, actor: DbUser, id: number, receipt: Receipt, now: Date, close: boolean) {
   const o = (db.supply_orders ?? []).find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "طلب التوريد غير موجود", "Supply order not found");
   if (o.status === "cancelled" || o.status === "received") fail(409, "BAD_STATE", "طلب التوريد مغلق", "This supply order is closed");
   if (o.warehouse_id !== receipt.warehouse_id) fail(422, "VALIDATION", "طلب التوريد لمخزن آخر", "The supply order is for another warehouse");
@@ -1656,18 +1657,34 @@ function receiveSupply(db: Db, actor: DbUser, id: number, receipt: Receipt, now:
   }
   o.receipt_ids.push(receipt.id);
   const complete = o.lines.every((l) => l.received_qty >= l.qty);
-  o.status = complete ? "received" : "partial";
+  // "The rest will not come": the order closes with what arrived, and the shortage stays written on it.
+  if (!complete && close) o.closed_short = { at: now.toISOString(), by: { id: actor.id, name: actor.name } };
+  o.status = complete || close ? "received" : "partial";
+  // Items that came although they weren't on the order.
+  const extra = receipt.lines.filter((rl) => !o.lines.some((l) => l.item_id === rl.item_id)).map((rl) => itemOf(db, rl.item_id).name);
+  const short = supplyGaps(o).filter((g) => g.diff < 0);
+  const over = supplyGaps(o).filter((g) => g.diff > 0);
+  const unitName = (u: Unit) => (u === "carton" ? "كارتون" : "قطعة");
+  const diffText = [
+    short.length ? `ناقص: ${short.slice(0, 3).map((g) => `${itemOf(db, g.item_id).name} ${-g.diff} ${unitName(g.unit)}`).join("، ")}${short.length > 3 ? ` و${short.length - 3} غيرها` : ""} (قيمته ${missingValue(o).toLocaleString("en-US")} د.ع)` : "",
+    over.length ? `زائد: ${over.map((g) => `${itemOf(db, g.item_id).name} ${g.diff} ${unitName(g.unit)}`).join("، ")}` : "",
+    extra.length ? `غير مطلوب: ${extra.join("، ")}` : "",
+  ].filter(Boolean);
   if (actor.role !== "accountant") {
     notify(
       db,
       {
         type: "supply_order",
         roles: ["accountant", "manager"],
-        title: complete ? `وصل طلب التوريد ${o.number} كاملاً` : `وصل جزء من طلب التوريد ${o.number}`,
-        title_en: complete ? `${o.number} arrived in full` : `Part of ${o.number} arrived`,
-        body: `${receipt.number} · ${actor.name}`,
+        title: complete
+          ? `وصل طلب التوريد ${o.number} كاملاً`
+          : close
+            ? `أُغلق طلب التوريد ${o.number} بنقص`
+            : `وصل جزء من طلب التوريد ${o.number}`,
+        title_en: complete ? `${o.number} arrived in full` : close ? `${o.number} closed short` : `Part of ${o.number} arrived`,
+        body: [`${receipt.number} · ${actor.name}`, ...diffText].join(" · "),
         body_en: receipt.number,
-        link: "/supply",
+        link: `/supply?open=${o.id}`,
       },
       now,
     );

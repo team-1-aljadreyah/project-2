@@ -930,6 +930,8 @@ export interface NewReceipt {
   lines: ReceiptLine[];
   /** Receiving the goods of a supply order: what arrives is counted against it. */
   supply_order_id?: number;
+  /** With a supply order: "the rest will not come", so the order closes with what arrived (short). */
+  close_supply?: boolean;
 }
 
 // ---------- Supply orders (the accountant orders goods for a warehouse) ----------
@@ -964,6 +966,8 @@ export interface SupplyOrder {
   created_at: string;
   created_by: Person & { role: Role };
   cancel_reason?: string;
+  /** The keeper closed it although less arrived ("the rest will not come"): who and when. */
+  closed_short?: { at: string; by: Person };
 }
 
 export interface NewSupplyOrder {
