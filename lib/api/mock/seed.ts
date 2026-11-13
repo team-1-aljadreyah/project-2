@@ -11,6 +11,7 @@ import {
   prepareOrder,
   closeMonth,
   confirmOrder,
+  counterSale,
   createOrder,
   createPayment,
   createReceipt,
@@ -672,6 +673,21 @@ export function makeSeed(now = new Date()): Db {
       hand(rep, cash, at(d, 19, int(0, 40)), cash - short);
     }
   }
+
+  // «أعلمني عند التوفر»: two hours ago a buyer at the main warehouse took the last orange juice and cheese
+  // triangles (a counter sale); أحمد جبار (ماركت الزهراء) asked to be told when they are back.
+  const soldOut = [21, 18].map((id) => ({ id, left: sellableQty(db, id, 1, now) })).filter((x) => x.left > 0);
+  if (soldOut.length)
+    safe(() =>
+      counterSale(
+        db,
+        keepers[0],
+        { client_ref: cref(), warehouse_id: 1, tier_id: 2, lines: soldOut.map((x) => ({ item_id: x.id, unit: "piece" as const, qty: x.left })), method: "cash", buyer_name: "مطعم الضيافة" },
+        new Date(now.getTime() - 2 * 3_600_000),
+      ),
+    );
+  const ahmed = users.find((u) => u.id === 9)!;
+  db.stock_alerts = [21, 18].filter((id) => sellableQty(db, id, 1, now) <= 0).map((item_id, i) => ({ customer_id: 2, user_id: ahmed.id, item_id, at: new Date(now.getTime() - (90 - i * 30) * 60_000).toISOString() }));
 
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);

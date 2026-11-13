@@ -38,6 +38,7 @@ import { ProductCard, RowHead, bagTotal, orderedCounts } from "@/components/shop
 import { afterOffer, offerOff, offerOn } from "@/lib/units";
 import { useSite } from "@/lib/site";
 import { ListEditor } from "@/components/shop/lists";
+import { NotifyMe } from "@/components/shop/notify-me";
 import { ListChecks, SlidersHorizontal } from "lucide-react";
 import { enqueue, isNetworkError } from "@/lib/offline";
 import { cn, piecesOf, priceOf, today } from "@/lib/utils";
@@ -595,14 +596,19 @@ export function ItemSheet({
             <p className="text-[11px] text-muted">{tr("السعر", "Price")}</p>
             <p className="num text-lg font-bold">{money(afterOffer(price(unit), item, unit, n, today()) * n)}</p>
           </div>
-          <button
-            type="button"
-            disabled={n < 1 || tooMuch}
-            onClick={() => onSave({ unit, qty: n })}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action transition hover:bg-action-hover disabled:opacity-50"
-          >
-            <ShoppingBag className="size-5" /> {line ? tr("تحديث السلة", "Update bag") : tr("أضف إلى السلة", "Add to bag")}
-          </button>
+          {/* Out of stock (and not in the bag): «أعلمني عند التوفر» instead of adding. */}
+          {available <= 0 && !line ? (
+            <NotifyMe item={item} size="lg" />
+          ) : (
+            <button
+              type="button"
+              disabled={n < 1 || tooMuch}
+              onClick={() => onSave({ unit, qty: n })}
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action transition hover:bg-action-hover disabled:opacity-50"
+            >
+              <ShoppingBag className="size-5" /> {line ? tr("تحديث السلة", "Update bag") : tr("أضف إلى السلة", "Add to bag")}
+            </button>
+          )}
         </div>
       }
     >

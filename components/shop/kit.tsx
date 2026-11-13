@@ -15,6 +15,7 @@ import { firstUnit } from "@/lib/units";
 import { useLoad } from "@/lib/use-load";
 import { cn, priceOf, today } from "@/lib/utils";
 import { afterOffer, offerOn } from "@/lib/units";
+import { NotifyMe } from "@/components/shop/notify-me";
 
 /** His shop (the one he works on now), his orders, and what the pages need around them. */
 export function useMyShop() {
@@ -110,10 +111,10 @@ export function ProductCard({
       <div className="mt-auto flex items-center justify-between gap-1 border-t border-line px-1 pt-2 mt-2">
         <span className="min-w-0">
           <span className="num block text-sm font-bold text-text">{money(price)}</span>
-          <span className="block text-[10px] text-muted">/ {unit(it, u)}</span>
+          {out ? <span className="block text-[10px] font-semibold text-danger">{tr("نفد حالياً", "Out for now")}</span> : <span className="block text-[10px] text-muted">/ {unit(it, u)}</span>}
         </span>
         {out ? (
-          <span className="rounded-full bg-card-2 px-2 py-1 text-[11px] font-semibold text-faint">{tr("نفد", "Out")}</span>
+          <NotifyMe item={it} />
         ) : qty ? (
           <span className="relative z-10 flex items-center gap-1" dir="ltr">
             <Round label={tr("أقل", "Less")} onClick={onLess}>

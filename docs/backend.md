@@ -145,6 +145,15 @@ The server must filter and hide, not only the pages:
   shortage (`short` = declared − received) stays in his custody, notifies the manager and the rep; full →
   notifies the rep. `POST /custody/handovers/:id/cancel`: the rep takes his back, or the accountant refuses it
   (the rep is told). Every confirm goes to the activity log (entity `custody`). Numbers `HND-000001`.
+- **«أعلمني عند التوفر».** A shop owner asks to be told when an item that ran out is back:
+  `POST /stock-alerts {item_id, on}` (shop owners only; returns his list of item ids, as `GET /stock-alerts`).
+  On: only an active item that can't be sold now from the shops' warehouse (the first one; 409 if it can), at most
+  50 per shop; per shop owner and his current shop. Off: removed. Whenever an item's sellable stock in that
+  warehouse goes above 0 (a receipt, a transfer in, a return in good condition, a count, a reservation freed),
+  each one waiting gets a notification `back_in_stock` (title «توفّرت «…» من جديد», link `/search?item=<id>`, also by
+  Web Push) and his ask is removed. An item deleted or stopped drops its asks. `GET /stock-alerts/waitlist`
+  (manager, accountant, keepers, staff): per item the shops waiting, the first ask, the shop names; most shops
+  first. The supply order's «اطلب الناقص» fill adds these items too.
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -280,10 +289,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 152 endpoints, generated from lib/api/http.ts -->
+<!-- 155 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -357,6 +366,9 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `releaseBatch` | POST | `/batches/:id/release` | `id: number` | `Batch` |  |
 | `traceBatch` | GET | `/batches/:id/trace` | `id: number` | `BatchTrace[]` |  |
 | `listDamaged` | GET | `/damaged` |  | `DamagedRecord[]` |  |
+| `myStockAlerts` | GET | `/stock-alerts` |  | `number[]` | «أعلمني عند التوفر» The items this shop owner waits for (the shop he works on now). |
+| `setStockAlert` | POST | `/stock-alerts` | `itemId: number, on: boolean` | `number[]` | Ask to be told when an item that ran out is back (on), or stop (off). Returns his list. |
+| `stockWaitlist` | GET | `/stock-alerts/waitlist` |  | `StockWait[]` | What the shops are waiting for, most shops first (manager, accountant, keepers). |
 
 ### Receiving, supply orders, transfers, counts
 
