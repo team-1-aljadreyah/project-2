@@ -3,7 +3,8 @@
 // The rep's "today's route", after the delivery-tracking screen of the medicine app Yasser chose for the rep:
 // a drawn map of Karbala's areas with the day's stops on a route, a bubble on the next stop,
 // and a card for the next shop (call, WhatsApp, "visited"). Plus the customer sheet (the design's product screen).
-import { useSyncExternalStore } from "react";
+// The day's shops are the manager's plan for today («خط السير»), then the most urgent others; a visit is recorded
+// on the server (components/visits.tsx → VisitSheet).
 import { motion } from "motion/react";
 import { Check, CheckCircle2, MessageCircle, Phone, ShoppingCart, Store, Wallet } from "lucide-react";
 import { Button, Dialog, LimitBar } from "@/components/ui";
@@ -14,28 +15,32 @@ import { CityMap, type LatLng, type MapMarker } from "@/components/map3d/city-ma
 import { useApp } from "@/components/shell";
 import type { Customer } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
-import { cn, today } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 // ---------- Which shops to visit today, and why ----------
 
-export type Reason = "over" | "near" | "quiet" | "debt";
+export type Reason = "over" | "near" | "quiet" | "debt" | "planned";
 
 export interface Stop {
   customer: Customer;
   reason: Reason;
   /** Days since the last order (for "quiet" shops). */
   days?: number;
+  /** On the manager's plan for today. */
+  planned: boolean;
 }
 
 const DAY = 86_400_000;
 
 /**
- * The day's stops: shops over their debt limit (collect), near it, shops that stopped ordering for a week,
- * then the biggest debts. At most 8, grouped by area so the rep doesn't cross the city twice.
+ * The day's stops: every shop on the manager's plan for today (`weekDay`), then the most urgent others —
+ * over their debt limit (collect), near it, no order for a week, then the biggest debts — up to 8 in all.
+ * Grouped by area so the rep doesn't cross the city twice.
  */
-export function buildStops(customers: Customer[], now: number): Stop[] {
-  const scored = customers
-    .filter((c) => c.active && !c.pending)
+export function buildStops(customers: Customer[], now: number, weekDay: number): Stop[] {
+  const live = customers.filter((c) => c.active && !c.pending && !c.walk_in);
+  const isPlanned = (c: Customer) => !!c.visit_days?.includes(weekDay as never);
+  const scored = live
     .map((c) => {
       const bal = c.balance ?? 0;
       const lim = c.debt_limit ?? 0;
@@ -46,15 +51,21 @@ export function buildStops(customers: Customer[], now: number): Stop[] {
       else if (lim > 0 && bal / lim >= 0.7) [reason, score] = ["near", 300 + bal / lim];
       else if (days !== undefined && days >= 7) [reason, score] = ["quiet", 200 + days];
       else if (bal > 0) [reason, score] = ["debt", 100 + bal / 1_000_000];
-      return reason ? { stop: { customer: c, reason, days } as Stop, score } : null;
+      const planned = isPlanned(c);
+      if (planned) return { stop: { customer: c, reason: reason ?? "planned", days, planned } as Stop, score: 1000 + score };
+      return reason ? { stop: { customer: c, reason, days, planned } as Stop, score } : null;
     })
     .filter((x): x is { stop: Stop; score: number } => !!x)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8)
-    .map((x) => x.stop);
-  // Keep the most urgent area first, then walk area by area.
-  const areas = [...new Set(scored.map((s) => s.customer.area))];
-  return areas.flatMap((a) => scored.filter((s) => s.customer.area === a));
+    .sort((a, b) => b.score - a.score);
+  const plan = scored.filter((x) => x.stop.planned);
+  const others = scored.filter((x) => !x.stop.planned).slice(0, Math.max(0, 8 - plan.length));
+  const picked = [...plan, ...others].map((x) => x.stop);
+  // The planned shops first (area by area), then the others.
+  const byArea = (list: Stop[]) => {
+    const areas = [...new Set(list.map((s) => s.customer.area))];
+    return areas.flatMap((a) => list.filter((s) => s.customer.area === a));
+  };
+  return [...byArea(picked.filter((s) => s.planned)), ...byArea(picked.filter((s) => !s.planned))];
 }
 
 export function reasonText(s: Stop, tr: (ar: string, en: string) => string) {
@@ -63,6 +74,7 @@ export function reasonText(s: Stop, tr: (ar: string, en: string) => string) {
     near: tr("قريب من السقف", "Near the limit"),
     quiet: tr(`لم يطلب منذ ${s.days} يوم`, `No order for ${s.days} days`),
     debt: tr("عليه دين", "Has debt"),
+    planned: tr("في خطة اليوم", "On today's plan"),
   }[s.reason];
 }
 
@@ -71,51 +83,8 @@ export const reasonTone: Record<Reason, string> = {
   near: "bg-warning-soft text-warning",
   quiet: "bg-primary-soft text-primary-ink",
   debt: "bg-card-2 text-muted",
+  planned: "bg-success-soft text-success",
 };
-
-// ---------- Visited shops (saved on the rep's phone, for today only) ----------
-
-const EVENT = "nahrain-visits";
-const keyOf = (userId: number) => `nahrain.visits.${userId}.${today()}`;
-function readRaw(userId: number) {
-  try {
-    return localStorage.getItem(keyOf(userId)) ?? "[]";
-  } catch {
-    return "[]";
-  }
-}
-function subscribe(cb: () => void) {
-  window.addEventListener(EVENT, cb);
-  window.addEventListener("storage", cb);
-  return () => {
-    window.removeEventListener(EVENT, cb);
-    window.removeEventListener("storage", cb);
-  };
-}
-
-/** The ids of the shops visited today. The snapshot is the saved text, so React compares it by value. */
-export function useVisits(userId: number): number[] {
-  const raw = useSyncExternalStore(
-    subscribe,
-    () => readRaw(userId),
-    () => "[]",
-  );
-  try {
-    return JSON.parse(raw) as number[];
-  } catch {
-    return [];
-  }
-}
-
-export function toggleVisit(userId: number, customerId: number) {
-  const list = new Set<number>(JSON.parse(readRaw(userId)) as number[]);
-  if (list.has(customerId)) list.delete(customerId);
-  else list.add(customerId);
-  try {
-    localStorage.setItem(keyOf(userId), JSON.stringify([...list]));
-  } catch {}
-  window.dispatchEvent(new Event(EVENT));
-}
 
 // ---------- The map of the day's route ----------
 // The same 3D city map as everywhere (components/map3d): the warehouse, the day's shops numbered in order,
@@ -156,7 +125,7 @@ export function RouteMap({ stops, visited, onPick }: { stops: Stop[]; visited: n
   );
 }
 
-export function NextStopCard({ stop, index, total, done, userId, onOpen }: { stop?: Stop; index: number; total: number; done: number; userId: number; onOpen: (c: Customer) => void }) {
+export function NextStopCard({ stop, index, total, done, onOpen, onVisit }: { stop?: Stop; index: number; total: number; done: number; onOpen: (c: Customer) => void; onVisit: (c: Customer) => void }) {
   const { tr, money } = useFmt();
   if (!stop) {
     return (
@@ -189,13 +158,16 @@ export function NextStopCard({ stop, index, total, done, userId, onOpen }: { sto
           <Phone className="size-4" />
         </a>
       </div>
-      <span className={cn("mt-2 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold", reasonTone[stop.reason])}>{reasonText(stop, tr)}</span>
+      <span className="mt-2 flex flex-wrap gap-1">
+        {stop.planned && stop.reason !== "planned" && <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", reasonTone.planned)}>{tr("في خطة اليوم", "On today's plan")}</span>}
+        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", reasonTone[stop.reason])}>{reasonText(stop, tr)}</span>
+      </span>
       <div className="mt-3 flex gap-2">
         <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" className="flex h-10 flex-1 items-center gap-2 rounded-xl bg-card-2 px-3 text-sm text-muted hover:text-text">
           <MessageCircle className="size-4" /> {tr("راسل المحل", "Message the shop")}
         </a>
-        <button type="button" onClick={() => toggleVisit(userId, c.id)} className="flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-on-primary hover:bg-primary-hover">
-          <Check className="size-4" /> {tr("تمت الزيارة", "Visited")}
+        <button type="button" onClick={() => onVisit(c)} className="flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-on-primary hover:bg-primary-hover">
+          <Check className="size-4" /> {tr("سجّل الزيارة", "Record the visit")}
         </button>
       </div>
     </motion.div>
@@ -204,7 +176,7 @@ export function NextStopCard({ stop, index, total, done, userId, onOpen }: { sto
 
 // ---------- The customer sheet (the design's product screen) ----------
 
-export function CustomerSheet({ customer, stop, onClose, visited, userId }: { customer: Customer; stop?: Stop; onClose: () => void; visited: boolean; userId: number }) {
+export function CustomerSheet({ customer, stop, onClose, visited, onVisit }: { customer: Customer; stop?: Stop; onClose: () => void; visited: boolean; onVisit: (c: Customer) => void }) {
   const { tr, money, ago } = useFmt();
   const bal = customer.balance ?? 0;
   const lim = customer.debt_limit ?? 0;
@@ -267,8 +239,8 @@ export function CustomerSheet({ customer, stop, onClose, visited, userId }: { cu
         <a href={`tel:${customer.phone}`} className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-line-strong text-sm font-semibold hover:bg-card-2">
           <Phone className="size-4" /> {tr("اتصال", "Call")}
         </a>
-        <button type="button" onClick={() => toggleVisit(userId, customer.id)} className={cn("flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold", visited ? "border-success bg-success-soft text-success" : "border-line-strong hover:bg-card-2")}>
-          <Check className="size-4" /> {visited ? tr("زرته اليوم", "Visited today") : tr("تمت الزيارة", "Mark visited")}
+        <button type="button" onClick={() => onVisit(customer)} className={cn("flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold", visited ? "border-success bg-success-soft text-success" : "border-line-strong hover:bg-card-2")}>
+          <Check className="size-4" /> {visited ? tr("زرته اليوم (غيّر)", "Visited today (change)") : tr("سجّل الزيارة", "Record the visit")}
         </button>
       </div>
       {shopPlace(customer) && <OpenInMaps className="mt-2 w-full" size="md" text={tr("الطريق إلى المحل", "The way to the shop")} to={{ ...shopPlace(customer)!, label: customer.name }} />}

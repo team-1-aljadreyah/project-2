@@ -118,6 +118,22 @@ The server must filter and hide, not only the pages:
   customer lists and pickers, and refuse it in `POST /orders`. `counter` on the order and the invoice keeps the
   buyer's optional name and phone (07 + 9 digits), the level, the method and the cash handed over (≥ total).
   Same `client_ref` again = the same invoice back. No delivery trip, no notifications to a rep.
+- **«خط السير» (the marketing reps' weekly visits).** `visit_days` on the customer (0 = Sunday … 6 = Saturday;
+  none = not planned), set by the manager only (`POST /customers/:id/visit-days {days}`); it plans the shop's
+  own rep (`rep_id`). A visit (`POST /visits`, a marketing rep, a shop of his own only, not the walk-in one):
+  `{customer_id, outcome: order | payment | no_order | closed, reason?: stocked | no_money | price | other
+  (no_order only; none = other), note? ≤ 200, lat?, lng?}`. One visit per rep, shop and day: a second one
+  changes it. The server works out `distance_m` from the shop's pin (`address_info.lat/lng`; none when either is
+  missing) and `far` when it is over 200 m — the visit is still recorded, only marked. `planned` = the shop was on
+  the plan that day (kept on the visit). An order (`POST /orders`) or a payment (`POST /payments`) a marketing rep
+  makes for a shop of his records that day's visit by itself (outcome `order` with `order_id`, or `payment`;
+  an order beats a payment, a payment beats no order / closed; the location of an earlier visit that day is
+  kept). `GET /visits?day=&rep_id=`: a rep gets his own, the manager everyone's or one rep's.
+  `GET /reports/visits?from=&to=` (manager, at most 62 days, up to today): per rep planned / visited (planned
+  ones only) / missed (planned, not visited, before today) / remaining (today's not yet visited) / extra (visits
+  off the plan) / far / orders, the no-order reasons, the missed list and the far ones. The demo works the plan
+  out from today's `visit_days`; the backend should keep each day's plan (a nightly copy) so changing the plan
+  later doesn't rewrite the past. Keep visits at least 120 days.
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -253,10 +269,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 143 endpoints, generated from lib/api/http.ts -->
+<!-- 147 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -352,7 +368,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `saveStocktake` | PATCH | `/stocktakes/:id` | `id: number, lines: StocktakeLine[]` | `Stocktake` |  |
 | `closeStocktake` | POST | `/stocktakes/:id/close` | `id: number` | `Stocktake` |  |
 
-### Customers, statements, special prices
+### Customers, statements, special prices, visits
 
 | Call | Method | Path | Takes | Returns | Notes |
 |---|---|---|---|---|---|
@@ -366,6 +382,9 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `saveCustomer` | POST (new) / PATCH :id | `/customers` | `id: number \| null, input: CustomerInput` | `Customer` |  |
 | `rejectCustomer` | POST | `/customers/:id/reject` | `id: number, reason: string` | `Customer` |  |
 | `statement` | GET | `/customers/:customerId/statement` | `customerId: number, from?: string, to?: string` | `Statement` |  |
+| `listVisits` | GET | `/visits` | `day: string, repId?: number` | `Visit[]` | «خط السير»: the marketing reps' weekly visits. One day's visits (a rep: his own; the manager: everyone's, or one rep's). |
+| `recordVisit` | POST | `/visits` | `input: VisitInput` | `Visit` | The rep records a visit at one of his shops (a second one the same day changes it). |
+| `setVisitDays` | POST | `/customers/:customerId/visit-days` | `customerId: number, days: number[]` | `Customer` | The manager sets the days a shop is visited by its rep (0 = Sunday … 6 = Saturday; [] = none). |
 | `previewAllocation` | GET | `/customers/:customerId/allocation` | `customerId: number, amount: number` | `Allocation[]` |  |
 
 ### Orders, delivery and loads
@@ -427,6 +446,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | Call | Method | Path | Takes | Returns | Notes |
 |---|---|---|---|---|---|
 | `ratingsReport` | GET | `/reports/delivery-ratings` |  | `RatingsReport` | Delivery ratings (manager, accountant): the average, per delivery rep, the latest. |
+| `visitsReport` | GET | `/reports/visits` | `from: string, to: string` | `VisitsReport` | Planned against done, per rep, the visits missed and the ones far from the shop (manager). |
 | `commissions` | GET | `/commissions` | `month: string` | `CommissionRow[]` |  |
 | `closeMonth` | POST | `/commissions/close` | `month: string` | `CommissionRow[]` |  |
 | `closedMonths` | GET | `/commissions/closed` |  | `string[]` |  |
@@ -465,4 +485,3 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `repTargets` | GET | `/reps/targets` | `month: string` | `RepTarget[]` | Each marketing rep's month against his monthly target, ranked (a rep gets only his own row). |
 | `savePushSubscription` | POST | `/push-subscriptions` | `sub: { endpoint: string; keys: { p256dh: string; auth: string } }` | `null` | This phone's Web Push address (the browser's subscription): the server sends each new notification to it. |
 | `deletePushSubscription` | POST | `/push-subscriptions/delete` | `endpoint: string` | `null` |  |
-

@@ -24,6 +24,8 @@ import {
   sellableQty,
   sweep,
 } from "./rules";
+import { weekDayOf } from "./visits";
+import type { NoOrderReason, Visit, WeekDay } from "../types";
 
 export const DEMO_PASSWORD = "123456";
 
@@ -586,6 +588,54 @@ export function makeSeed(now = new Date()): Db {
   db.chat_reads[1] = { shop: lastRead, staff: lastRead };
   say(shop2, 2, "shop", "السلام عليكم، وصلني كارتون حليب مفتوح من الطلب الأخير. كيف أرجعه؟", 25);
   db.chat_reads[2] = { shop: db.seq.chat, staff: 0 };
+
+  // «خط السير»: each rep's shops two days a week (the big ones three), Saturday to Thursday; then the last two
+  // weeks of visits: most planned shops visited (an order, a payment, no order or closed), a few missed, a few
+  // recorded far from the shop, and the rep's other orders as visits off the plan.
+  const PAIRS: WeekDay[][] = [[6, 2], [0, 3], [1, 4]];
+  for (const rep of reps) {
+    db.customers
+      .filter((c) => c.rep_id === rep.id && c.active)
+      .forEach((c, k) => {
+        const days = new Set<WeekDay>([...PAIRS[k % 3], ...(c.tier_id === 1 ? [PAIRS[(k + 1) % 3][0]] : [])]);
+        // The demo opened on a Friday: the first two shops are visited on Fridays too, so today has a plan.
+        if (now.getDay() === 5 && k < 2) days.add(5);
+        c.visit_days = [...days].sort() as WeekDay[];
+      });
+  }
+  db.visits = [];
+  const reasons: NoOrderReason[] = ["stocked", "stocked", "no_money", "price", "other"];
+  // (Today is left to the rep: the demo opens with today's route still to walk.)
+  for (let d = 14; d >= 1; d--) {
+    const day = dayOf(addDays(now, -d));
+    for (const rep of reps) {
+      const theirs = db.customers.filter((c) => c.rep_id === rep.id && c.active);
+      for (const c of theirs) {
+        const planned = !!c.visit_days?.includes(weekDayOf(day));
+        const order = db.orders.find((o) => o.customer_id === c.id && o.rep_id === rep.id && o.source === "rep" && dayOf(new Date(o.created_at)) === day);
+        const paid = db.payments.find((p) => p.customer_id === c.id && p.received_by.id === rep.id && dayOf(new Date(p.date)) === day);
+        if (!planned && !order && !paid) continue;
+        const when = order ? new Date(order.created_at) : paid ? new Date(paid.date) : at(d, int(9, 14), int(0, 59));
+        if (planned && !order && !paid && rand() < 0.3) continue; // missed
+        const far = rand() < 0.08;
+        const outcome = order ? "order" : paid ? "payment" : rand() < 0.75 ? "no_order" : "closed";
+        const v: Visit = {
+          id: (db.seq.visit = (db.seq.visit ?? 0) + 1),
+          rep: { id: rep.id, name: rep.name },
+          customer: { id: c.id, name: c.name, area: c.area },
+          day,
+          at: when.toISOString(),
+          outcome,
+          planned,
+          distance_m: far ? int(320, 1600) : int(8, 140),
+          far,
+          ...(outcome === "no_order" ? { reason: pick(reasons) } : {}),
+          ...(order ? { order_id: order.id } : {}),
+        };
+        db.visits.push(v);
+      }
+    }
+  }
 
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);
