@@ -27,7 +27,7 @@ export function invoiceReceipt(inv: Invoice, customer: Customer | undefined, ctx
             ...(c.buyer_phone ? [[tr("الهاتف", "Phone"), c.buyer_phone]] : []),
           ] as [string, string][])
         : ([[tr("المحل", "Shop"), customer?.name ?? ""]] as [string, string][])),
-      [tr("البائع", "Seller"), inv.created_by.name],
+      ...(inv.created_by ? ([[tr("البائع", "Seller"), inv.created_by.name]] as [string, string][]) : []),
     ],
     lines: lineRows(inv.lines, ctx),
     totals: [

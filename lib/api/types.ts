@@ -558,7 +558,8 @@ export interface Invoice {
   counter?: CounterInfo;
   cost?: number;
   profit?: number;
-  created_by: Person;
+  /** Who made it (the keeper for a counter sale). Optional: an older server may leave it out. */
+  created_by?: Person;
 }
 
 /** Local: cash (نقداً) or a transfer / Zain Cash (تحويل). Online: paid by card through the Qi Card gateway. */
