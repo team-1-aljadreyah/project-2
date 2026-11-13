@@ -14,6 +14,7 @@ import { CustomerSheet, NextStopCard, RouteMap, buildStops } from "@/components/
 import { VisitSheet, weekDayOf } from "@/components/visits";
 import { MyTarget } from "@/components/rep-targets";
 import { MyCustody } from "@/components/custody";
+import { LateShops } from "@/components/reorder";
 import Link from "next/link";
 import { useApp } from "@/components/shell";
 import { repDoes } from "@/lib/api/types";
@@ -138,6 +139,9 @@ export default function RepHome() {
 
       {/* The cash he holds («العهدة»), when he holds some or a handover waits. */}
       {repDoes(user, "sales") && <MyCustody compact />}
+
+      {/* His shops later than usual with their next order («قارب ينفد»). */}
+      {repDoes(user, "sales") && customers.data && <LateShops customers={customers.data} onOpen={setOpen} />}
 
       {/* His month against the target the manager set (only when there is one). */}
       {repDoes(user, "sales") && <MyTarget />}

@@ -865,6 +865,7 @@ export type NotificationType =
   | "back_in_stock"
   | "clearance"
   | "price_change"
+  | "reorder"
   | "rule";
 
 export interface AppNotification {
@@ -1745,4 +1746,26 @@ export interface PriceHistory {
   rows: { tier_id: number; carton_price: number; piece_price: number; from?: string; until?: string }[];
   /** Changes waiting for their day, with the prices they will set. */
   scheduled: (ScheduledPrice & { next: ItemPrice[] })[];
+}
+
+// ---------- «قارب ينفد عندك؟»: reorder reminders ----------
+
+/** An item a shop usually orders again about now (worked out from its own orders). */
+export interface ReorderDue {
+  item_id: number;
+  /** About how many days between its orders of it. */
+  every_days: number;
+  days_since: number;
+  last_at: string;
+  /** What it took the last time. */
+  last_unit: Unit;
+  last_qty: number;
+}
+
+/** A shop later than usual with its next order (for its rep and the manager). */
+export interface LateShop {
+  customer: { id: number; name: string; area: string; phone: string; rep_id: number };
+  every_days: number;
+  days_since: number;
+  last_at: string;
 }

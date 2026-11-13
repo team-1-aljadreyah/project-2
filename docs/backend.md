@@ -179,6 +179,14 @@ The server must filter and hide, not only the pages:
   (`created_at`), so open orders written before the day keep the old prices. `GET /items/:id/price-history`
   (manager, accountant): per tier the old prices with `from`/`until`, the current one, and the scheduled ones with
   their `next` prices. `GET /price-schedule`: the last 60, waiting first.
+- **«قارب ينفد عندك؟» (reorder reminders).** Learned from each shop's own orders (not cancelled / expired, no
+  counter sales, no split shipments). Per item: the distinct days the shop ordered it; with 3 or more, `every_days`
+  = the average gap (rounded, ≥ 1). `GET /reorder/due` (the shop owner, his current shop): items where the days
+  since the last order of it ≥ every − 1 and ≤ every × 3, leaving out items stopped / deleted and items on one of
+  its open orders (not delivered yet); with the last unit and amount; the most overdue for its own rhythm first,
+  12 at most. Once a day from 9 in the morning each shop owner with any due gets one `reorder` notification
+  (link `/shop#reorder`). `GET /reorder/late-shops` (a rep: his shops; manager, accountant: all): shops with
+  no open order whose days since their last order (same rhythm over all their orders) > every × 1.25 and ≥ every + 2.
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -314,10 +322,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `ReorderDue`, `LateShop`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 162 endpoints, generated from lib/api/http.ts -->
+<!-- 164 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -461,6 +469,8 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `createOrder` | POST | `/orders` | `input: NewOrder` | `Order` |  |
 | `acceptOrder` | POST | `/orders/:id/accept` | `id: number` | `Order` | The accountant / manager approves the order (it stays held until delivered). |
 | `rateDelivery` | POST | `/orders/:id/rating` | `id: number, input: { stars: number; note?: string }` | `Order` | The shop owner rates the delivery of his order (1–5, a note), within 7 days of it; again to change it. |
+| `myReorder` | GET | `/reorder/due` |  | `ReorderDue[]` | «قارب ينفد عندك؟» The shop owner's items he usually orders again about now (from his own orders). |
+| `lateShops` | GET | `/reorder/late-shops` |  | `LateShop[]` | Shops later than usual with their next order (a rep: his own; manager, accountant: all). |
 | `prepPlan` | GET | `/orders/:id/prep-plan` | `id: number` | `PrepLine[]` | For the keeper: free stock per warehouse for each line, and the suggested warehouse. |
 | `prepareOrder` | POST | `/orders/:id/prepare` | `id: number, warehouses: Record<number, number>` | `Order` | The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. |
 | `approveOrder` | POST | `/orders/:id/approve` | `id: number` | `Order` |  |

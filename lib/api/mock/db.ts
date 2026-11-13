@@ -102,6 +102,8 @@ export interface Db {
   clearances?: DbClearance[];
   /** «تغيير الأسعار من تاريخ»: price changes waiting for their day (and the done ones). */
   price_schedule?: ScheduledPrice[];
+  /** «قارب ينفد عندك؟»: the day each shop owner last got his reorder reminder (one a day). */
+  reorder_told?: Record<number, string>;
   /** «قوائمي»: the shops' saved lists. */
   shop_lists?: ShopList[];
   /** Phones that asked for push notifications (Web Push subscriptions), per person. */
