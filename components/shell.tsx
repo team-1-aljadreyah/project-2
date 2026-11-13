@@ -219,7 +219,7 @@ function useNav(user: User, all = false) {
 
 function isActive(path: string, href: string, role?: string) {
   // The shop owner's «طلبياتي» holds his orders, invoices and statement.
-  if (href === "/orders" && role === "shop") return /^\/(orders|invoices|statement|returns)(\/|$)/.test(path);
+  if (href === "/orders" && role === "shop") return /^\/(orders|invoices|statement|returns|lists)(\/|$)/.test(path);
   if (href === "/orders") return path === "/orders" || (/^\/orders\/\d+/.test(path) && true);
   return path === href || path.startsWith(href + "/");
 }

@@ -37,7 +37,8 @@ import { Banners, BrandRow, CategoryTiles, type Slide } from "@/components/shop/
 import { ProductCard, RowHead, bagTotal, orderedCounts } from "@/components/shop/kit";
 import { afterOffer, offerOff, offerOn } from "@/lib/units";
 import { useSite } from "@/lib/site";
-import { SlidersHorizontal } from "lucide-react";
+import { ListEditor } from "@/components/shop/lists";
+import { ListChecks, SlidersHorizontal } from "lucide-react";
 import { enqueue, isNetworkError } from "@/lib/offline";
 import { cn, piecesOf, priceOf, today } from "@/lib/utils";
 
@@ -56,6 +57,7 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
   const [cat, setCat] = useState("all");
   const [open, setOpen] = useState<Item | null>(null);
   const [bagOpen, setBagOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   // From another page's bag button (/shop?bag=1): the bag opens here.
   useEffect(() => {
     // Reading the address once, after the page shows (the static page has no address of its own).
@@ -376,6 +378,14 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
           </button>
         )}
 
+      {saving && (
+        <ListEditor
+          initial={bag.lines.map(({ item_id, unit, qty }) => ({ item_id, unit, qty }))}
+          onClose={() => setSaving(false)}
+          onSaved={() => setSaving(false)}
+        />
+      )}
+
       {open && (
         <ItemSheet
           key={open.id}
@@ -435,6 +445,13 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
               className="mt-3 h-10 w-full rounded-xl border border-line bg-card-2 px-3 text-sm outline-none focus:border-action"
             />
           </div>
+
+          {/* Keep this bag as a list («قوائمي»), to send it again another day in one tap */}
+          {bag.lines.length > 0 && (
+            <button type="button" onClick={() => setSaving(true)} className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-strong py-2 text-sm font-semibold text-muted hover:border-action hover:text-action">
+              <ListChecks className="size-4" /> {tr("احفظ السلة كقائمة", "Save the bag as a list")}
+            </button>
+          )}
 
           {/* Items */}
           <ul className="space-y-2">

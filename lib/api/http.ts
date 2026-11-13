@@ -5,6 +5,8 @@ import type {
   Allocation,
   Batch,
   CommissionRow,
+  ShopList,
+  ShopListInput,
   CatalogItem,
   CounterSaleInput,
   RepTarget,
@@ -210,6 +212,10 @@ export const httpApi = {
   getOrder: (id: number) => get<Order>(`/orders/${id}`),
   // Support chat. The page asks again every few seconds (later the backend can push with WebSockets).
   myChat: () => get<MyChat>("/chat/me"),
+  // «قوائمي»: the shop's saved lists (only its own).
+  shopLists: () => get<ShopList[]>("/shop-lists"),
+  saveShopList: (id: number | null, input: ShopListInput) => save<ShopList>("/shop-lists", id, input),
+  deleteShopList: (id: number) => del<null>(`/shop-lists/${id}`),
   sendChat: (text: string) => post<ChatMessage>("/chat/me", { text }),
   chatThreads: () => get<ChatThread[]>("/chat"),
   getChat: (customerId: number) => get<ChatMessage[]>(`/chat/${customerId}`),

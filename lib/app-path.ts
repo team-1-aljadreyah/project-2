@@ -13,7 +13,7 @@ export type AppPrefix = "" | "/client" | "/driver";
 
 /** The pages each app has (":id" = a record's number). Must match the folders in app/client/(in) and app/driver/(in). */
 const PAGES: Record<Exclude<AppPrefix, "">, string[]> = {
-  "/client": ["/shop", "/search", "/showcase", "/orders", "/orders/:id", "/invoices", "/invoices/:id", "/statement", "/account", "/notifications", "/returns/:id"],
+  "/client": ["/shop", "/search", "/showcase", "/orders", "/orders/:id", "/invoices", "/invoices/:id", "/statement", "/lists", "/account", "/notifications", "/returns/:id"],
   "/driver": [
     "/rep",
     "/deliveries",
