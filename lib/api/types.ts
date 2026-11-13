@@ -1375,6 +1375,21 @@ export interface ChatMessage {
   at: string;
 }
 
+/** «قوائمي»: a list a shop owner keeps (his weekly order…) and puts in the bag in one tap. Kept on the server, so
+ *  it follows him to any phone; only his own shop sees it. */
+export interface ShopList {
+  id: number;
+  customer_id: number;
+  name: string;
+  lines: { item_id: number; unit: Unit; qty: number }[];
+  updated_at: string;
+}
+
+export interface ShopListInput {
+  name: string;
+  lines: { item_id: number; unit: Unit; qty: number }[];
+}
+
 /** One shop's conversation, as the staff's inbox lists it. */
 export interface ChatThread {
   customer_id: number;

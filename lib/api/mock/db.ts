@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
+import type { ShopList, CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -92,6 +92,8 @@ export interface Db {
   price_changes: { item_id: number; tier_id: number; carton_price: number; piece_price: number; until: string }[];
   /** Support chat messages, all shops together. */
   chat: ChatMessage[];
+  /** «قوائمي»: the shops' saved lists. */
+  shop_lists?: ShopList[];
   /** The last message id each side has seen, per shop: { "<customer id>": { shop, staff } }. */
   chat_reads: Record<number, { shop: number; staff: number }>;
 }

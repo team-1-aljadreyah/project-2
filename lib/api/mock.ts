@@ -1587,6 +1587,46 @@ export const mockApi: Api = {
 
   // Support chat
   myChat: () => read((db, a) => myChat(db, a)),
+  // «قوائمي»: a shop owner's lists, for the shop he works on now. Up to 30, each up to 80 lines, whole quantities.
+  shopLists: () =>
+    read((db, a) => {
+      need(a, ["shop"]);
+      return (db.shop_lists ?? []).filter((l) => l.customer_id === a.customer_id).sort((x, y) => y.updated_at.localeCompare(x.updated_at));
+    }),
+  saveShopList: (id, input) =>
+    write((db, a, now) => {
+      need(a, ["shop"]);
+      db.shop_lists ??= [];
+      const name = input.name?.trim();
+      const errors: Record<string, string> = {};
+      if (!name || name.length > 40) errors.name = msg("اسم القائمة مطلوب (40 حرفاً على الأكثر)", "The list needs a name (40 letters at most)");
+      const lines = (input.lines ?? []).filter((l) => l.qty > 0);
+      if (lines.length > 80) errors.lines = msg("80 مادة على الأكثر", "80 items at most");
+      lines.forEach((l, i) => {
+        const it = db.items.find((x) => x.id === l.item_id);
+        if (!it || it.deleted) errors[`lines.${i}`] = msg("مادة غير موجودة", "Unknown item");
+        if (!Number.isInteger(l.qty) || (l.unit !== "carton" && l.unit !== "piece")) errors[`lines.${i}`] = msg("كمية غير صحيحة", "Wrong quantity");
+      });
+      if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من القائمة", "Check the list", errors);
+      const clean = lines.map(({ item_id, unit, qty }) => ({ item_id, unit, qty }));
+      if (id) {
+        const l = db.shop_lists.find((x) => x.id === id && x.customer_id === a.customer_id) ?? notFound();
+        Object.assign(l, { name, lines: clean, updated_at: now.toISOString() });
+        return l;
+      }
+      if (db.shop_lists.filter((x) => x.customer_id === a.customer_id).length >= 30) fail(409, "BAD_STATE", "30 قائمة على الأكثر", "30 lists at most");
+      const l = { id: nextId(db, "shop_list"), customer_id: a.customer_id!, name: name!, lines: clean, updated_at: now.toISOString() };
+      db.shop_lists.push(l);
+      return l;
+    }),
+  deleteShopList: (id) =>
+    write((db, a) => {
+      need(a, ["shop"]);
+      const before = (db.shop_lists ?? []).length;
+      db.shop_lists = (db.shop_lists ?? []).filter((x) => !(x.id === id && x.customer_id === a.customer_id));
+      if (db.shop_lists.length === before) notFound();
+      return null;
+    }),
   sendChat: (text) => write((db, a, now) => sendChat(db, a, text, now)),
   chatThreads: () => read((db, a) => chatThreads(db, a)),
   getChat: (customerId) => read((db, a) => chatOf(db, a, customerId)),

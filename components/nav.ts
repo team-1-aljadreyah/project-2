@@ -149,6 +149,8 @@ const EXTRA: { prefix: string; roles: Role[] }[] = [
   // An item's own page shows its batches, which reps and shops don't get (the items list has no link for them either).
   { prefix: "/items/", roles: ["manager", "warehouse", "accountant", "staff"] },
   { prefix: "/notifications", roles: ["manager", "warehouse", "rep", "accountant", "shop"] },
+  // «قوائمي»: inside the shop owner's «طلبياتي».
+  { prefix: "/lists", roles: ["shop"] },
   { prefix: "/invoices/", roles: ["manager", "accountant", "rep", "shop", "warehouse"] },
   { prefix: "/returns/", roles: ["manager", "accountant", "rep", "warehouse", "shop"] },
 ];
