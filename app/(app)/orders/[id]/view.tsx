@@ -1,5 +1,8 @@
 "use client";
 
+import { ThermalReceiptButton } from "@/components/thermal-receipt";
+import { deliveryReceipt } from "@/lib/receipts";
+
 import { DeliveryRatingCard } from "@/components/rate-delivery";
 
 import { ShareWhatsApp, pageLink } from "@/components/share";
@@ -27,7 +30,8 @@ import { piecesOf, useIdParam } from "@/lib/utils";
 
 export default function OrderView() {
   const id = useIdParam();
-  const { tr, dateTime, money, qty, name, unit: un } = useFmt();
+  const fmt = useFmt();
+  const { tr, dateTime, money, qty, name, unit: un } = fmt;
   const { user, lookups, itemById, reloadItems } = useApp();
   const router = useAppRouter();
   const toast = useToast();
@@ -109,6 +113,8 @@ export default function OrderView() {
         subtitle={`${dateTime(o.created_at)} · ${tr("سجّله", "by")} ${o.created_by.name}`}
         actions={
           <>
+            {/* Delivered: the delivery receipt on the thermal printer (the driver's pocket printer). */}
+            {user.role !== "shop" && o.delivery?.status === "delivered" && <ThermalReceiptButton company={brand.company} label={tr("إيصال التسليم", "Delivery receipt")} build={() => deliveryReceipt(o, c, { fmt, itemById })} />}
             {/* The order's state for the shop, in one tap (the rep, the warehouse or the office sends it). */}
             {user.role !== "shop" && (
               <ShareWhatsApp
