@@ -358,6 +358,25 @@ export interface OrderLine {
   offer_off?: number;
 }
 
+/** The shop owner's rating of a delivery (1–5 stars, a note), given within 7 days of it. */
+export interface DeliveryRating {
+  stars: number;
+  note?: string;
+  at: string;
+  /** Who delivered it (for the reps' averages). */
+  rep?: Person;
+}
+
+/** The delivery ratings report: the average, each delivery rep's, and the latest ones. */
+export interface RatingsReport {
+  count: number;
+  average: number;
+  /** How many of each star (index 0 = 1 star). */
+  spread: number[];
+  reps: { rep: Person; count: number; average: number; low: number }[];
+  latest: { order_id: number; number: string; customer_id: number; customer: string; rating: DeliveryRating }[];
+}
+
 export interface Order {
   /** The manager's own fields (id → value), only the ones this person may see. */
   custom?: Record<string, CustomValue>;
@@ -387,6 +406,8 @@ export interface Order {
   approval_for?: ("debt" | "discount" | "rule")[];
   /** A counter sale (source "counter"): the buyer, price level and payment. */
   counter?: CounterInfo;
+  /** The shop owner's rating of the delivery. */
+  rating?: DeliveryRating;
   /** The automation rules that hold this order for the manager (their names). */
   rule_note?: string;
   /** The shop owner changed it after sending (before it was confirmed). */

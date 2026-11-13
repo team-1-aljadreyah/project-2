@@ -500,6 +500,16 @@ export function makeSeed(now = new Date()): Db {
     [/دبس|بهارات/, "بيت التوابل"],
   ];
   for (const it of db.items) it.brand = BRANDS.find(([re]) => re.test(it.name))?.[1];
+  // Some delivered orders already rated by their shops (the ratings report has something to show).
+  const NOTES = ["وصل بالوقت والبضاعة سليمة", "", "تأخر قليلاً", "ممتاز، شكراً", "", "كارتون واحد مبلول"];
+  db.orders
+    .filter((o) => o.delivery?.status === "delivered" && o.delivery.delivered_at)
+    .slice(0, 9)
+    .forEach((o, k) => {
+      const stars = [5, 4, 5, 3, 5, 2, 4, 5, 4][k];
+      const note = NOTES[k % NOTES.length];
+      o.rating = { stars, ...(note ? { note } : {}), at: o.delivery!.delivered_at!, ...(o.delivery!.delivered_by ?? o.delivery!.rep ? { rep: o.delivery!.delivered_by ?? o.delivery!.rep } : {}) };
+    });
   // Quantity offers: «وفّر … عند شراء … فأكثر» (the shop owners' app shows a badge, every sale applies them).
   const OFFERS: [number, { unit: "carton" | "piece"; min: number; off: number }][] = [
     [3, { unit: "carton", min: 10, off: 500 }],

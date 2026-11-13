@@ -1,5 +1,7 @@
 "use client";
 
+import { RatingsReport } from "@/components/ratings-report";
+
 import { useRemembered } from "@/lib/remember";
 
 import Link from "next/link";
@@ -17,7 +19,7 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { downloadCsv, today } from "@/lib/utils";
 
-type Tab = "daily" | "sales" | "slow" | "expiry" | "debts" | "ageing";
+type Tab = "daily" | "sales" | "slow" | "expiry" | "debts" | "ageing" | "ratings";
 
 export default function ReportsPage() {
   const { tr } = useFmt();
@@ -31,6 +33,7 @@ export default function ReportsPage() {
           { value: "sales" as Tab, label: tr("المبيعات والأرباح", "Sales and profit") },
           { value: "debts" as Tab, label: tr("الديون", "Debts") },
           { value: "ageing" as Tab, label: tr("أعمار الديون", "Debt ageing") },
+          { value: "ratings" as Tab, label: tr("تقييم التوصيل", "Delivery ratings") },
         ]
       : []),
     { value: "slow", label: tr("المواد الراكدة", "Slow-moving") },
@@ -46,6 +49,7 @@ export default function ReportsPage() {
       {tab === "expiry" && <Expiry />}
       {tab === "debts" && <Debts />}
       {tab === "ageing" && <DebtAgeing />}
+      {tab === "ratings" && <RatingsReport />}
     </>
   );
 }
