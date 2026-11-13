@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { Visit, ShopList, CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
+import type { CashHandover, Visit, ShopList, CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -94,6 +94,8 @@ export interface Db {
   chat: ChatMessage[];
   /** «خط السير»: the marketing reps' visits to their shops (one per shop per day). */
   visits?: Visit[];
+  /** «العهدة»: the reps' cash handed to the accountant. */
+  handovers?: CashHandover[];
   /** «قوائمي»: the shops' saved lists. */
   shop_lists?: ShopList[];
   /** Phones that asked for push notifications (Web Push subscriptions), per person. */
@@ -112,7 +114,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 29;
+export const DB_VERSION = 30;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

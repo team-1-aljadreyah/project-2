@@ -31,6 +31,7 @@ import {
   Wallet,
   HandCoins,
   Banknote,
+  Coins,
   type LucideIcon,
   Clapperboard,
   Search,
@@ -95,6 +96,8 @@ export const NAV: NavItem[] = [
   { href: "/statement", ar: "كشف حسابي", en: "My statement", icon: FileText, roles: ["shop"], group: "money" },
   { href: "/account", ar: "حسابي", en: "My account", icon: UserRound, roles: ["shop"], group: "money", mobile: ["shop"] },
   { href: "/payments", ar: "التسديدات", en: "Payments", icon: Wallet, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["rep", "manager", "accountant"] },
+  // «العهدة»: the cash the reps hold, handed to the accountant.
+  { href: "/custody", ar: "العهدة", en: "Cash custody", icon: Coins, roles: ["manager", "accountant", "rep"], group: "money", kind: "sales" },
   { href: "/expenses", ar: "الصرفيات", en: "Expenses", icon: Banknote, roles: ["accountant", "manager"], group: "money", mobile: ["accountant"] },
   { href: "/commissions", ar: "العمولات", en: "Commission", icon: Percent, roles: ["manager", "accountant", "rep"], group: "money", kind: "sales" },
   { href: "/stock", ar: "المخزون", en: "Stock", icon: Boxes, roles: ["manager", "warehouse", "accountant", "staff"], group: "stock", mobile: ["warehouse"] },

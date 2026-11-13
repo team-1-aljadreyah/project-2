@@ -821,7 +821,7 @@ export interface RepTarget {
 
 export type AuditAction = "create" | "update" | "delete" | "cancel" | "reverse" | "transfer" | "price_change" | "approve" | "confirm" | "close" | "login";
 
-export type AuditEntity = "item" | "batch" | "receipt" | "order" | "invoice" | "payment" | "return" | "transfer" | "stocktake" | "customer" | "user" | "commission" | "settings" | "expense";
+export type AuditEntity = "item" | "batch" | "receipt" | "order" | "invoice" | "payment" | "return" | "transfer" | "stocktake" | "customer" | "user" | "commission" | "settings" | "expense" | "custody";
 
 export interface AuditEntry {
   id: number;
@@ -857,6 +857,7 @@ export type NotificationType =
   | "refund"
   | "supply_order"
   | "expense"
+  | "custody"
   | "rule";
 
 export interface AppNotification {
@@ -1596,4 +1597,66 @@ export interface VisitsReport {
   missed: { day: string; rep: { id: number; name: string }; customer: { id: number; name: string; area: string } }[];
   /** Visits recorded far from the shop. Newest first. */
   far: Visit[];
+}
+
+// ---------- «العهدة»: the cash the reps hold ----------
+
+/** A rep hands cash to the accountant. pending: the rep said he handed it, waiting for the accountant to count
+ *  it; confirmed: counted (received may be less: the shortage stays in the rep's custody); cancelled. */
+export interface CashHandover {
+  id: number;
+  number: string;
+  rep: Person;
+  /** What the rep says he hands over. */
+  declared: number;
+  /** What the accountant counted (confirmed only). */
+  received?: number;
+  /** declared − received, when the accountant counted less. */
+  short?: number;
+  status: "pending" | "confirmed" | "cancelled";
+  note?: string;
+  created_at: string;
+  confirmed_at?: string;
+  confirmed_by?: Person;
+}
+
+export interface CustodyRow {
+  rep: Person & { phone: string };
+  /** Cash he took from the shops (all time, reversed payments left out). */
+  collected: number;
+  /** Counted by the accountant (all time). */
+  handed: number;
+  /** In his hands now: collected − handed. */
+  holding: number;
+  /** Cash he took today. */
+  today: number;
+  /** His handover waiting for the accountant (one at a time). */
+  pending?: CashHandover;
+  /** Shortages found when counting (all time). */
+  short_total: number;
+  /** The oldest cash not handed yet (the first payment the handovers don't cover yet). */
+  oldest_at?: string;
+  last_handover_at?: string;
+}
+
+/** One line of a rep's custody: cash in (a payment) or out (a handover counted). */
+export interface CustodyEntry {
+  at: string;
+  kind: "cash" | "handover";
+  /** + cash in, − handed over. */
+  amount: number;
+  /** The payment's or the handover's number. */
+  number: string;
+  customer?: string;
+  /** The page of the payment. */
+  link?: string;
+  /** Handover: what he declared, and the shortage. */
+  declared?: number;
+  short?: number;
+}
+
+export interface CustodyLog {
+  row: CustodyRow;
+  entries: CustodyEntry[];
+  handovers: CashHandover[];
 }

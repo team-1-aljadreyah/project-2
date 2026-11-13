@@ -134,6 +134,17 @@ The server must filter and hide, not only the pages:
   off the plan) / far / orders, the no-order reasons, the missed list and the far ones. The demo works the plan
   out from today's `visit_days`; the backend should keep each day's plan (a nightly copy) so changing the plan
   later doesn't rewrite the past. Keep visits at least 120 days.
+- **«العهدة» (the cash the reps hold).** A rep's custody = the cash payments he received (`method: cash`,
+  `received_by` him, not reversed) − what the accountant counted from his handovers. `GET /custody`: the manager
+  and the accountant get every rep who ever held cash (`holding`, `today`, `pending`, `short_total`, `oldest_at` =
+  the first payment the handovers don't cover yet, oldest first), the rep only his own row. `GET /custody/:repId`:
+  his cash in and out (newest first) and his handovers. `POST /custody/handovers {amount, note?}` by the rep:
+  pending (one at a time; amount a whole number, > 0, ≤ what he holds) → a notification to the accountant.
+  The same call by the accountant or the manager with `rep_id`: cash taken from the rep in person, counted at once.
+  `POST /custody/handovers/:id/confirm {received}` (accountant, manager): 0 ≤ received ≤ declared; the
+  shortage (`short` = declared − received) stays in his custody, notifies the manager and the rep; full →
+  notifies the rep. `POST /custody/handovers/:id/cancel`: the rep takes his back, or the accountant refuses it
+  (the rep is told). Every confirm goes to the activity log (entity `custody`). Numbers `HND-000001`.
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -269,10 +280,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 147 endpoints, generated from lib/api/http.ts -->
+<!-- 152 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -440,6 +451,16 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `createExpense` | POST | `/expenses` | `input: NewExpense` | `Expense` |  |
 | `decideExpense` | POST | `/expenses/:id/decide` | `id: number, ok: boolean, reason?: string` | `Expense` | The manager: yes, or no with a reason. |
 | `cancelExpense` | POST | `/expenses/:id/cancel` | `id: number, reason: string` | `Expense` | Never deleted: cancelled with a reason (it stays, struck out). |
+
+### Cash custody
+
+| Call | Method | Path | Takes | Returns | Notes |
+|---|---|---|---|---|---|
+| `custody` | GET | `/custody` |  | `CustodyRow[]` | «العهدة»: the cash the reps hold. What each rep holds now (manager, accountant), or the rep's own. |
+| `custodyLog` | GET | `/custody/:repId` | `repId: number` | `CustodyLog` | One rep's cash in and out, and his handovers. |
+| `handOver` | POST | `/custody/handovers` | `input: { rep_id?: number; amount: number; note?: string }` | `CashHandover` | The rep hands cash to the accountant (waits to be counted); the accountant / manager with rep_id: taken and counted at once. |
+| `confirmHandover` | POST | `/custody/handovers/:id/confirm` | `id: number, received: number` | `CashHandover` | The accountant counted it: what he received (≤ declared; the shortage stays on the rep). |
+| `cancelHandover` | POST | `/custody/handovers/:id/cancel` | `id: number` | `CashHandover` | The rep takes back his handover before it is counted, or the accountant refuses it. |
 
 ### Commissions, dashboard and reports
 

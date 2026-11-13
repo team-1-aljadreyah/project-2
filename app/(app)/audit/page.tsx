@@ -44,7 +44,7 @@ function recordHref(e: AuditEntry): string | undefined {
     customer: "/customers",
     expense: "/expenses",
   };
-  const list: Partial<Record<AuditEntity, string>> = { transfer: "/transfers", user: "/users", commission: "/commissions", settings: "/settings", batch: "/stock" };
+  const list: Partial<Record<AuditEntity, string>> = { transfer: "/transfers", user: "/users", commission: "/commissions", settings: "/settings", batch: "/stock", custody: "/custody" };
   return own[e.entity] && e.entity_id ? `${own[e.entity]}/${e.entity_id}` : (list[e.entity] ?? own[e.entity]);
 }
 
@@ -79,6 +79,7 @@ export default function AuditPage() {
       settings: tr("الإعدادات", "Settings"),
       batch: tr("الدفعات", "Batches"),
       expense: tr("الصرفيات", "Expenses"),
+      custody: tr("العهدة", "Custody"),
     })[x];
 
   return (
