@@ -8,6 +8,7 @@ import { useApp } from "@/components/shell";
 import { hasWarehouseFilter, setWarehouseFilter, useMyWarehouses, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
 import { StockWaitlist } from "@/components/stock-waitlist";
+import { ClearancePanel } from "@/components/clearance";
 import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, PageHeader, SearchBox, Segmented, Select, Stat, type Column } from "@/components/ui";
 import { api, type ShelfRow } from "@/lib/api";
 import type { DamagedRecord, NearExpiryRow } from "@/lib/api/types";
@@ -157,6 +158,8 @@ export default function StockPage() {
       </div>
       {/* What the shop owners are waiting for («أعلمني عند التوفر»). */}
       <StockWaitlist />
+      {/* Near-expiry batches to sell at a discount, and the running clearances («عروض التصريف»). */}
+      {tab === "expiry" && <ClearancePanel rows={exp} />}
       <Card>
         <div className="flex flex-col gap-3 border-b border-line p-3 xl:flex-row xl:items-center xl:justify-between">
           <Segmented

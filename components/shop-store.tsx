@@ -35,7 +35,7 @@ import { Art, CatIcon } from "@/components/product-art";
 import { EMPTY, parseBag, readFav, readRaw, subscribeBag, subscribeFav, toggleFav, writeBag, type Bag, type Line } from "@/lib/shop-bag";
 import { Banners, BrandRow, CategoryTiles, type Slide } from "@/components/shop/home-sections";
 import { ProductCard, RowHead, bagTotal, orderedCounts } from "@/components/shop/kit";
-import { afterOffer, offerOff, offerOn } from "@/lib/units";
+import { afterOffer, clearPrice, clearanceOn, offerOff, offerOn } from "@/lib/units";
 import { useSite } from "@/lib/site";
 import { ListEditor } from "@/components/shop/lists";
 import { NotifyMe } from "@/components/shop/notify-me";
@@ -71,7 +71,12 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
   // Orders come from the main warehouse (the shop doesn't choose; the company does).
   const warehouseId = lookups.warehouses[0].id;
   const available = (it: Item) => it.stock.by_warehouse.find((w) => w.warehouse_id === warehouseId)?.qty ?? 0;
-  const price = (it: Item, unit: Unit) => priceOf(it, customer.tier_id, unit);
+  // His price; with a clearance running («عرض تصريف»), after its discount.
+  const basePrice = (it: Item, unit: Unit) => priceOf(it, customer.tier_id, unit);
+  const price = (it: Item, unit: Unit) => {
+    const c = clearanceOn(it, today());
+    return c ? clearPrice(basePrice(it, unit), c.percent) : basePrice(it, unit);
+  };
 
   const favRaw = useSyncExternalStore(subscribeFav, () => readFav(user.id, customer.id), () => "");
   const favs = useMemo(() => new Set(favRaw.split(",").filter(Boolean).map(Number)), [favRaw]);
@@ -202,7 +207,10 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
   const newest = [...inStock].sort((a, b) => b.id - a.id).slice(0, 10);
   const mostOrdered = [...active].filter((i) => counts.has(i.id)).sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0)).slice(0, 10);
   const picked = [...active.filter((i) => favs.has(i.id)), ...mostOrdered.filter((i) => !favs.has(i.id))].slice(0, 10);
+  // Near-expiry batches at a discount, the soonest to end first.
+  const clearing = inStock.filter((i) => clearanceOn(i, today())).sort((a, b) => a.clearance!.until.localeCompare(b.clearance!.until));
   const rows = [
+    { key: "clear", title: tr("عروض التصريف", "Clearance"), href: "/search?clear=1", list: clearing },
     { key: "picked", title: tr("مختارات لك", "Picked for you"), href: "/search?fav=1", list: picked },
     { key: "new", title: tr("وصل حديثاً", "Just arrived"), href: "/search?sort=new", list: newest },
     { key: "top", title: tr("الأكثر طلباً عندك", "What you order most"), href: "/search?sort=top", list: mostOrdered },
@@ -224,6 +232,7 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
         it={it}
         index={catIndex(it.category)}
         price={price(it, firstUnit(it))}
+        was={basePrice(it, firstUnit(it))}
         out={available(it) <= 0}
         qty={l?.qty}
         fav={favs.has(it.id)}
@@ -541,6 +550,7 @@ export function ItemSheet({
   line,
   available,
   price,
+  base,
   onClose,
   onSave,
   similar,
@@ -558,6 +568,8 @@ export function ItemSheet({
   onOpen: (it: Item) => void;
   /** How much more the order can take (the limit minus the other lines). */
   price: (u: Unit) => number;
+  /** The usual price (with a clearance running, `price` is the lower one). */
+  base?: (u: Unit) => number;
   onClose: () => void;
   onSave: (line: Omit<Line, "item_id"> | null) => void;
 }) {
@@ -585,6 +597,10 @@ export function ItemSheet({
   // What is in stock, and never more than what is left of the order's limit.
   const max = unit === "carton" ? Math.floor(available / item.pieces_per_carton) : available;
   const tooMuch = piecesOf(item, unit, n) > available;
+  // A clearance: its price for what is left of the batch; a bigger amount is all at the usual price.
+  const clr = clearanceOn(item, today());
+  const overClear = !!clr && piecesOf(item, unit, n) > clr.left;
+  const unitPrice = overClear && base ? base(unit) : price(unit);
   return (
     <Dialog
       open
@@ -594,7 +610,7 @@ export function ItemSheet({
         <div className="flex w-full items-center gap-3">
           <div className="min-w-0">
             <p className="text-[11px] text-muted">{tr("السعر", "Price")}</p>
-            <p className="num text-lg font-bold">{money(afterOffer(price(unit), item, unit, n, today()) * n)}</p>
+            <p className="num text-lg font-bold">{money(afterOffer(unitPrice, item, unit, n, today()) * n)}</p>
           </div>
           {/* Out of stock (and not in the bag): «أعلمني عند التوفر» instead of adding. */}
           {available <= 0 && !line ? (
@@ -636,6 +652,23 @@ export function ItemSheet({
         {soldUnits(item).includes("carton") && tr(`${unitOf(item, "carton")} فيه ${item.pieces_per_carton} ${unitOf(item, "piece")}. `, `A ${unitOf(item, "carton")} has ${item.pieces_per_carton} ${unitOf(item, "piece")}. `)}
         {tr(`المتوفر الآن ${fmtQty(available, item.pieces_per_carton, item)}.`, `Available now: ${fmtQty(available, item.pieces_per_carton, item)}.`)}
       </p>
+      {clr && (
+        <div className="mt-3 rounded-2xl border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
+          <p className="font-bold">
+            {tr(`عرض تصريف: خصم ${clr.percent}% حتى ${date(clr.until)}`, `Clearance: ${clr.percent}% off until ${date(clr.until)}`)}
+            {base && (
+              <span className="num ms-2 font-normal text-faint line-through">
+                {money(base(unit))}
+              </span>
+            )}
+          </p>
+          <p className="mt-0.5 text-xs">
+            {overClear
+              ? tr(`الخصم لـ ${fmtQty(clr.left, item.pieces_per_carton, item)} فقط؛ هذه الكمية كلها بالسعر العادي.`, `The discount is for ${fmtQty(clr.left, item.pieces_per_carton, item)} only; this amount is all at the usual price.`)
+              : tr(`لكمية محدودة: باقي ${fmtQty(clr.left, item.pieces_per_carton, item)} بهذا السعر.`, `Limited: ${fmtQty(clr.left, item.pieces_per_carton, item)} left at this price.`)}
+          </p>
+        </div>
+      )}
 
       <p className="mt-4 text-sm font-bold">{tr("الوحدة", "Unit")}</p>
       {soldUnits(item).length > 1 ? (

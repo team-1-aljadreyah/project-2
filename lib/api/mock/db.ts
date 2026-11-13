@@ -98,12 +98,28 @@ export interface Db {
   handovers?: CashHandover[];
   /** «أعلمني عند التوفر»: shop owners waiting for an item that ran out. */
   stock_alerts?: { customer_id: number; user_id: number; item_id: number; at: string }[];
+  /** «عروض التصريف»: near-expiry batches sold at a discount. */
+  clearances?: DbClearance[];
   /** «قوائمي»: the shops' saved lists. */
   shop_lists?: ShopList[];
   /** Phones that asked for push notifications (Web Push subscriptions), per person. */
   push_subs?: { user_id: number; endpoint: string; keys: { p256dh: string; auth: string }; at: string }[];
   /** The last message id each side has seen, per shop: { "<customer id>": { shop, staff } }. */
   chat_reads: Record<number, { shop: number; staff: number }>;
+}
+
+export interface DbClearance {
+  id: number;
+  item_id: number;
+  batch_id: number;
+  warehouse_id: number;
+  percent: number;
+  /** Pieces of the batch when it started. */
+  qty: number;
+  status: "active" | "sold" | "expired" | "cancelled";
+  created_at: string;
+  by: { id: number; name: string };
+  ended_at?: string;
 }
 
 export type DbOnline = Omit<OnlinePayment, "form_url"> & {
@@ -116,7 +132,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 31;
+export const DB_VERSION = 32;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

@@ -289,7 +289,11 @@ export default function OrderView() {
                         </p>
                         <p className="text-xs text-muted">
                           <span className="num">{l.qty}</span> {un(it, l.unit)} × <span className="num">{money(l.unit_price)}</span>
-                          {l.offer_off ? <span className="ms-1 font-semibold text-success">{tr(`(عرض كمية: −${money(l.offer_off)})`, `(quantity offer: −${money(l.offer_off)})`)}</span> : null}
+                          {l.offer_off ? (
+                            <span className="ms-1 font-semibold text-success">
+                              {l.clearance ? tr(`(عرض تصريف: −${money(l.offer_off)})`, `(clearance: −${money(l.offer_off)})`) : tr(`(عرض كمية: −${money(l.offer_off)})`, `(quantity offer: −${money(l.offer_off)})`)}
+                            </span>
+                          ) : null}
                           {it && l.unit === "carton" && (
                             <span>
                               {" "}

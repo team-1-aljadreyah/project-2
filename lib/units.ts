@@ -75,3 +75,14 @@ export const afterOffer = (base: number, it: Parameters<typeof offerOff>[0], uni
 
 /** Is there an offer running today (to show its badge)? */
 export const offerOn = (it: { offer?: { until?: string } } | undefined, day: string) => !!it?.offer && (!it.offer.until || it.offer.until >= day);
+
+/** «عرض تصريف»: the price after the clearance's percent, to the nearest 250 IQD (never below zero). */
+export const clearPrice = (base: number, percent: number) => Math.max(0, Math.round((base * (1 - percent / 100)) / 250) * 250);
+
+/** The clearance running on an item today (to show and to price), if any. */
+export const clearanceOn = <C extends { until: string; left: number }>(it: { clearance?: C } | undefined, day: string): C | undefined =>
+  it?.clearance && it.clearance.until >= day && it.clearance.left > 0 ? it.clearance : undefined;
+
+/** The suggested clearance discount for a batch with this many days left: 30% in the last week, 20% in the
+ *  second, 10% before that. */
+export const suggestClearance = (daysLeft: number) => (daysLeft <= 7 ? 30 : daysLeft <= 14 ? 20 : 10);
