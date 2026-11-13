@@ -14,7 +14,7 @@ import { Button, Card, Empty, errorText, Field, Input, NumberInput, PageHeader, 
 import { api, ApiError } from "@/lib/api";
 import { workWarehouses, type Invoice, type Item, type Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
-import { firstUnit, soldUnits } from "@/lib/units";
+import { afterOffer, firstUnit, soldUnits } from "@/lib/units";
 import { useUnsaved } from "@/lib/unsaved";
 import { useLoad } from "@/lib/use-load";
 import { cn, dayOfIso, matches, today } from "@/lib/utils";
@@ -51,7 +51,9 @@ export default function CounterPage() {
   };
   const inStock = (it: Item) => it.stock.by_warehouse.find((w) => w.warehouse_id === wh)?.qty ?? 0;
   const piecesOf = (l: Line) => (l.unit === "carton" ? (itemById.get(l.item_id)?.pieces_per_carton ?? 1) : 1) * l.qty;
-  const subtotal = lines.reduce((t, l) => t + price(itemById.get(l.item_id)!, l.unit) * l.qty, 0);
+  // Each line after the quantity offer (the server applies the same).
+  const lineUnit = (it: Item, l: Line) => afterOffer(price(it, l.unit), it, l.unit, l.qty, today());
+  const subtotal = lines.reduce((t, l) => t + lineUnit(itemById.get(l.item_id)!, l) * l.qty, 0);
   // The invoice total is rounded to the nearest 250 (the smallest note), like every invoice.
   const total = Math.round(subtotal / 250) * 250;
   const change = method === "cash" && received !== "" ? received - total : null;
@@ -248,7 +250,7 @@ export default function CounterPage() {
                         <Plus className="size-4" />
                       </button>
                     </span>
-                    <span className="num w-28 text-end font-bold">{money(price(it, l.unit) * l.qty)}</span>
+                    <span className="num w-28 text-end font-bold">{money(lineUnit(it, l) * l.qty)}</span>
                     <button type="button" aria-label={tr("احذف السطر", "Remove the line")} className="flex size-10 items-center justify-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger" onClick={() => setLines((ls) => ls.filter((_, k) => k !== i))}>
                       <Trash2 className="size-4" />
                     </button>

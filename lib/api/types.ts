@@ -187,6 +187,8 @@ export interface Item extends ItemUnits {
   barcode?: string;
   /** The maker's name (Pepsi, Lay's, النخلة…): a row of brands and a filter in the shop owners' app. */
   brand?: string;
+  /** A quantity offer (set by the manager): `off` IQD less on each unit when `min` or more are bought in `unit`. */
+  offer?: QtyOffer;
   pieces_per_carton: number;
   min_stock: number;
   commission_percent: number;
@@ -349,6 +351,8 @@ export interface OrderLine {
   qty: number;
   unit_price: number;
   total: number;
+  /** A quantity offer took this much off each unit (unit_price is after it). */
+  offer_off?: number;
 }
 
 export interface Order {
@@ -1296,9 +1300,18 @@ export interface CatalogItem extends ItemUnits {
   in_stock: boolean;
 }
 
+/** «وفّر 250 د.ع لكل كارتون عند شراء 25 فأكثر»: until the end of `until` (a day), or with no end. */
+export interface QtyOffer {
+  unit: Unit;
+  min: number;
+  off: number;
+  until?: string;
+}
+
 export interface ItemInput extends ItemUnits {
   weight_kg?: number;
   brand?: string;
+  offer?: QtyOffer | null;
   name: string;
   name_en: string;
   category: string;

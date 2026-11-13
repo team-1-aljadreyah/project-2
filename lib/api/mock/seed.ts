@@ -500,6 +500,16 @@ export function makeSeed(now = new Date()): Db {
     [/دبس|بهارات/, "بيت التوابل"],
   ];
   for (const it of db.items) it.brand = BRANDS.find(([re]) => re.test(it.name))?.[1];
+  // Quantity offers: «وفّر … عند شراء … فأكثر» (the shop owners' app shows a badge, every sale applies them).
+  const OFFERS: [number, { unit: "carton" | "piece"; min: number; off: number }][] = [
+    [3, { unit: "carton", min: 10, off: 500 }],
+    [5, { unit: "carton", min: 5, off: 1000 }],
+    [21, { unit: "carton", min: 20, off: 250 }],
+  ];
+  for (const [id, o] of OFFERS) {
+    const it = db.items.find((x) => x.id === id);
+    if (it) it.offer = o;
+  }
   // Each item's own units: basmati rice comes in a «شوال» of 4 «أكياس» (both sold); anbar rice by the bag only.
   const basmati = db.items.find((i) => i.id === 1);
   if (basmati) Object.assign(basmati, { pack_name: "شوال", piece_name: "كيس" });

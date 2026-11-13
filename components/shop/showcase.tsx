@@ -13,8 +13,8 @@ import { ACCENTS, CatIcon } from "@/components/product-art";
 import { ErrorBox, LoadingRows, useToast } from "@/components/ui";
 import type { Item } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
-import { firstUnit } from "@/lib/units";
-import { cn } from "@/lib/utils";
+import { firstUnit, offerOn } from "@/lib/units";
+import { cn, today } from "@/lib/utils";
 
 // The sparks: the same places every time (no random in drawing).
 const SPARKS = Array.from({ length: 14 }, (_, i) => ({ left: (i * 37) % 100, size: 3 + ((i * 7) % 5), delay: (i * 0.73) % 6, dur: 6 + ((i * 5) % 5) }));
@@ -149,7 +149,14 @@ export function Showcase() {
 
               {/* Its name and price, sliding in when it comes */}
               <div className="reel-text relative z-10 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-4 pb-4 pt-10 pe-20">
-                {it.brand && <span className="inline-block rounded-full border border-white/25 px-2.5 py-0.5 text-[11px] font-semibold text-white/85">{it.brand}</span>}
+                <span className="flex flex-wrap gap-1.5">
+                  {it.brand && <span className="inline-block rounded-full border border-white/25 px-2.5 py-0.5 text-[11px] font-semibold text-white/85">{it.brand}</span>}
+                  {it.offer && offerOn(it, today()) && (
+                    <span className="inline-block rounded-full bg-success px-2.5 py-0.5 text-[11px] font-bold text-white">
+                      {tr(`وفّر ${money(it.offer.off)} عند ${it.offer.min}+ ${unit(it, it.offer.unit)}`, `Save ${money(it.offer.off)} on ${it.offer.min}+`)}
+                    </span>
+                  )}
+                </span>
                 <h2 className="mt-1.5 text-2xl font-bold leading-8">{name(it)}</h2>
                 <p className="mt-0.5 text-sm text-white/70">
                   {it.category} · {u === "carton" ? `${unit(it, "carton")} = ${it.pieces_per_carton} ${unit(it, "piece")}` : unit(it, "piece")}

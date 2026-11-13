@@ -13,7 +13,8 @@ import { useRealtime } from "@/lib/realtime";
 import { useShopBag } from "@/lib/shop-bag";
 import { firstUnit } from "@/lib/units";
 import { useLoad } from "@/lib/use-load";
-import { cn, priceOf } from "@/lib/utils";
+import { cn, priceOf, today } from "@/lib/utils";
+import { afterOffer, offerOn } from "@/lib/units";
 
 /** His shop (the one he works on now), his orders, and what the pages need around them. */
 export function useMyShop() {
@@ -88,6 +89,12 @@ export function ProductCard({
         {it.brand && <span className="mt-2 block truncate px-1 text-[11px] font-semibold text-action">{it.brand}</span>}
         <span className={cn("line-clamp-2 block min-h-10 px-1 text-sm font-bold leading-5", !it.brand && "mt-2")}>{name(it)}</span>
       </button>
+      {/* The quantity offer, when one is running */}
+      {offerOn(it, today()) && it.offer && (
+        <span className="mx-1 mt-1.5 block rounded-lg bg-success-soft px-2 py-1 text-[11px] font-bold leading-4 text-success">
+          {tr(`وفّر ${money(it.offer.off)} لكل ${unit(it, it.offer.unit)} عند شراء ${it.offer.min}+`, `Save ${money(it.offer.off)} a ${unit(it, it.offer.unit)} on ${it.offer.min}+`)}
+        </span>
+      )}
       {/* The packing, as small chips */}
       <span className="mt-1 flex flex-wrap gap-1 px-1">
         <span className="num rounded-md bg-card-2 px-1.5 py-0.5 text-[10px] text-muted">{u === "carton" ? `${it.pieces_per_carton} ${unit(it, "piece", true)}/${unit(it, "carton", true)}` : unit(it, "piece")}</span>
@@ -176,4 +183,13 @@ export function itemsWord(n: number, tr: (a: string, e: string) => string) {
   if (n === 1) return tr("مادة واحدة", "1 item");
   if (n === 2) return tr("مادتان", "2 items");
   return tr(`${n} ${n >= 3 && n <= 10 ? "مواد" : "مادة"}`, `${n} items`);
+}
+
+/** What a bag costs for this shop: each line at its price after the quantity offer. */
+export function bagTotal(lines: { item_id: number; unit: Unit; qty: number }[], byId: (id: number) => Item | undefined, price: (it: Item, u: Unit) => number) {
+  const day = today();
+  return lines.reduce((s, l) => {
+    const it = byId(l.item_id);
+    return it ? s + afterOffer(price(it, l.unit), it, l.unit, l.qty, day) * l.qty : s;
+  }, 0);
 }

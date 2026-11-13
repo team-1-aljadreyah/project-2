@@ -10,10 +10,10 @@ import { AlertTriangle, CheckCircle2, ChevronDown, PackageX, ShoppingCart, Trash
 import { api, ApiError } from "@/lib/api";
 import type { Customer, Item, NewOrder, Unit } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
-import { firstUnit, soldUnits } from "@/lib/units";
+import { afterOffer, firstUnit, offerOn, soldUnits } from "@/lib/units";
 import { enqueue, isNetworkError, newClientRef, useOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
-import { cn, matches, piecesOf, priceOf as tierPrice } from "@/lib/utils";
+import { cn, matches, piecesOf, priceOf as tierPrice, today } from "@/lib/utils";
 import { isPhoneApp } from "./nav";
 import { useApp } from "./shell";
 import { DiscountPicker, canDiscount } from "./discount";
@@ -109,9 +109,11 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
     const sp = special.data?.find((x) => x.item_id === it.id);
     return sp ? (unit === "carton" ? sp.carton_price : sp.piece_price) : tierPrice(it, tier, unit);
   };
+  // Each line after the quantity offer (the server applies the same).
+  const lineUnit = (it: Item, l: { unit: Unit; qty: number }) => afterOffer(priceOf(it, tierId, l.unit), it, l.unit, l.qty, today());
   const subtotal = draft.lines.reduce((s, l) => {
     const it = itemById.get(l.item_id);
-    return it ? s + priceOf(it, tierId, l.unit) * l.qty : s;
+    return it ? s + lineUnit(it, l) * l.qty : s;
   }, 0);
   const pct = canDiscount(user.role) ? (draft.discount ?? 0) : 0;
   const total = subtotal - Math.round((subtotal * pct) / 100);
@@ -208,7 +210,14 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
             {(over || errors[`lines.${i}.qty`]) && (
               <p className="mt-2 text-xs font-medium text-danger">{errors[`lines.${i}.qty`] ?? tr(`الكمية أكثر من المتوفر (${fmtQty(avail, it.pieces_per_carton, it)})`, `More than available (${fmtQty(avail, it.pieces_per_carton, it)})`)}</p>
             )}
-            <p className="num mt-1 text-end text-sm font-semibold">{money(priceOf(it, tierId, l.unit) * l.qty)}</p>
+            <p className="num mt-1 text-end text-sm font-semibold">{money(lineUnit(it, l) * l.qty)}</p>
+            {it.offer && offerOn(it, today()) && it.offer.unit === l.unit && (
+              <p className={cn("mt-0.5 text-end text-[11px] font-semibold", l.qty >= it.offer.min ? "text-success" : "text-muted")}>
+                {l.qty >= it.offer.min
+                  ? tr(`عرض الكمية: وفّر ${money(it.offer.off * l.qty)}`, `Quantity offer: ${money(it.offer.off * l.qty)} off`)
+                  : tr(`عرض: من ${it.offer.min} ${unitOf(it, l.unit)} يوفّر ${money(it.offer.off)} على كل واحد`, `Offer: from ${it.offer.min}, ${money(it.offer.off)} off each`)}
+              </p>
+            )}
           </div>
         );
       })}

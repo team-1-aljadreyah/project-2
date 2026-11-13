@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { ItemSheet } from "@/components/shop-store";
-import { BagPill, ProductCard, itemsWord, orderedCounts, useMyShop } from "@/components/shop/kit";
+import { BagPill, ProductCard, bagTotal, itemsWord, orderedCounts, useMyShop } from "@/components/shop/kit";
 import { Dialog, ErrorBox, Field, LoadingRows, NumberInput, Segmented, Select, Switch } from "@/components/ui";
 import type { Item } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -81,10 +81,7 @@ export function ShopSearch() {
   ].filter(Boolean) as { k: string; label: string }[];
   const clear = (k: string) => setF((x) => (k === "price" ? { ...x, min: "", max: "" } : k === "sort" ? { ...x, sort: "best" } : { ...x, [k]: NONE[k as keyof Filters] }));
 
-  const total = shop.bag.lines.reduce((s, l) => {
-    const it = shop.active.find((i) => i.id === l.item_id);
-    return it ? s + shop.price(it, l.unit) * l.qty : s;
-  }, 0);
+  const total = bagTotal(shop.bag.lines, (id) => shop.active.find((i) => i.id === id), shop.price);
   const count = shop.bag.lines.reduce((s, l) => s + l.qty, 0);
   const lineOf = (id: number) => shop.bag.lines.find((l) => l.item_id === id);
   const addOne = (it: Item) => {

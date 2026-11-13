@@ -34,11 +34,12 @@ import { firstUnit, soldUnits } from "@/lib/units";
 import { Art, CatIcon } from "@/components/product-art";
 import { EMPTY, parseBag, readFav, readRaw, subscribeBag, subscribeFav, toggleFav, writeBag, type Bag, type Line } from "@/lib/shop-bag";
 import { Banners, BrandRow, CategoryTiles, type Slide } from "@/components/shop/home-sections";
-import { ProductCard, RowHead, orderedCounts } from "@/components/shop/kit";
+import { ProductCard, RowHead, bagTotal, orderedCounts } from "@/components/shop/kit";
+import { afterOffer, offerOff, offerOn } from "@/lib/units";
 import { useSite } from "@/lib/site";
 import { SlidersHorizontal } from "lucide-react";
 import { enqueue, isNetworkError } from "@/lib/offline";
-import { cn, piecesOf, priceOf } from "@/lib/utils";
+import { cn, piecesOf, priceOf, today } from "@/lib/utils";
 
 export function ShopStore({ customer, orders }: { customer: Customer; orders: Order[] }) {
   const { tr, money, name, unit: unitOf } = useFmt();
@@ -135,10 +136,8 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
     setLine(it.id, { unit: l?.unit ?? firstUnit(it), qty: (l?.qty ?? 0) + 1 });
   };
 
-  const total = bag.lines.reduce((s, l) => {
-    const it = itemById.get(l.item_id);
-    return it ? s + price(it, l.unit) * l.qty : s;
-  }, 0);
+  // After the quantity offers (the server applies the same).
+  const total = bagTotal(bag.lines, (id) => itemById.get(id), price);
   const count = bag.lines.reduce((s, l) => s + l.qty, 0);
   const balance = customer.balance ?? 0;
   const limit = customer.debt_limit ?? 0;
@@ -450,8 +449,14 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold">{name(it)}</p>
                     <p className="num text-xs text-muted">
-                      {money(price(it, l.unit))} / {unitOf(it, l.unit)}
+                      {offerOff(it, l.unit, l.qty, today()) > 0 && <s className="me-1 opacity-70">{money(price(it, l.unit))}</s>}
+                      {money(afterOffer(price(it, l.unit), it, l.unit, l.qty, today()))} / {unitOf(it, l.unit)}
                     </p>
+                    {offerOff(it, l.unit, l.qty, today()) > 0 ? (
+                      <p className="text-[11px] font-semibold text-success">{tr(`وفّرت ${money(offerOff(it, l.unit, l.qty, today()) * l.qty)}`, `You save ${money(offerOff(it, l.unit, l.qty, today()) * l.qty)}`)}</p>
+                    ) : it.offer && offerOn(it, today()) && it.offer.unit === l.unit && l.qty < it.offer.min ? (
+                      <p className="text-[11px] text-muted">{tr(`أضف ${it.offer.min - l.qty} لتوفّر ${money(it.offer.off)} على كل ${unitOf(it, l.unit)}`, `Add ${it.offer.min - l.qty} to save ${money(it.offer.off)} each`)}</p>
+                    ) : null}
                   </div>
                   <span className="flex items-center gap-1" dir="ltr">
                     <RoundBtn label={tr("أقل", "Less")} onClick={() => setLine(it.id, { unit: l.unit, qty: l.qty - 1 })}>
@@ -571,7 +576,7 @@ export function ItemSheet({
         <div className="flex w-full items-center gap-3">
           <div className="min-w-0">
             <p className="text-[11px] text-muted">{tr("السعر", "Price")}</p>
-            <p className="num text-lg font-bold">{money(price(unit) * n)}</p>
+            <p className="num text-lg font-bold">{money(afterOffer(price(unit), item, unit, n, today()) * n)}</p>
           </div>
           <button
             type="button"
@@ -626,6 +631,12 @@ export function ItemSheet({
         </p>
       )}
 
+      {item.offer && offerOn(item, today()) && (
+        <p className="mt-3 rounded-xl bg-success-soft px-3 py-2 text-sm font-semibold text-success">
+          {tr(`عرض: وفّر ${money(item.offer.off)} لكل ${unitOf(item, item.offer.unit)} عند شراء ${item.offer.min} فأكثر`, `Offer: save ${money(item.offer.off)} a ${unitOf(item, item.offer.unit)} on ${item.offer.min} or more`)}
+          {item.offer.until && <span className="block text-xs font-normal">{tr(`حتى ${item.offer.until}`, `Until ${item.offer.until}`)}</span>}
+        </p>
+      )}
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className="text-sm font-bold">{tr("الكمية", "Quantity")}</p>
         <Stepper value={n} onChange={setN} min={1} max={Math.max(1, max)} />

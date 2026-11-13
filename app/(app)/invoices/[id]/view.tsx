@@ -204,6 +204,7 @@ export default function InvoiceView() {
                   </td>
                   <td className="hidden py-3 text-end sm:table-cell">
                     <Money value={l.unit_price} />
+                    {l.offer_off ? <span className="block text-[11px] text-success">{tr(`عرض كمية −${money(l.offer_off)}`, `Offer −${money(l.offer_off)}`)}</span> : null}
                   </td>
                   <td className="py-3 text-end">
                     <Money value={l.total} className="font-medium" />
