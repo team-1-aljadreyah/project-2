@@ -5,7 +5,8 @@ import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
 import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type RuleOp, type RuleTrigger, type ShipmentLoad, type Vehicle } from "../types";
 import { linesWeight } from "../vehicles";
-import { offerOff, soldUnits, unitName } from "../../units";
+import { clearPrice, offerOff, soldUnits, unitName } from "../../units";
+import { clearanceFor } from "./clearance-price";
 import { fullSite } from "../site-defaults";
 import { missingValue, supplyGaps } from "../supply";
 import type {
@@ -412,7 +413,7 @@ export function shopPrice(db: Db, customerId: number, tierId: number, itemId: nu
   return priceFor(item, tierId, unit);
 }
 
-function orderLines(db: Db, tierId: number, lines: NewOrder["lines"], customerId?: number, at?: string) {
+function orderLines(db: Db, tierId: number, lines: NewOrder["lines"], customerId?: number, at?: string, warehouseId?: number) {
   const errors: Record<string, string> = {};
   if (!lines.length) errors["lines"] = msg("أضف مادة واحدة على الأقل", "Add at least one item");
   const out = lines.map((l, i) => {
@@ -424,10 +425,16 @@ function orderLines(db: Db, tierId: number, lines: NewOrder["lines"], customerId
       errors[`lines.${i}.unit`] = msg(`${item.name} تُباع بـ${unitName(item, only)} فقط`, `${item.name_en} is sold by the ${unitName(item, only, "en")} only`);
     }
     const base = customerId ? shopPrice(db, customerId, tierId, l.item_id, l.unit, at) : priceFor(item, tierId, l.unit);
+    const day = (at ?? new Date().toISOString()).slice(0, 10);
     // The quantity offer (the manager's): less on each unit when enough are bought, on the day it is recorded.
-    const off = Math.min(base, offerOff(item, l.unit, l.qty, (at ?? new Date().toISOString()).slice(0, 10)));
+    const qtyOff = Math.min(base, offerOff(item, l.unit, l.qty, day));
+    // A clearance («عرض تصريف») in the order's warehouse: its percent off, for a line that fits in what is left
+    // of the batch (more than that: the usual price). The bigger of the two discounts, never both.
+    const clr = clearanceFor(db, l.item_id, warehouseId, day);
+    const clearOff = clr && piecesOf(item, l.unit, l.qty) <= clr.left ? base - clearPrice(base, clr.percent) : 0;
+    const off = Math.max(qtyOff, clearOff);
     const unit_price = base - off;
-    return { item_id: l.item_id, unit: l.unit, qty: l.qty, unit_price, total: unit_price * l.qty, ...(off ? { offer_off: off } : {}) };
+    return { item_id: l.item_id, unit: l.unit, qty: l.qty, unit_price, total: unit_price * l.qty, ...(off ? { offer_off: off } : {}), ...(off && clearOff >= qtyOff ? { clearance: true } : {}) };
   });
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من المواد", "Check the items", errors);
   return out;
@@ -477,7 +484,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   const warehouseId = input.warehouse_id ?? db.warehouses[0].id;
   // The price is fixed when the order is recorded (offline: the moment on the rep's phone, at most 3 days back).
   const recordedAt = input.recorded_at && input.recorded_at < now.toISOString() && input.recorded_at > new Date(now.getTime() - 3 * 86_400_000).toISOString() ? input.recorded_at : undefined;
-  let lines = orderLines(db, customer.tier_id, input.lines, customer.id, recordedAt);
+  let lines = orderLines(db, customer.tier_id, input.lines, customer.id, recordedAt, input.warehouse_id);
   // Written offline: we never sell more than is there. What is there goes ahead; the rest waits for the goods.
   let waiting: typeof lines = [];
   if (input.offline) {
@@ -773,7 +780,7 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
   const wanted = (input.lines ?? []).filter((l) => l.qty > 0);
   if (!wanted.length) fail(422, "VALIDATION", "الطلب فارغ. لإلغائه استخدم زر الإلغاء", "The order is empty. To drop it, cancel it");
   const customer = db.customers.find((c) => c.id === o.customer_id)!;
-  const lines = orderLines(db, customer.tier_id, wanted, customer.id);
+  const lines = orderLines(db, customer.tier_id, wanted, customer.id, undefined, o.warehouse_id);
   // Its own held stock doesn't count against it.
   checkStock(db, o.warehouse_id, lines, now, o.id);
   const subtotal = lines.reduce((s, l) => s + l.total, 0);
@@ -1297,7 +1304,7 @@ export function counterSale(db: Db, actor: DbUser, input: CounterSaleInput, now:
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
 
   const customer = walkInCustomer(db);
-  const lines = orderLines(db, input.tier_id, input.lines);
+  const lines = orderLines(db, input.tier_id, input.lines, undefined, undefined, input.warehouse_id);
   checkStock(db, input.warehouse_id, lines, now);
   const subtotal = lines.reduce((t, l) => t + l.total, 0);
   const [total, rounding] = roundTotal(subtotal);

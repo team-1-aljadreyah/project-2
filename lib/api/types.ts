@@ -189,6 +189,8 @@ export interface Item extends ItemUnits {
   brand?: string;
   /** A quantity offer (set by the manager): `off` IQD less on each unit when `min` or more are bought in `unit`. */
   offer?: QtyOffer;
+  /** «عرض تصريف»: a near-expiry batch sold at a discount (worked out by the server; not saved with the item). */
+  clearance?: ItemClearance;
   /** A short video (manager / keeper): an https link to the file, or "media:<key>" for one kept on this device
    *  in the demo. It plays in «منتجاتنا» of the shop owners' app in place of the picture. */
   video?: string;
@@ -358,6 +360,8 @@ export interface OrderLine {
   total: number;
   /** A quantity offer took this much off each unit (unit_price is after it). */
   offer_off?: number;
+  /** The discount came from a clearance («عرض تصريف»), not a quantity offer. */
+  clearance?: boolean;
 }
 
 /** The shop owner's rating of a delivery (1–5 stars, a note), given within 7 days of it. */
@@ -859,6 +863,7 @@ export type NotificationType =
   | "expense"
   | "custody"
   | "back_in_stock"
+  | "clearance"
   | "rule";
 
 export interface AppNotification {
@@ -1671,4 +1676,36 @@ export interface StockWait {
   /** The first ask. */
   since: string;
   customers: { id: number; name: string }[];
+}
+
+// ---------- «عروض التصريف»: near-expiry batches sold at a discount ----------
+
+/** On an item: its clearance running in a warehouse (the shops see the discount and the countdown). */
+export interface ItemClearance {
+  id: number;
+  percent: number;
+  warehouse_id: number;
+  /** The last day it is sold (the day before the batch expires). */
+  until: string;
+  /** Pieces left at the clearance price (what is left of the batch). */
+  left: number;
+}
+
+export type ClearanceStatus = "active" | "sold" | "expired" | "cancelled";
+
+export interface Clearance {
+  id: number;
+  item: { id: number; name: string; name_en: string };
+  batch_id: number;
+  warehouse_id: number;
+  percent: number;
+  /** Pieces of the batch when it started, and left now. */
+  qty: number;
+  left: number;
+  until: string;
+  expiry_date: string;
+  status: ClearanceStatus;
+  created_at: string;
+  by: Person;
+  ended_at?: string;
 }

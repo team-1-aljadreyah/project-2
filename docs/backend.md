@@ -154,6 +154,18 @@ The server must filter and hide, not only the pages:
   Web Push) and his ask is removed. An item deleted or stopped drops its asks. `GET /stock-alerts/waitlist`
   (manager, accountant, keepers, staff): per item the shops waiting, the first ask, the shop names; most shops
   first. The supply order's «اطلب الناقص» fill adds these items too.
+- **«عروض التصريف» (near-expiry batches at a discount).** `POST /clearances {batch_id, percent}` (manager):
+  5–70% (the page suggests 30% with 7 days or less to the expiry, 20% with 14, else 10%); the batch has pieces
+  left, isn't held and isn't expired; one running per item and warehouse. It runs until the day before the
+  batch's expiry; it ends by itself (`sold` / `expired`) when the batch has no pieces left or that day passes, or
+  the manager stops it (`POST /clearances/:id/cancel`). Every item sent with one running in a warehouse carries
+  `clearance {id, percent, warehouse_id, until, left}` (a shop owner: only for the shops' warehouse, the first
+  one). Pricing (`POST /orders`, the order edit, `/counter-sales`): for an order from that warehouse, a line whose
+  pieces fit in what is left of the batch costs `round250(price × (1 − percent/100))` per unit; a bigger line is all
+  at the usual price; the bigger of the clearance and the quantity offer applies, never both (`offer_off` +
+  `clearance: true` on the line). Starting one in the shops' warehouse notifies every shop owner (`clearance`, link
+  `/search?item=<id>`); it goes to the activity log as a price change. `GET /clearances` (manager, accountant,
+  keepers, staff): the last 100, running first, with `left`.
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -289,10 +301,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 155 endpoints, generated from lib/api/http.ts -->
+<!-- 158 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -369,6 +381,9 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `myStockAlerts` | GET | `/stock-alerts` |  | `number[]` | «أعلمني عند التوفر» The items this shop owner waits for (the shop he works on now). |
 | `setStockAlert` | POST | `/stock-alerts` | `itemId: number, on: boolean` | `number[]` | Ask to be told when an item that ran out is back (on), or stop (off). Returns his list. |
 | `stockWaitlist` | GET | `/stock-alerts/waitlist` |  | `StockWait[]` | What the shops are waiting for, most shops first (manager, accountant, keepers). |
+| `listClearances` | GET | `/clearances` |  | `Clearance[]` | «عروض التصريف» The clearances, running ones first (manager, accountant, keepers). The running one also comes on its item. |
+| `startClearance` | POST | `/clearances` | `input: { batch_id: number; percent: number }` | `Clearance` | The manager sells a near-expiry batch at a discount (5–70%) until it is sold or expires. |
+| `cancelClearance` | POST | `/clearances/:id/cancel` | `id: number` | `Clearance` | The manager stops a clearance early. |
 
 ### Receiving, supply orders, transfers, counts
 

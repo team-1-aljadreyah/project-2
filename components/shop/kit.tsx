@@ -3,7 +3,7 @@
 // Pieces shared by the shop owner's app pages (home, search, «منتجاتنا», account): his shop and its prices,
 // the product card, and the floating bag button. The bag itself is lib/shop-bag.ts (one per shop, on the phone).
 import Link from "next/link";
-import { Heart, Minus, Play, Plus, ShoppingBag } from "lucide-react";
+import { Heart, Hourglass, Minus, Play, Plus, ShoppingBag } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { Art } from "@/components/product-art";
 import { api } from "@/lib/api";
@@ -14,7 +14,7 @@ import { useShopBag } from "@/lib/shop-bag";
 import { firstUnit } from "@/lib/units";
 import { useLoad } from "@/lib/use-load";
 import { cn, priceOf, today } from "@/lib/utils";
-import { afterOffer, offerOn } from "@/lib/units";
+import { afterOffer, clearPrice, clearanceOn, offerOn } from "@/lib/units";
 import { NotifyMe } from "@/components/shop/notify-me";
 
 /** His shop (the one he works on now), his orders, and what the pages need around them. */
@@ -28,13 +28,18 @@ export function useMyShop() {
   // Orders come from the main warehouse (the company decides).
   const warehouseId = lookups.warehouses[0]?.id;
   const available = (it: Item) => it.stock.by_warehouse.find((w) => w.warehouse_id === warehouseId)?.qty ?? 0;
-  const price = (it: Item, unit: Unit) => (customer ? priceOf(it, customer.tier_id, unit) : 0);
+  // His price; with a clearance running («عرض تصريف»), after its discount.
+  const base = (it: Item, unit: Unit) => (customer ? priceOf(it, customer.tier_id, unit) : 0);
+  const price = (it: Item, unit: Unit) => {
+    const c = clearanceOn(it, today());
+    return c ? clearPrice(base(it, unit), c.percent) : base(it, unit);
+  };
   const active = items.filter((i) => i.active);
   const categories = lookups.categories.filter((cat) => active.some((i) => i.category === cat));
   const catIndex = (cat: string) => Math.max(0, categories.indexOf(cat));
   const brands = [...new Set(active.map((i) => i.brand).filter((b): b is string => !!b))].sort((a, b) => a.localeCompare(b, "ar"));
   const bag = useShopBag(user.id, id);
-  return { user, customer, state: c.state, reload: c.reload, orders: orders.data ?? [], active, categories, catIndex, brands, available, price, ...bag };
+  return { user, customer, state: c.state, reload: c.reload, orders: orders.data ?? [], active, categories, catIndex, brands, available, price, base, ...bag };
 }
 
 /** How many times this shop ordered each item (its own orders, not cancelled): "what you order most". */
@@ -51,6 +56,7 @@ export function ProductCard({
   price,
   out,
   qty,
+  was,
   fav,
   onOpen,
   onAdd,
@@ -65,6 +71,8 @@ export function ProductCard({
   out: boolean;
   qty?: number;
   fav: boolean;
+  /** The usual price, when a clearance shows a lower one (struck through). */
+  was?: number;
   onOpen: () => void;
   onAdd: () => void;
   onLess: () => void;
@@ -72,8 +80,10 @@ export function ProductCard({
   className?: string;
   delay?: number;
 }) {
-  const { tr, money, name, unit } = useFmt();
+  const { tr, money, name, unit, num } = useFmt();
   const u = firstUnit(it);
+  const clr = clearanceOn(it, today());
+  const daysLeft = clr ? Math.max(0, Math.round((new Date(`${clr.until}T12:00:00`).getTime() - new Date(`${today()}T12:00:00`).getTime()) / 86_400_000)) : 0;
   return (
     <div style={{ animationDelay: `${delay}s` }} className={cn("rise-item box-row relative flex flex-col rounded-3xl border border-line bg-card p-2.5 transition hover:border-action/40 hover:shadow-md", className)}>
       <button
@@ -88,6 +98,11 @@ export function ProductCard({
       <button type="button" onClick={onOpen} className="box-link-main text-start">
         <span className="relative block">
           <Art category={it.category} index={index} image={it.image} />
+          {clr && (
+            <span className="absolute start-2 top-2 rounded-full bg-danger px-2 py-0.5 text-[11px] font-bold text-white shadow">
+              {tr(`تصريف −${num(clr.percent)}%`, `Clearance −${num(clr.percent)}%`)}
+            </span>
+          )}
           {it.video && (
             <span className="absolute bottom-2 start-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
               <Play className="size-3 fill-current" /> {tr("فيديو", "Video")}
@@ -110,7 +125,14 @@ export function ProductCard({
       </span>
       <div className="mt-auto flex items-center justify-between gap-1 border-t border-line px-1 pt-2 mt-2">
         <span className="min-w-0">
-          <span className="num block text-sm font-bold text-text">{money(price)}</span>
+          <span className={cn("num block text-sm font-bold", clr ? "text-danger" : "text-text")}>{money(price)}</span>
+          {clr && was !== undefined && was > price && <span className="num block text-[10px] text-faint line-through">{money(was)}</span>}
+          {clr && !out && (
+            <span className="flex items-center gap-0.5 text-[10px] font-semibold text-danger">
+              <Hourglass className="size-3" />
+              {daysLeft === 0 ? tr("آخر يوم", "Last day") : daysLeft === 1 ? tr("ينتهي غداً", "Ends tomorrow") : daysLeft === 2 ? tr("ينتهي خلال يومين", "Ends in 2 days") : tr(`ينتهي خلال ${num(daysLeft)} ${daysLeft <= 10 ? "أيام" : "يوماً"}`, `Ends in ${num(daysLeft)} days`)}
+            </span>
+          )}
           {out ? <span className="block text-[10px] font-semibold text-danger">{tr("نفد حالياً", "Out for now")}</span> : <span className="block text-[10px] text-muted">/ {unit(it, u)}</span>}
         </span>
         {out ? (

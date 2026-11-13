@@ -3,7 +3,7 @@
 // «بحث» in the shop owner's app: words, and a filter sheet (section, brand, price, in stock, order). The results
 // come in groups — by section or by brand — four of each, «عرض المزيد» for the rest. A tap opens the product
 // window; + puts it in the bag (the same bag as the home). Opened from the home's links with what to show:
-// ?cat= ?brand= ?q= ?sort=new|top ?fav=1 ?item= ?by=brand ?filters=1.
+// ?cat= ?brand= ?q= ?sort=new|top ?fav=1 ?clear=1 (the clearances) ?item= ?by=brand ?filters=1.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, X } from "lucide-react";
@@ -12,12 +12,12 @@ import { BagPill, ProductCard, bagTotal, itemsWord, orderedCounts, useMyShop } f
 import { Dialog, ErrorBox, Field, LoadingRows, NumberInput, Segmented, Select, Switch } from "@/components/ui";
 import type { Item } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
-import { firstUnit } from "@/lib/units";
-import { cn, matches } from "@/lib/utils";
+import { clearanceOn, firstUnit } from "@/lib/units";
+import { cn, matches, today } from "@/lib/utils";
 
 type Sort = "best" | "new" | "top" | "low" | "high";
-type Filters = { cat: string; brand: string; min: number | ""; max: number | ""; inStock: boolean; sort: Sort; fav: boolean };
-const NONE: Filters = { cat: "", brand: "", min: "", max: "", inStock: false, sort: "best", fav: false };
+type Filters = { cat: string; brand: string; min: number | ""; max: number | ""; inStock: boolean; sort: Sort; fav: boolean; clear: boolean };
+const NONE: Filters = { cat: "", brand: "", min: "", max: "", inStock: false, sort: "best", fav: false, clear: false };
 
 export function ShopSearch() {
   const { tr, money } = useFmt();
@@ -30,6 +30,7 @@ export function ShopSearch() {
     brand: params.get("brand") ?? "",
     sort: (["new", "top", "low", "high"].includes(params.get("sort") ?? "") ? params.get("sort") : "best") as Sort,
     fav: params.get("fav") === "1",
+    clear: params.get("clear") === "1",
   }));
   const [by, setBy] = useState<"cat" | "brand">(params.get("by") === "brand" || params.get("brand") ? "brand" : "cat");
   const [sheet, setSheet] = useState(params.get("filters") === "1");
@@ -60,6 +61,7 @@ export function ShopSearch() {
     .filter((it) => !f.brand || it.brand === f.brand)
     .filter((it) => !f.inStock || shop.available(it) > 0)
     .filter((it) => !f.fav || shop.favs.has(it.id))
+    .filter((it) => !f.clear || !!clearanceOn(it, today()))
     .filter((it) => (f.min === "" || priceOf(it) >= f.min) && (f.max === "" || priceOf(it) <= f.max))
     .sort((a, b) => {
       if (f.sort === "new") return b.id - a.id;
@@ -77,6 +79,7 @@ export function ShopSearch() {
     (f.min !== "" || f.max !== "") && { k: "price", label: `${f.min === "" ? "" : money(f.min)} – ${f.max === "" ? "" : money(f.max)}` },
     f.inStock && { k: "inStock", label: tr("المتوفر فقط", "In stock only") },
     f.fav && { k: "fav", label: tr("المفضلة", "Favourites") },
+    f.clear && { k: "clear", label: tr("عروض التصريف", "Clearance") },
     f.sort !== "best" && { k: "sort", label: sortLabel(f.sort, tr) },
   ].filter(Boolean) as { k: string; label: string }[];
   const clear = (k: string) => setF((x) => (k === "price" ? { ...x, min: "", max: "" } : k === "sort" ? { ...x, sort: "best" } : { ...x, [k]: NONE[k as keyof Filters] }));
@@ -170,6 +173,7 @@ export function ShopSearch() {
                     it={it}
                     index={shop.catIndex(it.category)}
                     price={priceOf(it)}
+                    was={shop.base(it, firstUnit(it))}
                     out={shop.available(it) <= 0}
                     qty={l?.qty}
                     fav={shop.favs.has(it.id)}
@@ -209,6 +213,7 @@ export function ShopSearch() {
           line={lineOf(open.id)}
           available={shop.available(open)}
           price={(u) => shop.price(open, u)}
+          base={(u) => shop.base(open, u)}
           onClose={() => setOpen(null)}
           onSave={(line) => {
             shop.setLine(open.id, line);

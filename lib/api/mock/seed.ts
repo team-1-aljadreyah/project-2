@@ -689,6 +689,28 @@ export function makeSeed(now = new Date()): Db {
   const ahmed = users.find((u) => u.id === 9)!;
   db.stock_alerts = [21, 18].filter((id) => sellableQty(db, id, 1, now) <= 0).map((item_id, i) => ({ customer_id: 2, user_id: ahmed.id, item_id, at: new Date(now.getTime() - (90 - i * 30) * 60_000).toISOString() }));
 
+  // «عروض التصريف»: the manager put the main warehouse's batch closest to its expiry (3+ days away) on clearance
+  // this morning, with the suggested discount.
+  const soon = db.batches
+    .filter((b) => b.warehouse_id === 1 && b.qty_left > 0 && !b.held && b.expiry_date >= dayOf(addDays(now, 3)) && b.expiry_date <= dayOf(addDays(now, 30)))
+    .sort((x, y) => x.expiry_date.localeCompare(y.expiry_date))[0];
+  if (soon) {
+    const days = Math.round((new Date(`${soon.expiry_date}T12:00:00`).getTime() - new Date(`${dayOf(now)}T12:00:00`).getTime()) / 86_400_000);
+    db.clearances = [
+      {
+        id: (db.seq.clearance = 1),
+        item_id: soon.item_id,
+        batch_id: soon.id,
+        warehouse_id: 1,
+        percent: days <= 7 ? 30 : days <= 14 ? 20 : 10,
+        qty: soon.qty_left,
+        status: "active",
+        created_at: new Date(Math.min(at(0, 8, 15).getTime(), now.getTime() - 3_600_000)).toISOString(),
+        by: { id: manager.id, name: manager.name },
+      },
+    ];
+  }
+
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);
   db.notifications.forEach((n) => {

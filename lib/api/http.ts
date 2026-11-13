@@ -12,6 +12,7 @@ import type {
   CustodyLog,
   CustodyRow,
   StockWait,
+  Clearance,
   VisitsReport,
   ShopList,
   ShopListInput,
@@ -300,6 +301,13 @@ export const httpApi = {
   setStockAlert: (itemId: number, on: boolean) => post<number[]>("/stock-alerts", { item_id: itemId, on }),
   /** What the shops are waiting for, most shops first (manager, accountant, keepers). */
   stockWaitlist: () => get<StockWait[]>("/stock-alerts/waitlist"),
+  // «عروض التصريف»
+  /** The clearances, running ones first (manager, accountant, keepers). The running one also comes on its item. */
+  listClearances: () => get<Clearance[]>("/clearances"),
+  /** The manager sells a near-expiry batch at a discount (5–70%) until it is sold or expires. */
+  startClearance: (input: { batch_id: number; percent: number }) => post<Clearance>("/clearances", input),
+  /** The manager stops a clearance early. */
+  cancelClearance: (id: number) => post<Clearance>(`/clearances/${id}/cancel`),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */

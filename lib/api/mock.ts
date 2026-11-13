@@ -131,6 +131,8 @@ import { makeSeed } from "./mock/seed";
 import { autoVisit, listVisits, recordVisit, setVisitDays, visitsReport } from "./mock/visits";
 import { cancelHandover, confirmHandover, createHandover, custodyList, custodyLog } from "./mock/custody";
 import { checkStockAlerts, myStockAlerts, setStockAlert, stockWaitlist } from "./mock/stock-alerts";
+import { cancelClearance, checkClearances, listClearances, startClearance } from "./mock/clearance";
+import { clearanceFor } from "./mock/clearance-price";
 import { fullSite, ordered } from "./site-defaults";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
@@ -193,6 +195,7 @@ async function read<T>(fn: (db: Db, actor: DbUser, now: Date) => T): Promise<T> 
   const before = db.audit.length + db.notifications.length;
   sweep(db, now);
   checkStockAlerts(db, now);
+  checkClearances(db, now);
   if (db.audit.length + db.notifications.length !== before) {
     saveDb(db);
     setTimeout(emitChange, 0);
@@ -208,6 +211,7 @@ async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { ano
   const now = new Date();
   sweep(draft, now);
   checkStockAlerts(draft, now);
+  checkClearances(draft, now);
   const before = liveMarks(draft);
   const actor = opts.anonymous ? (null as unknown as DbUser) : actorOf(draft);
   // A see-only profile changes nothing but its own account and notifications (`self`).
@@ -253,9 +257,12 @@ function itemView(db: Db, it: DbItem, actor: DbUser, now: Date): Item {
     prices = sp && c ? [{ tier_id: c.tier_id, carton_price: sp.carton_price, piece_price: sp.piece_price }] : it.prices.filter((p) => p.tier_id === c?.tier_id);
   }
   const custom = customOf(db, "item", it.id, actor);
+  // A clearance running on it (a shop owner: only in the warehouse the shops order from).
+  const clearance = clearanceFor(db, it.id, actor.role === "shop" ? db.warehouses[0]?.id : undefined, today);
   return {
     ...it,
     ...(custom ? { custom } : {}),
+    ...(clearance ? { clearance } : {}),
     prices,
     stock: { total: by_warehouse.reduce((s, w) => s + w.qty, 0), by_warehouse },
     nearest_expiry: nearest,
@@ -1779,6 +1786,10 @@ export const mockApi: Api = {
   myStockAlerts: () => read((db, a) => myStockAlerts(db, a)),
   setStockAlert: (itemId, on) => write((db, a, now) => setStockAlert(db, a, itemId, on, now), { self: true }),
   stockWaitlist: () => read((db, a) => stockWaitlist(db, a)),
+  // «عروض التصريف»
+  listClearances: () => read((db, a) => listClearances(db, a)),
+  startClearance: (input) => write((db, a, now) => startClearance(db, a, input, now)),
+  cancelClearance: (id) => write((db, a, now) => cancelClearance(db, a, id, now)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
   prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),
