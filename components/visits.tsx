@@ -6,7 +6,6 @@
 // - VisitPlan: the manager picks the days each shop is visited by its rep (Saturday to Friday).
 // - VisitsReport: planned against done per rep, the visits missed, the ones far from the shop, why shops didn't order.
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarDays, Check, DoorClosed, MapPin, MapPinOff, Route, ShoppingCart, Wallet, XCircle } from "lucide-react";
 import { shopPlace } from "@/components/delivery/live-map";
@@ -17,6 +16,7 @@ import { VISIT_NEAR_M, type Customer, type NoOrderReason, type VisitOutcome, typ
 import { metres } from "@/lib/geo";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useAppRouter } from "@/lib/app-path";
 import { cn, downloadCsv, today } from "@/lib/utils";
 
 type Tr = (ar: string, en: string) => string;
@@ -51,7 +51,8 @@ type Place = "wait" | "none" | { lat: number; lng: number };
 export function VisitSheet({ customer, onClose }: { customer: Customer; onClose: () => void }) {
   const { tr, num } = useFmt();
   const toast = useToast();
-  const router = useRouter();
+  // Inside the reps' app (/driver/…) the order and payment pages open in the app.
+  const router = useAppRouter();
   // Where the phone is (asked once when the sheet opens; the rep may refuse — the visit is still recorded).
   const [place, setPlace] = useState<Place>(() => (typeof navigator !== "undefined" && "geolocation" in navigator ? "wait" : "none"));
   const [outcome, setOutcome] = useState<VisitOutcome | null>(null);
