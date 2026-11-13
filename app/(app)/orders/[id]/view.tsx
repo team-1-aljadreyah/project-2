@@ -1,5 +1,7 @@
 "use client";
 
+import { DeliveryRatingCard } from "@/components/rate-delivery";
+
 import { ShareWhatsApp, pageLink } from "@/components/share";
 import { useBrand } from "@/lib/site";
 import { CustomFieldsCard } from "@/components/custom-fields";
@@ -191,6 +193,7 @@ export default function OrderView() {
             <VehicleBox order={o} canPlan={user.role === "manager" || ((user.role === "warehouse" || user.role === "staff") && worksIn(user, o.warehouse_id, lookups.warehouses))} onDone={order.reload} />
           )}
           {o.delivery?.status === "out" && c && <ShipmentTracker order={o} shop={c} warehouse={wh} live={locations[o.delivery.rep?.id ?? o.rep_id]} />}
+          <DeliveryRatingCard order={o} user={user} onChanged={order.reload} />
           {o.status === "needs_approval" && (
             <Notice
               tone="warning"

@@ -1,5 +1,7 @@
 "use client";
 
+import { RatePrompt } from "@/components/rate-delivery";
+
 import { Check, Clock, PhoneCall, ShoppingCart, Warehouse, XCircle } from "lucide-react";
 import Link from "next/link";
 import { PinCard } from "@/components/delivery/status";
@@ -44,6 +46,7 @@ export default function ShopOrderPage() {
   }
   return (
     <>
+      <RatePrompt orders={orders.data ?? []} customerId={c.data.id} />
       <MyShipments customer={c.data} orders={orders.data ?? []} />
       <ShopStore key={c.data.id} customer={c.data} orders={orders.data ?? []} />
       <OurWarehouses />

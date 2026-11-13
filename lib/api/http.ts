@@ -5,6 +5,7 @@ import type {
   Allocation,
   Batch,
   CommissionRow,
+  RatingsReport,
   ShopList,
   ShopListInput,
   CatalogItem,
@@ -261,6 +262,10 @@ export const httpApi = {
   counterSale: (input: CounterSaleInput) => post<Invoice>("/counter-sales", input, input.client_ref),
   /** The accountant / manager approves the order (it stays held until delivered). */
   acceptOrder: (id: number) => post<Order>(`/orders/${id}/accept`),
+  /** The shop owner rates the delivery of his order (1–5, a note), within 7 days of it; again to change it. */
+  rateDelivery: (id: number, input: { stars: number; note?: string }) => post<Order>(`/orders/${id}/rating`, input),
+  /** Delivery ratings (manager, accountant): the average, per delivery rep, the latest. */
+  ratingsReport: () => get<RatingsReport>("/reports/delivery-ratings"),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */

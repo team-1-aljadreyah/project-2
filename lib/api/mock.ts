@@ -1714,6 +1714,49 @@ export const mockApi: Api = {
       return seesDebt(a) ? v : { ...v, paid: 0, remaining: 0 };
     }),
   acceptOrder: (id) => write((db, a, now) => orderView(acceptOrder(db, a, id, now), a)),
+  rateDelivery: (id, input) =>
+    write((db, a, now) => {
+      need(a, ["shop"]);
+      const o = db.orders.find((x) => x.id === id && x.customer_id === a.customer_id) ?? notFound();
+      const d = o.delivery;
+      if (!d || d.status !== "delivered" || !d.delivered_at) fail(409, "BAD_STATE", "يُقيَّم التوصيل بعد استلام الطلب", "A delivery is rated after it arrives");
+      if (now.getTime() - new Date(d.delivered_at).getTime() > 7 * 86_400_000) fail(409, "BAD_STATE", "مضى أكثر من 7 أيام على التسليم", "More than 7 days since it arrived");
+      const stars = Math.round(Number(input.stars));
+      if (!(stars >= 1 && stars <= 5)) fail(422, "VALIDATION", "اختر من 1 إلى 5 نجوم", "Choose 1 to 5 stars", { stars: msg("1 إلى 5", "1 to 5") });
+      const note = input.note?.trim().slice(0, 300) || undefined;
+      const first = !o.rating;
+      o.rating = { stars, ...(note ? { note } : {}), at: now.toISOString(), ...(d.delivered_by ?? d.rep ? { rep: d.delivered_by ?? d.rep } : {}) };
+      const shopName = db.customers.find((c) => c.id === o.customer_id)?.name ?? "";
+      audit(db, a, "update", "order", o.id, `تقييم توصيل ${o.number}: ${stars} من 5${note ? ` («${note}»)` : ""}`, `Delivery of ${o.number} rated ${stars}/5`, now);
+      // A low one: the manager hears of it at once.
+      if (stars <= 2)
+        notify(db, { type: "needs_approval", roles: ["manager"], title: `تقييم منخفض للتوصيل: ${shopName}`, title_en: `Low delivery rating: ${shopName}`, body: `${o.number} · ${stars} من 5${note ? ` · ${note}` : ""}`, body_en: `${o.number} · ${stars}/5`, link: `/orders/${o.id}` }, now);
+      else if (first && stars === 5 && o.rating.rep) notify(db, { type: "order_confirmed", roles: ["rep"], user_id: o.rating.rep.id, title: `⭐ 5 من 5 من ${shopName}`, title_en: `5/5 from ${shopName}`, body: note ?? o.number, body_en: note ?? o.number, link: `/orders/${o.id}` }, now);
+      return orderView(o, a);
+    }),
+  ratingsReport: () =>
+    read((db, a) => {
+      need(a, ["manager", "accountant"]);
+      const rated = db.orders.filter((o) => o.rating).sort((x, y) => y.rating!.at.localeCompare(x.rating!.at));
+      const spread = [0, 0, 0, 0, 0];
+      for (const o of rated) spread[o.rating!.stars - 1]++;
+      const byRep = new Map<number, { rep: { id: number; name: string }; stars: number[] }>();
+      for (const o of rated) {
+        const r = o.rating!.rep;
+        if (!r) continue;
+        const e = byRep.get(r.id) ?? { rep: r, stars: [] };
+        e.stars.push(o.rating!.stars);
+        byRep.set(r.id, e);
+      }
+      const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((t, x) => t + x, 0) / xs.length) * 10) / 10 : 0);
+      return {
+        count: rated.length,
+        average: avg(rated.map((o) => o.rating!.stars)),
+        spread,
+        reps: [...byRep.values()].map((e) => ({ rep: e.rep, count: e.stars.length, average: avg(e.stars), low: e.stars.filter((x) => x <= 2).length })).sort((x, y) => y.average - x.average),
+        latest: rated.slice(0, 30).map((o) => ({ order_id: o.id, number: o.number, customer_id: o.customer_id, customer: db.customers.find((c) => c.id === o.customer_id)?.name ?? "", rating: o.rating! })),
+      };
+    }),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
   prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),
