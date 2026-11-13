@@ -310,6 +310,8 @@ export interface Customer {
   /** The full address with the map pin (newer shops). `address` stays the short text of it. */
   address_info?: ShopAddress;
   last_order_at?: string;
+  /** «خط السير»: the days its marketing rep visits it (0 = Sunday … 6 = Saturday), set by the manager. */
+  visit_days?: WeekDay[];
 }
 
 /** pending: sent, held 24 h, waits for the accountant / manager to approve it.
@@ -1540,4 +1542,58 @@ export interface Health {
     /** A password that is easy to guess (123456, the phone number, under 8 characters). Names only. */
     weak: { id: number; name: string; role: Role }[];
   };
+}
+
+// ---------- «خط السير»: the marketing rep's weekly visits ----------
+
+/** The days of the week as JavaScript counts them: 0 = Sunday … 6 = Saturday. */
+export type WeekDay = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** What came out of a visit. order / payment: also recorded by themselves when the rep makes one for the shop that day. */
+export type VisitOutcome = "order" | "payment" | "no_order" | "closed";
+export type NoOrderReason = "stocked" | "no_money" | "price" | "other";
+
+/** How far from the shop's pin a visit may be before it is marked «بعيد عن المحل» (still recorded). */
+export const VISIT_NEAR_M = 200;
+
+export interface Visit {
+  id: number;
+  rep: { id: number; name: string };
+  customer: { id: number; name: string; area: string };
+  /** yyyy-mm-dd */
+  day: string;
+  at: string;
+  outcome: VisitOutcome;
+  reason?: NoOrderReason;
+  note?: string;
+  /** Metres from the shop's pin (none: no location from the phone, or the shop has no pin). */
+  distance_m?: number;
+  /** Farther than VISIT_NEAR_M from the shop. */
+  far?: boolean;
+  /** The shop was on the rep's plan for that day. */
+  planned: boolean;
+  order_id?: number;
+}
+
+export interface VisitInput {
+  customer_id: number;
+  outcome: VisitOutcome;
+  reason?: NoOrderReason;
+  note?: string;
+  /** Where the phone was (left out when the rep didn't allow the location). */
+  lat?: number;
+  lng?: number;
+}
+
+export interface VisitsReport {
+  from: string;
+  to: string;
+  totals: { planned: number; visited: number; missed: number; remaining: number; extra: number; far: number; orders: number };
+  reps: { rep: { id: number; name: string }; planned: number; visited: number; missed: number; remaining: number; extra: number; far: number; orders: number }[];
+  /** Why the shops didn't order. */
+  reasons: Record<NoOrderReason, number>;
+  /** Planned and not visited (today's not counted: the day isn't over). Newest first. */
+  missed: { day: string; rep: { id: number; name: string }; customer: { id: number; name: string; area: string } }[];
+  /** Visits recorded far from the shop. Newest first. */
+  far: Visit[];
 }

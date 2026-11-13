@@ -6,6 +6,9 @@ import type {
   Batch,
   CommissionRow,
   RatingsReport,
+  Visit,
+  VisitInput,
+  VisitsReport,
   ShopList,
   ShopListInput,
   CatalogItem,
@@ -266,6 +269,15 @@ export const httpApi = {
   rateDelivery: (id: number, input: { stars: number; note?: string }) => post<Order>(`/orders/${id}/rating`, input),
   /** Delivery ratings (manager, accountant): the average, per delivery rep, the latest. */
   ratingsReport: () => get<RatingsReport>("/reports/delivery-ratings"),
+  // «خط السير»: the marketing reps' weekly visits.
+  /** One day's visits (a rep: his own; the manager: everyone's, or one rep's). */
+  listVisits: (day: string, repId?: number) => get<Visit[]>("/visits", { day, rep_id: repId }),
+  /** The rep records a visit at one of his shops (a second one the same day changes it). */
+  recordVisit: (input: VisitInput) => post<Visit>("/visits", input),
+  /** The manager sets the days a shop is visited by its rep (0 = Sunday … 6 = Saturday; [] = none). */
+  setVisitDays: (customerId: number, days: number[]) => post<Customer>(`/customers/${customerId}/visit-days`, { days }),
+  /** Planned against done, per rep, the visits missed and the ones far from the shop (manager). */
+  visitsReport: (from: string, to: string) => get<VisitsReport>("/reports/visits", { from, to }),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */

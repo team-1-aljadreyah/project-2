@@ -128,6 +128,7 @@ import {
   removeUserPhoto,
 } from "./mock/rules";
 import { makeSeed } from "./mock/seed";
+import { autoVisit, listVisits, recordVisit, setVisitDays, visitsReport } from "./mock/visits";
 import { fullSite, ordered } from "./site-defaults";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
@@ -1696,6 +1697,8 @@ export const mockApi: Api = {
       const o = createOrder(db, a, input, now);
       // A new order (not the same one sent twice): the manager's automation rules run on it.
       if (o.created_at !== now.toISOString()) return o;
+      // The rep's order for a shop of his counts as visiting it today («خط السير»).
+      autoVisit(db, a, o.customer_id, "order", now, o.id);
       const c = db.customers.find((x) => x.id === o.customer_id);
       const wait = runRules(db, "order_created", { total: o.total, discount: o.discount?.percent ?? 0, lines: o.lines.length, by_role: a.role, area: c?.area ?? "" }, { number: o.number, link: `/orders/${o.id}`, by: a.name, customer: c?.name }, now);
       const st = db.orders.find((x) => x.id === o.id);
@@ -1757,6 +1760,11 @@ export const mockApi: Api = {
         latest: rated.slice(0, 30).map((o) => ({ order_id: o.id, number: o.number, customer_id: o.customer_id, customer: db.customers.find((c) => c.id === o.customer_id)?.name ?? "", rating: o.rating! })),
       };
     }),
+  // «خط السير»
+  listVisits: (day, repId) => read((db, a) => listVisits(db, a, day, repId)),
+  recordVisit: (input) => write((db, a, now) => recordVisit(db, a, input, now)),
+  setVisitDays: (customerId, days) => write((db, a) => customerView(db, setVisitDays(db, a, customerId, days), a)),
+  visitsReport: (from, to) => read((db, a, now) => visitsReport(db, a, from, to, now)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
   prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),
@@ -1822,6 +1830,7 @@ export const mockApi: Api = {
       // The same payment sent twice (weak internet) comes back as the first one: the rules ran then.
       const isNew = !db.payments.some((x) => x.client_ref === input.client_ref);
       const p = createPayment(db, a, input, now);
+      if (isNew) autoVisit(db, a, p.customer_id, "payment", now);
       if (isNew)
         runRules(db, "payment_created", { amount: p.amount, method: p.method }, { number: p.number, link: `/payments/${p.id}`, by: a.name, customer: db.customers.find((c) => c.id === p.customer_id)?.name }, now);
       return p;

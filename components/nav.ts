@@ -15,6 +15,7 @@ import {
   LayoutGrid,
   PackageCheck,
   Map as MapIcon,
+  Route,
   Warehouse,
   Package,
   PackagePlus,
@@ -76,6 +77,8 @@ export const NAV: NavItem[] = [
   },
   // The keeper sells to someone who came to the warehouse and pays on the spot.
   { href: "/counter", ar: "بيع مباشر", en: "Counter sale", icon: HandCoins, roles: ["warehouse"], group: "sales" },
+  // «خط السير»: the days each marketing rep visits each shop, and the visits missed.
+  { href: "/routes", ar: "خط السير", en: "Visit plan", icon: Route, roles: ["manager"], group: "sales" },
   { href: "/invoices", ar: "الفواتير", en: "Invoices", icon: ReceiptText, roles: ["manager", "accountant", "rep", "shop"], group: "sales" },
   { href: "/returns", ar: "المرتجعات", en: "Returns", icon: Undo2, roles: ["manager", "accountant", "rep", "warehouse"], group: "sales" },
   {

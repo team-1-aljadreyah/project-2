@@ -10,7 +10,8 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { Percent, Route, Search, ShoppingCart, Truck, Wallet, WifiOff } from "lucide-react";
 import { useNow } from "@/components/hall/live";
-import { CustomerSheet, NextStopCard, RouteMap, buildStops, useVisits } from "@/components/rep-route";
+import { CustomerSheet, NextStopCard, RouteMap, buildStops } from "@/components/rep-route";
+import { VisitSheet, weekDayOf } from "@/components/visits";
 import { MyTarget } from "@/components/rep-targets";
 import Link from "next/link";
 import { useApp } from "@/components/shell";
@@ -33,16 +34,20 @@ export default function RepHome() {
   const month = today().slice(0, 7);
   const comm = useLoad(() => api.commissions(month), [month]);
   const queue = useQueue();
-  const visited = useVisits(user.id);
+  const t = today();
+  // Today's visits, recorded on the server («خط السير»).
+  const visits = useLoad(() => api.listVisits(t), [t]);
+  const visited = (visits.data ?? []).map((v) => v.customer.id);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Customer | null>(null);
+  const [visiting, setVisiting] = useState<Customer | null>(null);
 
-  const t = today();
   const todayOrders = (orders.data ?? []).filter((o) => dayOfIso(o.created_at) === t && o.status !== "cancelled");
   const collected = (payments.data ?? []).filter((p) => dayOfIso(p.date) === t && !p.reversed && !p.reversal_of).reduce((s, p) => s + p.amount, 0);
   const all = (customers.data ?? []).slice().sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
   const shown = all.filter((c) => matches(q, c.name, c.owner_name, c.area, c.phone));
-  const stops = customers.data ? buildStops(customers.data, now) : [];
+  const stops = customers.data ? buildStops(customers.data, now, weekDayOf(t)) : [];
+  const plannedCount = stops.filter((s) => s.planned).length;
   const done = stops.filter((s) => visited.includes(s.customer.id)).length;
   const nextIdx = stops.findIndex((s) => !visited.includes(s.customer.id));
   const row = comm.data?.[0];
@@ -149,10 +154,12 @@ export default function RepHome() {
               <>
                 <RouteMap stops={stops} visited={visited} onPick={setOpen} />
                 <div className="mt-3">
-                  <NextStopCard stop={stops[nextIdx]} index={nextIdx} total={stops.length} done={done} userId={user.id} onOpen={setOpen} />
+                  <NextStopCard stop={stops[nextIdx]} index={nextIdx} total={stops.length} done={done} onOpen={setOpen} onVisit={setVisiting} />
                 </div>
                 <p className="mt-2 px-1 text-[11px] text-faint">
-                  {tr("المحلات مرتبة حسب الأهم: فوق السقف، قريب منه، ثم من لم يطلب منذ أسبوع.", "Shops in order of importance: over the limit, near it, then those with no order for a week.")}
+                  {plannedCount
+                    ? tr(`${plannedCount} من خطة اليوم التي وضعها المدير، ثم الأهم: فوق السقف، قريب منه، ومن لم يطلب منذ أسبوع.`, `${plannedCount} from the manager's plan for today, then the most urgent: over the limit, near it, no order for a week.`)
+                    : tr("المحلات مرتبة حسب الأهم: فوق السقف، قريب منه، ثم من لم يطلب منذ أسبوع.", "Shops in order of importance: over the limit, near it, then those with no order for a week.")}
                 </p>
               </>
             ) : (
@@ -211,7 +218,19 @@ export default function RepHome() {
         </div>
       </div>
 
-      {open && <CustomerSheet customer={open} stop={stops.find((s) => s.customer.id === open.id)} visited={visited.includes(open.id)} userId={user.id} onClose={() => setOpen(null)} />}
+      {open && (
+        <CustomerSheet
+          customer={open}
+          stop={stops.find((s) => s.customer.id === open.id)}
+          visited={visited.includes(open.id)}
+          onVisit={(c) => {
+            setOpen(null);
+            setVisiting(c);
+          }}
+          onClose={() => setOpen(null)}
+        />
+      )}
+      {visiting && <VisitSheet customer={visiting} onClose={() => setVisiting(null)} />}
     </div>
   );
 }
