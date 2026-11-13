@@ -10,7 +10,7 @@ import { api, ApiError } from "@/lib/api";
 import type { Item, ItemInput } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useApp } from "./shell";
-import { Button, Dialog, Field, Input, NumberInput, Notice, Segmented, Switch, errorText, useToast } from "./ui";
+import { Button, Dialog, Field, Input, NumberInput, Notice, Segmented, Select, Switch, errorText, useToast } from "./ui";
 import { Trash2 } from "lucide-react";
 import { PACK_NAMES, PIECE_NAMES } from "@/lib/units";
 
@@ -30,6 +30,7 @@ export function ItemForm({ open, onClose, item, onSaved, onDeleted }: { open: bo
     min_stock: item?.min_stock ?? 120,
     commission_percent: item?.commission_percent ?? 2,
     weight_kg: item?.weight_kg,
+    offer: item?.offer ?? null,
     brand: item?.brand ?? "",
     prices: lookups.tiers.map((t) => item?.prices.find((p) => p.tier_id === t.id) ?? { tier_id: t.id, carton_price: 0, piece_price: 0 }),
     active: item?.active ?? true,
@@ -183,6 +184,35 @@ export function ItemForm({ open, onClose, item, onSaved, onDeleted }: { open: bo
               />
             )}
           </div>
+        </div>
+        {/* The quantity offer: «وفّر X لكل كارتون عند شراء Y فأكثر» (every sale applies it) */}
+        <div className="grid gap-3 rounded-xl border border-line bg-card-2/50 p-3 sm:col-span-2 sm:grid-cols-4">
+          <div className="sm:col-span-4">
+            <Switch
+              checked={!!f.offer}
+              onChange={(v) => set({ offer: v ? { unit: sells === "piece" ? "piece" : "carton", min: 10, off: 250 } : null })}
+              label={<span className="text-sm font-semibold">{tr("عرض الكمية (خصم عند شراء كمية)", "Quantity offer (less when buying more)")}</span>}
+            />
+          </div>
+          {f.offer && (
+            <>
+              <Field label={tr("على", "On")}>
+                <Select value={f.offer.unit} onChange={(e) => set({ offer: { ...f.offer!, unit: e.target.value as "carton" | "piece" } })}>
+                  {sells !== "piece" && <option value="carton">{pack}</option>}
+                  {sells !== "pack" && <option value="piece">{piece}</option>}
+                </Select>
+              </Field>
+              <Field label={tr("عند شراء (فأكثر)", "When buying (or more)")} error={err["offer.min"]}>
+                <NumberInput value={f.offer.min} onChange={(v) => set({ offer: { ...f.offer!, min: v === "" ? 0 : v } })} invalid={!!err["offer.min"]} />
+              </Field>
+              <Field label={tr("يوفّر على كل واحد (د.ع)", "Off each (IQD)")} error={err["offer.off"]}>
+                <NumberInput value={f.offer.off} onChange={(v) => set({ offer: { ...f.offer!, off: v === "" ? 0 : v } })} invalid={!!err["offer.off"]} />
+              </Field>
+              <Field label={tr("ينتهي (اختياري)", "Ends (optional)")} error={err["offer.until"]}>
+                <Input type="date" dir="ltr" value={f.offer.until ?? ""} onChange={(e) => set({ offer: { ...f.offer!, until: e.target.value || undefined } })} />
+              </Field>
+            </>
+          )}
         </div>
         <Field label={tr(`الحد الأدنى (بال${piece})`, `Minimum stock (${piece})`)} error={err.min_stock} hint={tr("إذا نزل المخزون عنه يصلك إشعار", "You get a notification below this")}>
           <NumberInput value={f.min_stock} onChange={(v) => set({ min_stock: v === "" ? 0 : v })} />

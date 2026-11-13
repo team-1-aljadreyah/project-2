@@ -1219,6 +1219,14 @@ export const mockApi: Api = {
       if (input.weight_kg !== undefined && !(input.weight_kg > 0 && input.weight_kg <= 100)) errors.weight_kg = msg("بين 0.01 و 100 كغم", "Between 0.01 and 100 kg");
       if (input.commission_percent < 0 || input.commission_percent > 50) errors.commission_percent = msg("بين 0 و 50", "Between 0 and 50");
       if (input.brand && input.brand.trim().length > 40) errors.brand = msg("اسم قصير (40 حرفاً على الأكثر)", "A short name (40 letters at most)");
+      // The quantity offer: a unit it is sold by, from 2 up, less than the lowest price of that unit.
+      if (input.offer) {
+        const o = input.offer;
+        const lowest = Math.min(...input.prices.map((p) => (o.unit === "carton" ? p.carton_price : p.piece_price)).filter((x) => x > 0));
+        if (!Number.isInteger(o.min) || o.min < 2) errors["offer.min"] = msg("عدد صحيح من 2 فأكثر", "A whole number from 2");
+        if (!Number.isInteger(o.off) || o.off <= 0 || o.off >= lowest) errors["offer.off"] = msg(`أقل من أدنى سعر (${lowest.toLocaleString("en")} د.ع)`, `Less than the lowest price (${lowest.toLocaleString("en")} IQD)`);
+        if (o.until && (!/^\d{4}-\d{2}-\d{2}$/.test(o.until) || o.until < dayOf(now))) errors["offer.until"] = msg("تاريخ اليوم أو بعده", "Today or later");
+      }
       // The units: two names (a few letters each) and which are sold. A pack of one is the single itself.
       const pack_name = input.pack_name?.trim() || "كارتون";
       const piece_name = input.piece_name?.trim() || "قطعة";
@@ -1234,6 +1242,7 @@ export const mockApi: Api = {
       input = {
         ...input,
         brand: input.brand?.trim() || undefined,
+        offer: input.offer ? { unit: input.offer.unit, min: input.offer.min, off: input.offer.off, ...(input.offer.until ? { until: input.offer.until } : {}) } : undefined,
         pack_name: pack_name === "كارتون" ? undefined : pack_name,
         piece_name: piece_name === "قطعة" ? undefined : piece_name,
         sells: sells === "both" ? undefined : sells,
@@ -1261,7 +1270,7 @@ export const mockApi: Api = {
         }
         Object.assign(it, { ...input, name: input.name.trim(), name_en: input.name_en.trim() });
         // Back to the usual names / both units: the old values go.
-        for (const k of ["pack_name", "piece_name", "sells", "brand"] as const) if (input[k] === undefined) delete it[k];
+        for (const k of ["pack_name", "piece_name", "sells", "brand", "offer"] as const) if (input[k] === undefined) delete it[k];
         if (changed.length) {
           const t = changed.map((p) => `${db.tiers.find((x) => x.id === p.tier_id)?.name}: ${p.carton_price.toLocaleString("en")}/${p.piece_price.toLocaleString("en")}`).join("، ");
           audit(db, a, "price_change", "item", it.id, `تغيير سعر ${it.name} (${t}). الفواتير القديمة لا تتغير`, `Price change for ${it.name_en}. Old invoices keep their prices`, now);
@@ -1269,7 +1278,7 @@ export const mockApi: Api = {
         audit(db, a, "update", "item", it.id, `تعديل المادة ${it.name}`, `Updated item ${it.name_en}`, now);
         return itemView(db, it, a, now);
       }
-      const it: DbItem = { id: nextId(db, "item"), ...input, name: input.name.trim(), name_en: input.name_en.trim() };
+      const it: DbItem = { id: nextId(db, "item"), ...input, offer: input.offer ?? undefined, name: input.name.trim(), name_en: input.name_en.trim() };
       db.items.push(it);
       audit(db, a, "create", "item", it.id, `إضافة المادة ${it.name}`, `Added item ${it.name_en}`, now);
       return itemView(db, it, a, now);

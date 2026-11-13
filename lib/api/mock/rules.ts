@@ -5,7 +5,7 @@ import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
 import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type RuleOp, type RuleTrigger, type ShipmentLoad, type Vehicle } from "../types";
 import { linesWeight } from "../vehicles";
-import { soldUnits, unitName } from "../../units";
+import { offerOff, soldUnits, unitName } from "../../units";
 import { fullSite } from "../site-defaults";
 import { missingValue, supplyGaps } from "../supply";
 import type {
@@ -423,8 +423,11 @@ function orderLines(db: Db, tierId: number, lines: NewOrder["lines"], customerId
       const only = soldUnits(item)[0];
       errors[`lines.${i}.unit`] = msg(`${item.name} تُباع بـ${unitName(item, only)} فقط`, `${item.name_en} is sold by the ${unitName(item, only, "en")} only`);
     }
-    const unit_price = customerId ? shopPrice(db, customerId, tierId, l.item_id, l.unit, at) : priceFor(item, tierId, l.unit);
-    return { item_id: l.item_id, unit: l.unit, qty: l.qty, unit_price, total: unit_price * l.qty };
+    const base = customerId ? shopPrice(db, customerId, tierId, l.item_id, l.unit, at) : priceFor(item, tierId, l.unit);
+    // The quantity offer (the manager's): less on each unit when enough are bought, on the day it is recorded.
+    const off = Math.min(base, offerOff(item, l.unit, l.qty, (at ?? new Date().toISOString()).slice(0, 10)));
+    const unit_price = base - off;
+    return { item_id: l.item_id, unit: l.unit, qty: l.qty, unit_price, total: unit_price * l.qty, ...(off ? { offer_off: off } : {}) };
   });
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من المواد", "Check the items", errors);
   return out;

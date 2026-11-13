@@ -63,3 +63,15 @@ export function qtyIn(it: Named | undefined, pieces: number, lang: "ar" | "en" =
   if (r || !c) parts.push(`${nf.format(r)} ${pc}`);
   return (neg ? "-" : "") + parts.join(" + ");
 }
+
+/** The quantity offer's IQD off each unit for this line (its unit, enough of it, not ended), else 0. */
+export function offerOff(it: { offer?: { unit: Unit; min: number; off: number; until?: string } } | undefined, unit: Unit, qty: number, day: string) {
+  const o = it?.offer;
+  return o && o.unit === unit && qty >= o.min && (!o.until || o.until >= day) ? o.off : 0;
+}
+
+/** A unit's price after the quantity offer (never below zero). */
+export const afterOffer = (base: number, it: Parameters<typeof offerOff>[0], unit: Unit, qty: number, day: string) => Math.max(0, base - offerOff(it, unit, qty, day));
+
+/** Is there an offer running today (to show its badge)? */
+export const offerOn = (it: { offer?: { until?: string } } | undefined, day: string) => !!it?.offer && (!it.offer.until || it.offer.until >= day);
