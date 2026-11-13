@@ -45,6 +45,27 @@ The server must filter and hide, not only the pages:
   categories the manager gave him (`rep_categories`, empty = all). His monthly target (`sales_target`, set by
   the manager on the user) is counted by `GET /reps/targets`: the month's invoices with his `rep_id` less the
   returns on them; he gets only his own row (with his rank), the manager and accountant get every marketing rep.
+- **Quantity offers** (`item.offer = {unit, min, off, until?}`, set in the item form): every sale (shop, rep,
+  office, counter) takes `off` IQD off each unit of a line in that `unit` with `qty ≥ min`, until the end of
+  `until` (by the day the order is recorded), never below zero; the line keeps `offer_off` (its `unit_price` is
+  after it). Check: `min ≥ 2`, `0 < off <` the lowest price of that unit, `until ≥ today`.
+- **«قوائمي»** (`GET/POST/PUT /shop-lists`, `DELETE /shop-lists/:id`, shop owners only, for the shop they work on
+  now): `{id, customer_id, name ≤ 40, lines ≤ 80 [{item_id, unit, qty}], updated_at}`, up to 30 per shop. Putting
+  a list in the bag happens in the app (only what can be ordered now).
+- **Product videos** (`POST /items/:id/video`, manager and keeper): take the file (multipart, mp4/webm/mov,
+  ≤ 20 MB, ≤ 30 s), store it (CDN) and keep its https link in `item.video`; `{video: null}` removes it. The demo
+  keeps an uploaded file in the browser (IndexedDB, `media:<key>`), so only that device plays it; a link plays
+  everywhere.
+- **Phone notifications (Web Push).** The app registers `public/sw.js` and, when `NEXT_PUBLIC_VAPID_KEY` is set,
+  sends the phone's subscription to `POST /push-subscriptions` (`{endpoint, keys: {p256dh, auth}}`; remove with
+  `POST /push-subscriptions/delete {endpoint}`). Keep them per person; whenever a notification is made for a
+  person (and a support message for the other side), send `{title, body, url, tag}` to each of their
+  subscriptions with the VAPID private key (e.g. the `web-push` library); drop one that answers 404/410. Without
+  it, the app still shows them on the phone while it is open in the background.
+- **Delivery ratings** (`POST /orders/:id/rating {stars 1–5, note ≤ 300}`, the order's shop owner, within 7 days
+  of the delivery, again to change it): kept on the order (`rating`, with the rep who delivered); 1–2 stars →
+  a notification to the manager. `GET /reports/delivery-ratings` (manager, accountant): average, spread,
+  per delivery rep (count, average, low ones), the latest 30.
 - **Brands and the store's ads.** An item may have `brand` (≤ 40 letters, saved with the item; also in
   `GET /catalog`): the shop owners' app shows a brands row and filters by it. The manager's ads live in the
   site settings (`SiteCustom.banners`, saved with `PUT /site`): up to 12, each `{id, image (JPEG/PNG/WebP,
@@ -235,7 +256,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 `ChatMessage`, `RepTarget`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 135 endpoints, generated from lib/api/http.ts -->
+<!-- 143 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -301,6 +322,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `saveItem` | POST (new) / PATCH :id | `/items` | `id: number \| null, input: ItemInput` | `Item` |  |
 | `deleteItem` | DELETE | `/items/:id` | `id: number` | `{ result: "removed" \| "hidden" }` | Delete an item (manager). Never used: removed for good ("removed"). Used before: hidden everywhere, its name kept on the old records ("hidden"). Refused while it has stock or is on an open order. |
 | `setItemImage` | POST | `/items/:id/image` | `id: number, image: string \| null` | `Item` | image: a data URL from the page (the backend stores the file and returns its link in item.image), or null to remove. |
+| `setItemVideo` | POST | `/items/:id/video` | `id: number, video: string \| null` | `Item` | video: the uploaded file's link (the backend takes the file: multipart, ≤ 20 MB, ≤ 30 s) or null to remove. |
 | `itemBatches` | GET | `/items/:itemId/batches` | `itemId: number` | `Batch[]` |  |
 | `listBatches` | GET | `/batches` | `warehouseId?: number` | `Batch[]` |  |
 | `shelfStock` | GET | `/stock` |  | `ShelfRow[]` |  |
@@ -364,6 +386,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `getDeliveryPhoto` | GET | `/orders/:id/delivery/photo` | `id: number` | `string \| null` |  |
 | `createOrder` | POST | `/orders` | `input: NewOrder` | `Order` |  |
 | `acceptOrder` | POST | `/orders/:id/accept` | `id: number` | `Order` | The accountant / manager approves the order (it stays held until delivered). |
+| `rateDelivery` | POST | `/orders/:id/rating` | `id: number, input: { stars: number; note?: string }` | `Order` | The shop owner rates the delivery of his order (1–5, a note), within 7 days of it; again to change it. |
 | `prepPlan` | GET | `/orders/:id/prep-plan` | `id: number` | `PrepLine[]` | For the keeper: free stock per warehouse for each line, and the suggested warehouse. |
 | `prepareOrder` | POST | `/orders/:id/prepare` | `id: number, warehouses: Record<number, number>` | `Order` | The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. |
 | `approveOrder` | POST | `/orders/:id/approve` | `id: number` | `Order` |  |
@@ -403,6 +426,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 
 | Call | Method | Path | Takes | Returns | Notes |
 |---|---|---|---|---|---|
+| `ratingsReport` | GET | `/reports/delivery-ratings` |  | `RatingsReport` | Delivery ratings (manager, accountant): the average, per delivery rep, the latest. |
 | `commissions` | GET | `/commissions` | `month: string` | `CommissionRow[]` |  |
 | `closeMonth` | POST | `/commissions/close` | `month: string` | `CommissionRow[]` |  |
 | `closedMonths` | GET | `/commissions/closed` |  | `string[]` |  |
@@ -434,6 +458,11 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | Call | Method | Path | Takes | Returns | Notes |
 |---|---|---|---|---|---|
 | `catalog` | GET | `/catalog` |  | `CatalogItem[]` | The public catalog (no sign-in): the products on sale with their pictures, no prices. |
+| `shopLists` | GET | `/shop-lists` |  | `ShopList[]` | «قوائمي»: the shop's saved lists (only its own). |
+| `saveShopList` | POST (new) / PATCH :id | `/shop-lists` | `id: number \| null, input: ShopListInput` | `ShopList` |  |
+| `deleteShopList` | DELETE | `/shop-lists/:id` | `id: number` | `null` |  |
 | `counterSale` | POST | `/counter-sales` | `input: CounterSaleInput` | `Invoice` | The keeper's counter sale: the invoice, already paid in full (the goods left the warehouse). |
 | `repTargets` | GET | `/reps/targets` | `month: string` | `RepTarget[]` | Each marketing rep's month against his monthly target, ranked (a rep gets only his own row). |
+| `savePushSubscription` | POST | `/push-subscriptions` | `sub: { endpoint: string; keys: { p256dh: string; auth: string } }` | `null` | This phone's Web Push address (the browser's subscription): the server sends each new notification to it. |
+| `deletePushSubscription` | POST | `/push-subscriptions/delete` | `endpoint: string` | `null` |  |
 
