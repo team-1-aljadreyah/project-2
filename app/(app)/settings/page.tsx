@@ -160,6 +160,9 @@ export default function SettingsPage() {
             <Field label={tr("تُعدّ المادة راكدة إذا لم تُبع خلال (يوم)", "An item is slow if not sold in (days)")}>
               <NumberInput value={s.slow_moving_days} onChange={(v) => setS({ ...s, slow_moving_days: v === "" ? 0 : v })} />
             </Field>
+            <Field label={tr("ساعة «ملخص اليوم» (0 إلى 23)", "“Day summary” hour (0 to 23)")} hint={tr("يصلك أنت والمحاسب إشعار الملخص كل يوم في هذه الساعة", "You and the accountant get the summary's notification daily at this hour")}>
+              <NumberInput value={s.summary_hour ?? 21} onChange={(v) => setS({ ...s, summary_hour: v === "" ? 0 : Math.min(23, v) })} suffix=":00" />
+            </Field>
             <Field label={tr("الصرفيات: يحتاج موافقتك ما يزيد على (د.ع)", "Expenses: above this needs your OK (IQD)")} hint={tr("صرفيات المحاسب الأكبر من هذا المبلغ تنتظر موافقتك", "The accountant's bigger expenses wait for you")}>
               <NumberInput value={s.expense_approval_above ?? EXPENSE_APPROVAL_ABOVE} onChange={(v) => setS({ ...s, expense_approval_above: v === "" ? 0 : v })} suffix={tr("د.ع", "IQD")} />
             </Field>

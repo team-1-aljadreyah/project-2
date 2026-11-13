@@ -104,6 +104,8 @@ export interface Db {
   price_schedule?: ScheduledPrice[];
   /** «قارب ينفد عندك؟»: the day each shop owner last got his reorder reminder (one a day). */
   reorder_told?: Record<number, string>;
+  /** «ملخص اليوم»: the last day its notification went out. */
+  summary_told?: string;
   /** «قوائمي»: the shops' saved lists. */
   shop_lists?: ShopList[];
   /** Phones that asked for push notifications (Web Push subscriptions), per person. */
@@ -136,7 +138,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 33;
+export const DB_VERSION = 34;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

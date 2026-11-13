@@ -866,6 +866,7 @@ export type NotificationType =
   | "clearance"
   | "price_change"
   | "reorder"
+  | "day_summary"
   | "rule";
 
 export interface AppNotification {
@@ -889,6 +890,8 @@ export interface Settings {
   auto_confirm_rep_orders: boolean;
   /** An expense above this (IQD) waits for the manager's OK. None = EXPENSE_APPROVAL_ABOVE. */
   expense_approval_above?: number;
+  /** «ملخص اليوم»: the hour (0–23) its notification reaches the manager and the accountant. None = 21. */
+  summary_hour?: number;
 }
 
 /** A name in the two languages (only the ones the manager changed). */
@@ -1768,4 +1771,36 @@ export interface LateShop {
   every_days: number;
   days_since: number;
   last_at: string;
+}
+
+// ---------- «ملخص اليوم» ----------
+
+/** One day's numbers (sales at invoice value, collected = payments less reversals). */
+export interface DayNumbers {
+  sales: number;
+  invoices: number;
+  returns: number;
+  collected: number;
+  /** What the shops owe more at the end of the day: sales − returns − collected (below 0: they paid off more). */
+  new_debt: number;
+  /** Orders written that day. */
+  orders: number;
+  /** Only for who sees the profit. */
+  profit?: number;
+}
+
+export interface DaySummary {
+  date: string;
+  day: DayNumbers;
+  yesterday: DayNumbers;
+  /** The same weekday a week before. */
+  last_week: DayNumbers;
+  best_rep?: { id: number; name: string; sales: number };
+  counter_sales: number;
+  /** Now: deliveries not done a day after their order. */
+  late: { order_id: number; number: string; customer: string; since: string }[];
+  /** Now: items under their minimum. */
+  low: { item_id: number; name: string; name_en: string; qty: number; min: number }[];
+  /** The hour the summary's notification goes out. */
+  hour: number;
 }

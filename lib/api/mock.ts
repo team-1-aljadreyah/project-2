@@ -16,6 +16,8 @@ import type {
   Batch,
   Customer,
   DailySales,
+  DaySummary,
+  DayNumbers,
   Dashboard,
   DebtRow,
   Item,
@@ -79,6 +81,7 @@ import {
   createStocktake,
   createTransfer,
   customerBalance,
+  addDays,
   dayOf,
   daysBetween,
   fail,
@@ -200,6 +203,7 @@ async function read<T>(fn: (db: Db, actor: DbUser, now: Date) => T): Promise<T> 
   checkClearances(db, now);
   applyScheduledPrices(db, now);
   remindReorders(db, now);
+  tellSummary(db, now);
   if (db.audit.length + db.notifications.length !== before) {
     saveDb(db);
     setTimeout(emitChange, 0);
@@ -218,6 +222,7 @@ async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { ano
   checkClearances(draft, now);
   applyScheduledPrices(draft, now);
   remindReorders(draft, now);
+  tellSummary(draft, now);
   const before = liveMarks(draft);
   const actor = opts.anonymous ? (null as unknown as DbUser) : actorOf(draft);
   // A see-only profile changes nothing but its own account and notifications (`self`).
@@ -392,6 +397,78 @@ function notFound(): never {
 }
 
 // ---------- reports ----------
+
+/** «ملخص اليوم»: one day's numbers (the same ones every report shows). */
+function dayNumbers(db: Db, a: DbUser, day: string): DayNumbers {
+  const rows = salesRows(db, a, "warehouse", day, day);
+  const sales = rows.reduce((s, r) => s + r.sales, 0);
+  const returns = rows.reduce((s, r) => s + r.returns, 0);
+  const collected = db.payments.filter((p) => dayOf(new Date(p.date)) === day).reduce((s, p) => s + p.amount, 0);
+  return {
+    sales,
+    invoices: rows.reduce((s, r) => s + r.invoices, 0),
+    returns,
+    collected,
+    new_debt: sales - returns - collected,
+    orders: db.orders.filter((o) => dayOf(new Date(o.created_at)) === day && !o.shipment_of).length,
+    ...(seesProfit(a) ? { profit: rows.reduce((s, r) => s + (r.profit ?? 0), 0) } : {}),
+  };
+}
+
+function daySummary(db: Db, a: DbUser, date: string, now: Date): DaySummary {
+  need(a, ["manager", "accountant"]);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) fail(422, "VALIDATION", "اختر يوماً", "Pick a day");
+  const at = new Date(`${date}T12:00:00`);
+  const reps = salesRows(db, a, "rep", date, date);
+  const best = reps.filter((r) => r.key !== "0").sort((x, y) => y.sales - y.returns - (x.sales - x.returns))[0];
+  const dayAgo = now.getTime() - 86_400_000;
+  return {
+    date,
+    day: dayNumbers(db, a, date),
+    yesterday: dayNumbers(db, a, dayOf(addDays(at, -1))),
+    last_week: dayNumbers(db, a, dayOf(addDays(at, -7))),
+    ...(best && best.sales ? { best_rep: { id: Number(best.key), name: best.label, sales: best.sales - best.returns } } : {}),
+    counter_sales: reps.find((r) => r.key === "0")?.sales ?? 0,
+    late: db.orders
+      .filter((o) => (o.status === "approved" || o.status === "confirmed") && o.delivery && o.delivery.status !== "delivered" && new Date(o.created_at).getTime() < dayAgo)
+      .sort((x, y) => x.created_at.localeCompare(y.created_at))
+      .slice(0, 10)
+      .map((o) => ({ order_id: o.id, number: o.number, customer: db.customers.find((c) => c.id === o.customer_id)?.name ?? "-", since: o.created_at })),
+    low: db.items
+      .filter((it) => it.active && !it.deleted)
+      .map((it) => ({ it, qty: db.warehouses.reduce((s, w) => s + sellableQty(db, it.id, w.id, now), 0) }))
+      .filter((x) => x.qty < x.it.min_stock)
+      .sort((x, y) => x.qty / Math.max(1, x.it.min_stock) - y.qty / Math.max(1, y.it.min_stock))
+      .slice(0, 10)
+      .map((x) => ({ item_id: x.it.id, name: x.it.name, name_en: x.it.name_en, qty: x.qty, min: x.it.min_stock })),
+    hour: db.settings.summary_hour ?? 21,
+  };
+}
+
+/** Runs before every request: at the set hour (21 unless the manager changed it) the manager and the accountant
+ *  are told the day's summary is ready (once a day). */
+function tellSummary(db: Db, now: Date) {
+  const day = dayOf(now);
+  if (db.summary_told === day || now.getHours() < (db.settings.summary_hour ?? 21)) return;
+  db.summary_told = day;
+  const manager = db.users.find((u) => u.role === "manager" && u.active);
+  if (!manager) return;
+  const n = dayNumbers(db, manager, day);
+  const f = (x: number) => x.toLocaleString("en");
+  notify(
+    db,
+    {
+      type: "day_summary",
+      roles: ["manager", "accountant"],
+      title: "ملخص اليوم جاهز",
+      title_en: "Today's summary is ready",
+      body: `مبيعات ${f(n.sales)} د.ع · مقبوض ${f(n.collected)} د.ع · ${n.orders} طلب`,
+      body_en: `Sales ${f(n.sales)} IQD · collected ${f(n.collected)} IQD · ${n.orders} orders`,
+      link: "/summary",
+    },
+    now,
+  );
+}
 
 function salesRows(db: Db, actor: DbUser, group: "rep" | "item" | "warehouse" | "customer", from: string, to: string, warehouseId?: number): SalesRow[] {
   const rows = new Map<string, SalesRow>();
@@ -850,6 +927,7 @@ export const mockApi: Api = {
       need(a, ["manager"]);
       if (!(s.reservation_hours >= 1 && s.reservation_hours <= 72)) fail(422, "VALIDATION", "مدة الحجز بين 1 و 72 ساعة", "Reservation must be 1 to 72 hours", { reservation_hours: "1-72" });
       if (s.expense_approval_above !== undefined && !(s.expense_approval_above >= 0)) fail(422, "VALIDATION", "حد موافقة الصرفيات غير صحيح", "The expense limit is wrong", { expense_approval_above: "≥ 0" });
+      if (s.summary_hour !== undefined && !(Number.isInteger(s.summary_hour) && s.summary_hour >= 0 && s.summary_hour <= 23)) fail(422, "VALIDATION", "ساعة الملخص من 0 إلى 23", "The summary hour is 0 to 23", { summary_hour: "0-23" });
       db.settings = s;
       audit(
         db,
@@ -2041,6 +2119,7 @@ export const mockApi: Api = {
       }
       return base;
     }),
+  daySummary: (date) => read((db, a, now) => daySummary(db, a, date, now)),
   dailySales: (date, warehouseId) =>
     read((db, a): DailySales => {
       need(a, ["manager", "accountant"]);

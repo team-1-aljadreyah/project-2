@@ -187,6 +187,14 @@ The server must filter and hide, not only the pages:
   12 at most. Once a day from 9 in the morning each shop owner with any due gets one `reorder` notification
   (link `/shop#reorder`). `GET /reorder/late-shops` (a rep: his shops; manager, accountant: all): shops with
   no open order whose days since their last order (same rhythm over all their orders) > every × 1.25 and ≥ every + 2.
+- **«ملخص اليوم».** `GET /reports/day-summary?date=` (manager, accountant): for the day, the day before and the
+  same weekday a week before: `sales`, `invoices`, `returns` (as the sales report counts them), `collected`
+  (payments that day, reversals subtracting), `new_debt` = sales − returns − collected, `orders` written that day
+  (no split shipments), and `profit` only for who sees the profit. Also the best rep that day (net of returns;
+  the counter sales apart as `counter_sales`), and now: deliveries not delivered a day after their order (10 at
+  most, oldest first) and items under their minimum in all warehouses (10, the furthest under first).
+  `settings.summary_hour` (0–23, none = 21): from that hour each day the manager and the accountant get one
+  `day_summary` notification (sales, collected, orders; link `/summary`).
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -322,10 +330,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `ReorderDue`, `LateShop`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `DaySummary`, `DayNumbers`, `ReorderDue`, `LateShop`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 164 endpoints, generated from lib/api/http.ts -->
+<!-- 165 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -522,6 +530,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 |---|---|---|---|---|---|
 | `ratingsReport` | GET | `/reports/delivery-ratings` |  | `RatingsReport` | Delivery ratings (manager, accountant): the average, per delivery rep, the latest. |
 | `visitsReport` | GET | `/reports/visits` | `from: string, to: string` | `VisitsReport` | Planned against done, per rep, the visits missed and the ones far from the shop (manager). |
+| `daySummary` | GET | `/reports/day-summary` | `date: string` | `DaySummary` | «ملخص اليوم»: a day's numbers against the day before and the same day last week, best rep, late deliveries and low stock now (manager, accountant; the profit only for who sees it). |
 | `commissions` | GET | `/commissions` | `month: string` | `CommissionRow[]` |  |
 | `closeMonth` | POST | `/commissions/close` | `month: string` | `CommissionRow[]` |  |
 | `closedMonths` | GET | `/commissions/closed` |  | `string[]` |  |
