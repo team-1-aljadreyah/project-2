@@ -2034,6 +2034,18 @@ export const mockApi: Api = {
       if (n) n.read = true;
       return null;
     }),
+  savePushSubscription: (sub) =>
+    write((db, a, now) => {
+      if (!/^https:\/\//.test(sub?.endpoint ?? "") || !sub.keys?.p256dh || !sub.keys?.auth) fail(422, "VALIDATION", "اشتراك غير صحيح", "Wrong subscription");
+      db.push_subs = (db.push_subs ?? []).filter((x) => x.endpoint !== sub.endpoint);
+      db.push_subs.push({ user_id: a.id, endpoint: sub.endpoint, keys: sub.keys, at: now.toISOString() });
+      return null;
+    }),
+  deletePushSubscription: (endpoint) =>
+    write((db, a) => {
+      db.push_subs = (db.push_subs ?? []).filter((x) => !(x.endpoint === endpoint && x.user_id === a.id));
+      return null;
+    }),
   markAllRead: () =>
     selfWrite((db, a) => {
       for (const n of db.notifications) if (n.roles.includes(a.role) && (!n.user_id || n.user_id === a.id)) n.read = true;

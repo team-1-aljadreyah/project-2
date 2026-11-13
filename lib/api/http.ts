@@ -314,6 +314,9 @@ export const httpApi = {
   listNotifications: () => get<AppNotification[]>("/notifications"),
   markRead: (id: number) => post<null>(`/notifications/${id}/read`),
   markAllRead: () => post<null>("/notifications/read-all"),
+  /** This phone's Web Push address (the browser's subscription): the server sends each new notification to it. */
+  savePushSubscription: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) => post<null>("/push-subscriptions", sub),
+  deletePushSubscription: (endpoint: string) => post<null>("/push-subscriptions/delete", { endpoint }),
 
   /** Demo only: the real backend has no such thing. */
   resetDemo: async () => {},

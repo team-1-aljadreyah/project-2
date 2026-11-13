@@ -11,6 +11,7 @@ import { MessageCircle, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { ChatThread } from "@/lib/api/types";
 import { playMessage, useWakeSound } from "@/lib/alert-sound";
+import { notifyPhone } from "@/lib/phone-notify";
 import { useAppPath } from "@/lib/app-path";
 import { useFmt } from "@/lib/i18n";
 import { useRealtime } from "@/lib/realtime";
@@ -33,6 +34,11 @@ export function ChatAlerts({ userId }: { userId: number }) {
   const [seen, setSeen] = useState<Map<number, number> | null>(null);
   const [cards, setCards] = useState<Card[]>([]);
   const [rings, setRings] = useState(0);
+  // Sent to the phone after the page has drawn (once each).
+  const [toPhone, setToPhone] = useState<Parameters<typeof notifyPhone>[0][]>([]);
+  useEffect(() => {
+    toPhone.forEach((n) => void notifyPhone(n));
+  }, [toPhone]);
   const list = threads.data;
   if (list) {
     const lastShop = (t: ChatThread) => (t.last.from === "shop" ? t.last.id : 0);
@@ -44,6 +50,7 @@ export function ChatAlerts({ userId }: { userId: number }) {
         fresh.forEach((t) => next.set(t.customer_id, lastShop(t)));
         setSeen(next);
         setRings((r) => r + 1);
+        setToPhone(fresh.slice(0, 3).map((t) => ({ title: tr(`رسالة من ${t.customer}`, `Message from ${t.customer}`), body: t.last.text, url: "/support", tag: `chat${t.customer_id}` })));
         // On the support page the inbox shows it already: the sound only.
         if (!path.startsWith("/support")) setCards((c) => [...fresh.map((t) => ({ id: `${t.customer_id}-${t.last.id}`, customer: t.customer, text: t.last.text })), ...c].slice(0, 3));
       }

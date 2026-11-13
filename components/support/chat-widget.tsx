@@ -16,6 +16,7 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
 import { playMessage, useWakeSound } from "@/lib/alert-sound";
+import { notifyPhone } from "@/lib/phone-notify";
 import { cn, matches } from "@/lib/utils";
 import { FAQ } from "./faq";
 import { Bubbles, SendBox } from "./messages";
@@ -70,7 +71,12 @@ export function ChatWidget() {
     }
   }
   useEffect(() => {
-    if (rings) playMessage();
+    if (!rings) return;
+    playMessage();
+    // On the phone too, when the app is in the background.
+    if (lastStaff) void notifyPhone({ title: tr(`رد من ${lastStaff.by.name}`, `Reply from ${lastStaff.by.name}`), body: lastStaff.text, url: "/client/shop", tag: "chat" });
+    // Once per new answer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rings]);
 
   return (

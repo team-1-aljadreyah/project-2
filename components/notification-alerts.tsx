@@ -10,6 +10,8 @@ import { BellRing, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { AppNotification } from "@/lib/api/types";
 import { playAlert, useWakeSound } from "@/lib/alert-sound";
+import { notifyPhone } from "@/lib/phone-notify";
+import { inApp, useAppPath } from "@/lib/app-path";
 import { useFmt } from "@/lib/i18n";
 
 /** How long a card stays, and how many show at once (the newest on top). */
@@ -23,6 +25,13 @@ export function NotificationAlerts({ list }: { list: AppNotification[] | undefin
   // Goes up by one for each batch of new notifications: one sound for the batch.
   const [rings, setRings] = useState(0);
   useWakeSound();
+  const { lang } = useFmt();
+  const { prefix } = useAppPath();
+  // Sent to the phone after the page has drawn (once each).
+  const [toPhone, setToPhone] = useState<Parameters<typeof notifyPhone>[0][]>([]);
+  useEffect(() => {
+    toPhone.forEach((n) => void notifyPhone(n));
+  }, [toPhone]);
 
   if (list) {
     if (seen === null) setSeen(new Set(list.map((n) => n.id)));
@@ -31,6 +40,8 @@ export function NotificationAlerts({ list }: { list: AppNotification[] | undefin
       if (fresh.length) {
         setSeen(new Set([...seen, ...fresh.map((n) => n.id)]));
         const unread = fresh.filter((n) => !n.read);
+        // On the phone too, when the app is in the background (the person turned it on).
+        setToPhone(unread.slice(0, 3).map((n) => ({ title: lang === "en" ? n.title_en : n.title, body: lang === "en" ? n.body_en : n.body, url: n.link ? inApp(prefix, n.link) : undefined, tag: `n${n.id}` })));
         if (unread.length) {
           setCards((c) => [...unread, ...c].slice(0, MAX));
           setRings((r) => r + 1);
