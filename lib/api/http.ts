@@ -11,6 +11,7 @@ import type {
   CashHandover,
   CustodyLog,
   CustodyRow,
+  StockWait,
   VisitsReport,
   ShopList,
   ShopListInput,
@@ -292,6 +293,13 @@ export const httpApi = {
   confirmHandover: (id: number, received: number) => post<CashHandover>(`/custody/handovers/${id}/confirm`, { received }),
   /** The rep takes back his handover before it is counted, or the accountant refuses it. */
   cancelHandover: (id: number) => post<CashHandover>(`/custody/handovers/${id}/cancel`),
+  // «أعلمني عند التوفر»
+  /** The items this shop owner waits for (the shop he works on now). */
+  myStockAlerts: () => get<number[]>("/stock-alerts"),
+  /** Ask to be told when an item that ran out is back (on), or stop (off). Returns his list. */
+  setStockAlert: (itemId: number, on: boolean) => post<number[]>("/stock-alerts", { item_id: itemId, on }),
+  /** What the shops are waiting for, most shops first (manager, accountant, keepers). */
+  stockWaitlist: () => get<StockWait[]>("/stock-alerts/waitlist"),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */

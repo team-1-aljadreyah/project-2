@@ -96,6 +96,8 @@ export interface Db {
   visits?: Visit[];
   /** «العهدة»: the reps' cash handed to the accountant. */
   handovers?: CashHandover[];
+  /** «أعلمني عند التوفر»: shop owners waiting for an item that ran out. */
+  stock_alerts?: { customer_id: number; user_id: number; item_id: number; at: string }[];
   /** «قوائمي»: the shops' saved lists. */
   shop_lists?: ShopList[];
   /** Phones that asked for push notifications (Web Push subscriptions), per person. */
@@ -114,7 +116,7 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   settles_at?: number;
 };
 
-export const DB_VERSION = 30;
+export const DB_VERSION = 31;
 const KEY = "nahrain.db";
 
 let current: Db | null = null;

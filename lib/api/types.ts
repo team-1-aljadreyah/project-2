@@ -858,6 +858,7 @@ export type NotificationType =
   | "supply_order"
   | "expense"
   | "custody"
+  | "back_in_stock"
   | "rule";
 
 export interface AppNotification {
@@ -1659,4 +1660,15 @@ export interface CustodyLog {
   row: CustodyRow;
   entries: CustodyEntry[];
   handovers: CashHandover[];
+}
+
+// ---------- «أعلمني عند التوفر» ----------
+
+/** An item shop owners wait for: how many shops, since when. */
+export interface StockWait {
+  item: { id: number; name: string; name_en: string };
+  shops: number;
+  /** The first ask. */
+  since: string;
+  customers: { id: number; name: string }[];
 }

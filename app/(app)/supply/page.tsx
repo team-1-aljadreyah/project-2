@@ -427,12 +427,16 @@ function NewSupply({ onClose, onDone, fillLow }: { onClose: () => void; onDone: 
   // minimum, the last purchase price, and the supplier that last brought most of them. The accountant checks
   // and changes anything before sending. (Low = under the minimum; in one of several warehouses: under half.)
   const receipts = useLoad(() => api.listReceipts().catch(() => []), []);
+  // What the shop owners wait for («أعلمني عند التوفر»): added too, even with no minimum set.
+  const waits = useLoad(() => api.stockWaitlist().catch(() => []), []);
   function fillWithLow(wh = warehouse) {
     const share = lookups.warehouses.length > 1 ? 0.5 : 1;
+    const waited = new Map((waits.data ?? []).map((w) => [w.item.id, w.shops]));
     const low = items
       .filter((it) => it.active)
-      .map((it) => ({ it, have: it.stock.by_warehouse.find((w) => w.warehouse_id === wh)?.qty ?? 0, min: Math.round(it.min_stock * share) }))
-      .filter((x) => x.min > 0 && x.have < x.min);
+      .map((it) => ({ it, have: it.stock.by_warehouse.find((w) => w.warehouse_id === wh)?.qty ?? 0, min: Math.max(Math.round(it.min_stock * share), (waited.get(it.id) ?? 0) * it.pieces_per_carton) }))
+      .filter((x) => (x.min > 0 && x.have < x.min) || (waited.has(x.it.id) && x.have <= 0));
+    const forShops = low.filter((x) => waited.has(x.it.id)).length;
     if (!low.length) {
       toast("success", tr("لا مواد ناقصة في هذا المخزن", "Nothing is running low in this warehouse"));
       return;
@@ -454,17 +458,23 @@ function NewSupply({ onClose, onDone, fillLow }: { onClose: () => void; onDone: 
     }
     const best = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     if (best && !supplier.trim()) setSupplier(best);
-    toast("success", tr(`أُضيفت ${low.length} مواد ناقصة: راجع الكميات والأسعار ثم أرسل`, `${low.length} low items added: check the amounts and prices, then send`));
+    toast(
+      "success",
+      tr(
+        `أُضيفت ${low.length} مواد ناقصة${forShops ? ` (منها ${forShops} ينتظرها أصحاب المحلات)` : ""}: راجع الكميات والأسعار ثم أرسل`,
+        `${low.length} low items added${forShops ? ` (${forShops} the shops are waiting for)` : ""}: check the amounts and prices, then send`,
+      ),
+    );
   }
   // Opened from «اطلب الناقص» (the stock page): filled once, as soon as the receipts (for the supplier) are in.
   const filled = useRef(false);
   useEffect(() => {
-    if (!fillLow || filled.current || !receipts.data) return;
+    if (!fillLow || filled.current || !receipts.data || !waits.data) return;
     filled.current = true;
     fillWithLow();
     // Once, when the receipts arrive (fillWithLow reads the latest form state itself).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fillLow, receipts.data]);
+  }, [fillLow, receipts.data, waits.data]);
 
   async function save() {
     setBusy(true);

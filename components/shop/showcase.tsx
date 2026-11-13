@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronUp, Heart, Info, Plus, Share2, ShoppingBag, Volume2, VolumeX } from "lucide-react";
 import { useVideoSrc } from "@/lib/media-store";
 import { ItemSheet } from "@/components/shop-store";
+import { NotifyMe } from "@/components/shop/notify-me";
 import { useMyShop } from "@/components/shop/kit";
 import { ACCENTS, CatIcon } from "@/components/product-art";
 import { ErrorBox, LoadingRows, useToast } from "@/components/ui";
@@ -178,14 +179,13 @@ export function Showcase() {
                     <span className="num block text-xl font-bold">{money(shop.price(it, u))}</span>
                     <span className="text-xs text-white/60">/ {unit(it, u)}</span>
                   </p>
-                  <button
-                    type="button"
-                    disabled={out}
-                    onClick={() => add(it)}
-                    className="ms-auto flex h-12 items-center gap-2 rounded-2xl bg-action px-5 font-bold text-on-action shadow-lg transition active:scale-95 disabled:bg-white/15 disabled:text-white/60"
-                  >
-                    {out ? tr("نفد حالياً", "Out for now") : <><Plus className="size-5" /> {tr("أضف إلى السلة", "Add to bag")}</>}
-                  </button>
+                  {out ? (
+                    <NotifyMe item={it} size="lg" className="ms-auto flex-none rounded-2xl px-5 shadow-lg" />
+                  ) : (
+                    <button type="button" onClick={() => add(it)} className="ms-auto flex h-12 items-center gap-2 rounded-2xl bg-action px-5 font-bold text-on-action shadow-lg transition active:scale-95">
+                      <Plus className="size-5" /> {tr("أضف إلى السلة", "Add to bag")}
+                    </button>
+                  )}
                 </div>
               </div>
               </div>

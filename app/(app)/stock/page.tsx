@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, HandCoins, Packag
 import { useApp } from "@/components/shell";
 import { hasWarehouseFilter, setWarehouseFilter, useMyWarehouses, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
+import { StockWaitlist } from "@/components/stock-waitlist";
 import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, PageHeader, SearchBox, Segmented, Select, Stat, type Column } from "@/components/ui";
 import { api, type ShelfRow } from "@/lib/api";
 import type { DamagedRecord, NearExpiryRow } from "@/lib/api/types";
@@ -154,6 +155,8 @@ export default function StockPage() {
         />
         <Stat label={tr("طلبات تنتظر التجهيز", "Orders to issue")} value={toIssue} icon={<Boxes className="size-4" />} href="/orders" />
       </div>
+      {/* What the shop owners are waiting for («أعلمني عند التوفر»). */}
+      <StockWaitlist />
       <Card>
         <div className="flex flex-col gap-3 border-b border-line p-3 xl:flex-row xl:items-center xl:justify-between">
           <Segmented

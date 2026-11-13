@@ -130,6 +130,7 @@ import {
 import { makeSeed } from "./mock/seed";
 import { autoVisit, listVisits, recordVisit, setVisitDays, visitsReport } from "./mock/visits";
 import { cancelHandover, confirmHandover, createHandover, custodyList, custodyLog } from "./mock/custody";
+import { checkStockAlerts, myStockAlerts, setStockAlert, stockWaitlist } from "./mock/stock-alerts";
 import { fullSite, ordered } from "./site-defaults";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
@@ -191,6 +192,7 @@ async function read<T>(fn: (db: Db, actor: DbUser, now: Date) => T): Promise<T> 
   const now = new Date();
   const before = db.audit.length + db.notifications.length;
   sweep(db, now);
+  checkStockAlerts(db, now);
   if (db.audit.length + db.notifications.length !== before) {
     saveDb(db);
     setTimeout(emitChange, 0);
@@ -205,6 +207,7 @@ async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { ano
   const draft = structuredClone(db0());
   const now = new Date();
   sweep(draft, now);
+  checkStockAlerts(draft, now);
   const before = liveMarks(draft);
   const actor = opts.anonymous ? (null as unknown as DbUser) : actorOf(draft);
   // A see-only profile changes nothing but its own account and notifications (`self`).
@@ -1772,6 +1775,10 @@ export const mockApi: Api = {
   handOver: (input) => write((db, a, now) => createHandover(db, a, input, now)),
   confirmHandover: (id, received) => write((db, a, now) => confirmHandover(db, a, id, received, now)),
   cancelHandover: (id) => write((db, a, now) => cancelHandover(db, a, id, now)),
+  // «أعلمني عند التوفر»
+  myStockAlerts: () => read((db, a) => myStockAlerts(db, a)),
+  setStockAlert: (itemId, on) => write((db, a, now) => setStockAlert(db, a, itemId, on, now), { self: true }),
+  stockWaitlist: () => read((db, a) => stockWaitlist(db, a)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
   prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),
