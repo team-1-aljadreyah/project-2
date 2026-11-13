@@ -10,6 +10,9 @@ import { Banknote, CheckCircle2, HandCoins, Minus, Plus, Printer, ReceiptText, S
 import { BarcodeScanner, ScanButton, itemByBarcode } from "@/components/barcode-scanner";
 import { useApp } from "@/components/shell";
 import { openWhatsApp } from "@/components/share";
+import { ThermalReceiptButton } from "@/components/thermal-receipt";
+import { invoiceReceipt } from "@/lib/receipts";
+import { useBrand } from "@/lib/site";
 import { Button, Card, Empty, errorText, Field, Input, NumberInput, PageHeader, SearchBox, Segmented, Select, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { workWarehouses, type Invoice, type Item, type Unit } from "@/lib/api/types";
@@ -23,7 +26,9 @@ type Line = { item_id: number; unit: Unit; qty: number };
 const newRef = () => `counter-${crypto.randomUUID()}`;
 
 export default function CounterPage() {
-  const { tr, money, name, num, qty: qtyText, dateTime, unit: unitOf } = useFmt();
+  const fmt = useFmt();
+  const { tr, money, name, num, qty: qtyText, dateTime, unit: unitOf } = fmt;
+  const brand = useBrand();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const toast = useToast();
   const mine = workWarehouses(user, lookups.warehouses) ?? lookups.warehouses.map((w) => w.id);
@@ -133,6 +138,8 @@ export default function CounterPage() {
             </p>
           )}
           <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {/* The small receipt for the buyer, on the warehouse's thermal printer */}
+            <ThermalReceiptButton company={brand.company} build={() => invoiceReceipt(done, undefined, { fmt, itemById })} />
             <Button href={`/invoices/${done.id}?print=1`}>
               <Printer className="size-4" /> {tr("اطبع الفاتورة", "Print the invoice")}
             </Button>

@@ -1,5 +1,8 @@
 "use client";
 
+import { ThermalReceiptButton } from "@/components/thermal-receipt";
+import { invoiceReceipt } from "@/lib/receipts";
+
 import { openWhatsApp, pageLink } from "@/components/share";
 
 import { useEffect } from "react";
@@ -19,7 +22,8 @@ import { useIdParam } from "@/lib/utils";
 
 export default function InvoiceView() {
   const id = useIdParam();
-  const { tr, dateTime, money, name, qty, num, unit: un } = useFmt();
+  const fmt = useFmt();
+  const { tr, dateTime, money, name, qty, num, unit: un } = fmt;
   const brand = useBrand();
   const { user, lookups, itemById } = useApp();
   const inv = useLoad(() => api.getInvoice(id), [id]);
@@ -89,6 +93,7 @@ export default function InvoiceView() {
             <Button variant={user.role === "shop" ? "action" : undefined} onClick={() => window.print()}>
               <Printer className="size-4" /> {tr("طباعة", "Print")}
             </Button>
+            {user.role !== "shop" && <ThermalReceiptButton company={brand.company} build={() => invoiceReceipt(i, customer.data, { fmt, itemById })} />}
             {(user.role === "accountant" || user.role === "manager") && <CreditNoteButton invoice={i} onDone={inv.reload} />}
             {canPay && (
               <Button variant="action" href={`/payments/new?customer=${i.customer_id}`}>

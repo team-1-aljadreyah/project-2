@@ -12,11 +12,12 @@ import { LogoMark } from "@/components/logo";
 import { CoverDialog, DeleteWarehouse, LayoutEditor, WarehouseForm, coverActive } from "@/components/warehouse-layout";
 import { VehiclesCard } from "@/components/vehicles";
 import { useApp } from "@/components/shell";
-import { Button, Card, CardHeader, Field, Input, NumberInput, errorText, useToast, PageHeader } from "@/components/ui";
+import { Button, Card, CardHeader, Field, Input, NumberInput, Segmented, errorText, useToast, PageHeader } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Settings, Warehouse } from "@/lib/api/types";
 import { EXPENSE_APPROVAL_ABOVE } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
+import { setPaper, usePaper } from "@/components/thermal-receipt";
 import { saveSite, setCustomizing, useBrand } from "@/lib/site";
 
 export default function SettingsPage() {
@@ -186,6 +187,13 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* The thermal printer's paper on this device (each device keeps its own: the warehouse's 80, a pocket 58). */}
+        <Card>
+          <CardHeader title={tr("ورق الإيصال على هذا الجهاز", "Receipt paper on this device")} subtitle={tr("للطابعة الحرارية: الفواتير ووصولات القبض وإيصالات التسليم", "For the thermal printer: invoices, payment receipts and delivery receipts")} />
+          <div className="p-4">
+            <PaperSwitch />
+          </div>
+        </Card>
         <Card>
           <CardHeader title={tr("أنواع الأسعار", "Price tiers")} subtitle={tr("مثلاً: جملة كبيرة تأخذ سعراً أقل", "e.g. big wholesale customers get a lower price")} />
           <div className="space-y-3 p-4">
@@ -235,5 +243,20 @@ export default function SettingsPage() {
       {covering && <CoverDialog warehouse={covering} onClose={() => setCovering(null)} />}
       {deleting && <DeleteWarehouse warehouse={deleting} onClose={() => setDeleting(null)} />}
     </>
+  );
+}
+
+function PaperSwitch() {
+  const { tr } = useFmt();
+  const paper = usePaper();
+  return (
+    <Segmented
+      value={paper}
+      onChange={setPaper}
+      options={[
+        { value: "80", label: tr("80 ملم (الشائع)", "80 mm (common)") },
+        { value: "58", label: tr("58 ملم (طابعة الجيب)", "58 mm (pocket printer)") },
+      ]}
+    />
   );
 }

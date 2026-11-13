@@ -31,6 +31,7 @@ const PAGES: Record<Exclude<AppPrefix, "">, string[]> = {
     "/payments/new",
     "/payments/:id",
     "/commissions",
+    "/custody",
     "/notifications",
   ],
 };

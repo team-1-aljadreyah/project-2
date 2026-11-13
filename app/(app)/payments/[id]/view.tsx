@@ -1,6 +1,8 @@
 "use client";
 
 import { ShareWhatsApp } from "@/components/share";
+import { ThermalReceiptButton } from "@/components/thermal-receipt";
+import { paymentReceipt } from "@/lib/receipts";
 import { useBrand } from "@/lib/site";
 
 import { useState } from "react";
@@ -16,9 +18,10 @@ import { useIdParam } from "@/lib/utils";
 
 export default function PaymentView() {
   const id = useIdParam();
-  const { tr, dateTime, money } = useFmt();
+  const fmt = useFmt();
+  const { tr, dateTime, money } = fmt;
   const brand = useBrand();
-  const { user } = useApp();
+  const { user, itemById } = useApp();
   const toast = useToast();
   const pay = useLoad(() => api.getPayment(id), [id]);
   const p = pay.data;
@@ -43,6 +46,8 @@ export default function PaymentView() {
         }
         actions={
           <>
+            {/* The receipt on the thermal printer (the rep's pocket printer, the office's). */}
+            {user.role !== "shop" && !p.reversed && !p.reversal_of && <ThermalReceiptButton company={brand.company} build={() => paymentReceipt(p, customer.data, { fmt, itemById })} />}
             {/* The receipt for the shop, in one tap. */}
             {user.role !== "shop" && !p.reversed && (
               <ShareWhatsApp

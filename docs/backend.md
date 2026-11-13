@@ -195,6 +195,10 @@ The server must filter and hide, not only the pages:
   most, oldest first) and items under their minimum in all warehouses (10, the furthest under first).
   `settings.summary_hour` (0–23, none = 21): from that hour each day the manager and the accountant get one
   `day_summary` notification (sales, collected, orders; link `/summary`).
+- **Thermal receipts (80 / 58 mm).** Printed by the browser from data the pages already have (the invoice, the
+  payment with its `allocations`, the delivered order); the paper width is kept on each device. Nothing new from
+  the server. The QR code opens `/invoices/:id`, `/payments/:id` or `/orders/:id` on the site, so these pages must
+  stay reachable at those addresses (after sign-in).
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
