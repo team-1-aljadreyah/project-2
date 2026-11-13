@@ -152,6 +152,8 @@ export const httpApi = {
   deleteItem: (id: number) => del<{ result: "removed" | "hidden" }>(`/items/${id}`),
   /** image: a data URL from the page (the backend stores the file and returns its link in item.image), or null to remove. */
   setItemImage: (id: number, image: string | null) => post<Item>(`/items/${id}/image`, { image }),
+  /** video: the uploaded file's link (the backend takes the file: multipart, ≤ 20 MB, ≤ 30 s) or null to remove. */
+  setItemVideo: (id: number, video: string | null) => post<Item>(`/items/${id}/video`, { video }),
   itemBatches: (itemId: number) => get<Batch[]>(`/items/${itemId}/batches`),
   listBatches: (warehouseId?: number) => get<Batch[]>("/batches", { warehouse_id: warehouseId }),
   shelfStock: () => get<ShelfRow[]>("/stock"),

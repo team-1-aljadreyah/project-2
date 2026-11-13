@@ -3,7 +3,7 @@
 // Pieces shared by the shop owner's app pages (home, search, «منتجاتنا», account): his shop and its prices,
 // the product card, and the floating bag button. The bag itself is lib/shop-bag.ts (one per shop, on the phone).
 import Link from "next/link";
-import { Heart, Minus, Plus, ShoppingBag } from "lucide-react";
+import { Heart, Minus, Play, Plus, ShoppingBag } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { Art } from "@/components/product-art";
 import { api } from "@/lib/api";
@@ -85,7 +85,14 @@ export function ProductCard({
         <Heart className={cn("size-4", fav ? "fill-[#e11d48] text-[#e11d48]" : "text-muted")} />
       </button>
       <button type="button" onClick={onOpen} className="box-link-main text-start">
-        <Art category={it.category} index={index} image={it.image} />
+        <span className="relative block">
+          <Art category={it.category} index={index} image={it.image} />
+          {it.video && (
+            <span className="absolute bottom-2 start-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
+              <Play className="size-3 fill-current" /> {tr("فيديو", "Video")}
+            </span>
+          )}
+        </span>
         {it.brand && <span className="mt-2 block truncate px-1 text-[11px] font-semibold text-action">{it.brand}</span>}
         <span className={cn("line-clamp-2 block min-h-10 px-1 text-sm font-bold leading-5", !it.brand && "mt-2")}>{name(it)}</span>
       </button>

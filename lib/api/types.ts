@@ -189,6 +189,9 @@ export interface Item extends ItemUnits {
   brand?: string;
   /** A quantity offer (set by the manager): `off` IQD less on each unit when `min` or more are bought in `unit`. */
   offer?: QtyOffer;
+  /** A short video (manager / keeper): an https link to the file, or "media:<key>" for one kept on this device
+   *  in the demo. It plays in «منتجاتنا» of the shop owners' app in place of the picture. */
+  video?: string;
   pieces_per_carton: number;
   min_stock: number;
   commission_percent: number;
@@ -1290,6 +1293,7 @@ export interface NewTransfer {
 /** One product in the public catalog (the shop owners' landing page, no sign-in): what it is and whether it
  *  is in stock — never a price, a quantity or a cost (each shop's price depends on its level). */
 export interface CatalogItem extends ItemUnits {
+  video?: string;
   id: number;
   name: string;
   name_en: string;

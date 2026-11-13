@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { ItemForm } from "@/components/item-form";
 import { ItemPhoto } from "@/components/item-photo";
+import { ItemVideo } from "@/components/item-video";
 import { BatchActions } from "@/components/batch-hold";
 import { useApp } from "@/components/shell";
 import { BatchStatusBadge } from "@/components/status";
@@ -77,6 +78,7 @@ export default function ItemView() {
       )}
       <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ItemPhoto item={it} />
+        <ItemVideo item={it} />
         <Card className="p-4">
           <p className="text-xs text-muted">{tr("المتوفر للبيع", "Sellable")}</p>
           <p className="mt-1 text-2xl font-bold">{qty(it.stock.total, it.pieces_per_carton, it)}</p>

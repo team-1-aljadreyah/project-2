@@ -1209,6 +1209,18 @@ export const mockApi: Api = {
       } else delete it.image;
       return itemView(db, it, a, now);
     }),
+  setItemVideo: (id, video) =>
+    write((db, a, now) => {
+      need(a, ["manager", "warehouse"]);
+      const it = db.items.find((x) => x.id === id) ?? notFound();
+      if (video !== null) {
+        // A link to the file (https), or a file kept on this device in the demo.
+        if (!(/^https:\/\/\S+$/.test(video) || /^media:[0-9a-f-]{36}$/.test(video)) || video.length > 500) fail(422, "VALIDATION", "رابط الفيديو غير صحيح", "The video link isn't valid");
+        it.video = video;
+      } else delete it.video;
+      audit(db, a, "update", "item", it.id, video ? `فيديو للمادة ${it.name}` : `حذف فيديو المادة ${it.name}`, `Video for ${it.name_en}`, now);
+      return itemView(db, it, a, now);
+    }),
   saveItem: (id, input) =>
     write((db, a, now) => {
       need(a, ["manager"]);
