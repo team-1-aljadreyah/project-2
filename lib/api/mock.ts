@@ -133,6 +133,7 @@ import { cancelHandover, confirmHandover, createHandover, custodyList, custodyLo
 import { checkStockAlerts, myStockAlerts, setStockAlert, stockWaitlist } from "./mock/stock-alerts";
 import { cancelClearance, checkClearances, listClearances, startClearance } from "./mock/clearance";
 import { clearanceFor } from "./mock/clearance-price";
+import { applyScheduledPrices, cancelScheduledPrice, listScheduledPrices, priceHistory, schedulePrice } from "./mock/price-schedule";
 import { fullSite, ordered } from "./site-defaults";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
@@ -196,6 +197,7 @@ async function read<T>(fn: (db: Db, actor: DbUser, now: Date) => T): Promise<T> 
   sweep(db, now);
   checkStockAlerts(db, now);
   checkClearances(db, now);
+  applyScheduledPrices(db, now);
   if (db.audit.length + db.notifications.length !== before) {
     saveDb(db);
     setTimeout(emitChange, 0);
@@ -212,6 +214,7 @@ async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { ano
   sweep(draft, now);
   checkStockAlerts(draft, now);
   checkClearances(draft, now);
+  applyScheduledPrices(draft, now);
   const before = liveMarks(draft);
   const actor = opts.anonymous ? (null as unknown as DbUser) : actorOf(draft);
   // A see-only profile changes nothing but its own account and notifications (`self`).
@@ -1790,6 +1793,11 @@ export const mockApi: Api = {
   listClearances: () => read((db, a) => listClearances(db, a)),
   startClearance: (input) => write((db, a, now) => startClearance(db, a, input, now)),
   cancelClearance: (id) => write((db, a, now) => cancelClearance(db, a, id, now)),
+  // «تغيير الأسعار من تاريخ»
+  listScheduledPrices: () => read((db, a) => listScheduledPrices(db, a)),
+  schedulePrice: (input) => write((db, a, now) => schedulePrice(db, a, input, now)),
+  cancelScheduledPrice: (id) => write((db, a, now) => cancelScheduledPrice(db, a, id, now)),
+  priceHistory: (itemId) => read((db, a) => priceHistory(db, a, itemId)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
   prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),

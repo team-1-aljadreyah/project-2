@@ -864,6 +864,7 @@ export type NotificationType =
   | "custody"
   | "back_in_stock"
   | "clearance"
+  | "price_change"
   | "rule";
 
 export interface AppNotification {
@@ -1708,4 +1709,40 @@ export interface Clearance {
   created_at: string;
   by: Person;
   ended_at?: string;
+}
+
+// ---------- «تغيير الأسعار من تاريخ» ----------
+
+export interface ScheduledPriceInput {
+  item_ids: number[];
+  /** The first day of the new prices (yyyy-mm-dd; today = at once). */
+  start: string;
+  /** +5 = 5% up, −10 = 10% down (all the items' prices, every tier). */
+  percent?: number;
+  /** Or one item's exact new prices (per tier). */
+  prices?: ItemPrice[];
+  note?: string;
+}
+
+export interface ScheduledPrice {
+  id: number;
+  start: string;
+  items: { id: number; name: string; name_en: string; direction: "up" | "down" | "mixed" }[];
+  percent?: number;
+  prices?: ItemPrice[];
+  status: "scheduled" | "applied" | "cancelled";
+  note?: string;
+  created_at: string;
+  by: Person;
+  applied_at?: string;
+  /** How many shop owners were told (a rise: when it was set; a fall: on the day). */
+  told: number;
+}
+
+export interface PriceHistory {
+  item_id: number;
+  /** Per tier, newest first: `from` none = since the start; `until` none = now. */
+  rows: { tier_id: number; carton_price: number; piece_price: number; from?: string; until?: string }[];
+  /** Changes waiting for their day, with the prices they will set. */
+  scheduled: (ScheduledPrice & { next: ItemPrice[] })[];
 }

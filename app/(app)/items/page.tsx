@@ -6,13 +6,14 @@ import { useRemembered } from "@/lib/remember";
 import { useCustomColumns } from "@/components/custom-fields";
 
 import { useRef, useState } from "react";
-import { AlertTriangle, ImagePlus, Package, Plus } from "lucide-react";
+import { CalendarClock, AlertTriangle, ImagePlus, Package, Plus } from "lucide-react";
 import { EditText } from "@/components/customize";
 import { ItemForm } from "@/components/item-form";
 import { useApp } from "@/components/shell";
 import { useWarehouseFilter } from "@/components/warehouse-filter";
 import { Badge, Button, Card, DataTable, Empty, Money, PageHeader, SearchBox, Segmented, Select, errorText, useToast, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
+import { PriceScheduleDialog, ScheduledPrices } from "@/components/price-schedule";
 import type { Item, ItemQuick } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { soldUnits } from "@/lib/units";
@@ -40,6 +41,7 @@ export default function ItemsPage() {
   const [cat, setCat] = useRemembered("items:cat", "");
   const [f, setF] = useState<"all" | "low" | "inactive">("all");
   const [add, setAdd] = useState(false);
+  const [schedule, setSchedule] = useState(false);
   const [tier, setTier] = useState(lookups.tiers[1]?.id ?? lookups.tiers[0].id);
   const wh = useWarehouseFilter();
   // The stock shown: the chosen warehouse only (manager / accountant filter), or both.
@@ -123,12 +125,20 @@ export default function ItemsPage() {
         )}
         actions={
           user.role === "manager" && (
-            <Button variant="primary" onClick={() => setAdd(true)}>
-              <Plus className="size-4" /> {tr("مادة جديدة", "New item")}
-            </Button>
+            <>
+              <Button onClick={() => setSchedule(true)}>
+                <CalendarClock className="size-4" /> {tr("تغيير الأسعار من تاريخ", "Change prices from a day")}
+              </Button>
+              <Button variant="primary" onClick={() => setAdd(true)}>
+                <Plus className="size-4" /> {tr("مادة جديدة", "New item")}
+              </Button>
+            </>
           )
         }
       />
+      {/* The price changes waiting for their day («تغيير الأسعار من تاريخ»). */}
+      {(user.role === "manager" || user.role === "accountant") && <ScheduledPrices />}
+      {schedule && <PriceScheduleDialog onClose={() => setSchedule(false)} />}
       <Card>
         <div className="flex flex-col gap-3 border-b border-line p-3 xl:flex-row xl:items-center xl:justify-between">
           <Segmented

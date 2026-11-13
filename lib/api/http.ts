@@ -13,6 +13,9 @@ import type {
   CustodyRow,
   StockWait,
   Clearance,
+  PriceHistory,
+  ScheduledPrice,
+  ScheduledPriceInput,
   VisitsReport,
   ShopList,
   ShopListInput,
@@ -308,6 +311,15 @@ export const httpApi = {
   startClearance: (input: { batch_id: number; percent: number }) => post<Clearance>("/clearances", input),
   /** The manager stops a clearance early. */
   cancelClearance: (id: number) => post<Clearance>(`/clearances/${id}/cancel`),
+  // «تغيير الأسعار من تاريخ»
+  /** The price changes set for a day: waiting first (manager, accountant). */
+  listScheduledPrices: () => get<ScheduledPrice[]>("/price-schedule"),
+  /** The manager sets new prices from a day (a percent for many items, or one item's exact prices). */
+  schedulePrice: (input: ScheduledPriceInput) => post<ScheduledPrice>("/price-schedule", input),
+  /** The manager drops a change before its day. */
+  cancelScheduledPrice: (id: number) => post<ScheduledPrice>(`/price-schedule/${id}/cancel`),
+  /** One item's prices over time, and what is scheduled (manager, accountant). */
+  priceHistory: (itemId: number) => get<PriceHistory>(`/items/${itemId}/price-history`),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */
