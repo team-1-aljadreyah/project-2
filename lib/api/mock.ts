@@ -129,6 +129,7 @@ import {
 } from "./mock/rules";
 import { makeSeed } from "./mock/seed";
 import { autoVisit, listVisits, recordVisit, setVisitDays, visitsReport } from "./mock/visits";
+import { cancelHandover, confirmHandover, createHandover, custodyList, custodyLog } from "./mock/custody";
 import { fullSite, ordered } from "./site-defaults";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
@@ -1765,6 +1766,12 @@ export const mockApi: Api = {
   recordVisit: (input) => write((db, a, now) => recordVisit(db, a, input, now)),
   setVisitDays: (customerId, days) => write((db, a) => customerView(db, setVisitDays(db, a, customerId, days), a)),
   visitsReport: (from, to) => read((db, a, now) => visitsReport(db, a, from, to, now)),
+  // «العهدة»
+  custody: () => read((db, a, now) => custodyList(db, a, now)),
+  custodyLog: (repId) => read((db, a, now) => custodyLog(db, a, repId, now)),
+  handOver: (input) => write((db, a, now) => createHandover(db, a, input, now)),
+  confirmHandover: (id, received) => write((db, a, now) => confirmHandover(db, a, id, received, now)),
+  cancelHandover: (id) => write((db, a, now) => cancelHandover(db, a, id, now)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
   prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),

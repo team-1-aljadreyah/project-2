@@ -13,6 +13,7 @@ import { useNow } from "@/components/hall/live";
 import { CustomerSheet, NextStopCard, RouteMap, buildStops } from "@/components/rep-route";
 import { VisitSheet, weekDayOf } from "@/components/visits";
 import { MyTarget } from "@/components/rep-targets";
+import { MyCustody } from "@/components/custody";
 import Link from "next/link";
 import { useApp } from "@/components/shell";
 import { repDoes } from "@/lib/api/types";
@@ -134,6 +135,9 @@ export default function RepHome() {
         </div>
         <div className="hazard absolute inset-x-0 bottom-0 h-1.5" aria-hidden />
       </motion.div>
+
+      {/* The cash he holds («العهدة»), when he holds some or a handover waits. */}
+      {repDoes(user, "sales") && <MyCustody compact />}
 
       {/* His month against the target the manager set (only when there is one). */}
       {repDoes(user, "sales") && <MyTarget />}

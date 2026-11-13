@@ -8,6 +8,9 @@ import type {
   RatingsReport,
   Visit,
   VisitInput,
+  CashHandover,
+  CustodyLog,
+  CustodyRow,
   VisitsReport,
   ShopList,
   ShopListInput,
@@ -278,6 +281,17 @@ export const httpApi = {
   setVisitDays: (customerId: number, days: number[]) => post<Customer>(`/customers/${customerId}/visit-days`, { days }),
   /** Planned against done, per rep, the visits missed and the ones far from the shop (manager). */
   visitsReport: (from: string, to: string) => get<VisitsReport>("/reports/visits", { from, to }),
+  // «العهدة»: the cash the reps hold.
+  /** What each rep holds now (manager, accountant), or the rep's own. */
+  custody: () => get<CustodyRow[]>("/custody"),
+  /** One rep's cash in and out, and his handovers. */
+  custodyLog: (repId: number) => get<CustodyLog>(`/custody/${repId}`),
+  /** The rep hands cash to the accountant (waits to be counted); the accountant / manager with rep_id: taken and counted at once. */
+  handOver: (input: { rep_id?: number; amount: number; note?: string }) => post<CashHandover>("/custody/handovers", input),
+  /** The accountant counted it: what he received (≤ declared; the shortage stays on the rep). */
+  confirmHandover: (id: number, received: number) => post<CashHandover>(`/custody/handovers/${id}/confirm`, { received }),
+  /** The rep takes back his handover before it is counted, or the accountant refuses it. */
+  cancelHandover: (id: number) => post<CashHandover>(`/custody/handovers/${id}/cancel`),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */

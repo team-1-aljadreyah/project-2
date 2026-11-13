@@ -637,6 +637,42 @@ export function makeSeed(now = new Date()): Db {
     }
   }
 
+  // «العهدة»: each evening the reps handed the day's cash to the accountant, who counted it. Once a rep came
+  // 25,000 short (it stays on him). Yesterday's: حسين علي still holds it; عباس فاضل holds two days; محمد رضا
+  // handed this morning and waits for the accountant to count it.
+  db.handovers = [];
+  const hand = (rep: DbUser, declared: number, when: Date, received: number | null) => {
+    const id = (db.seq.handover = (db.seq.handover ?? 0) + 1);
+    db.handovers!.push({
+      id,
+      number: `HND-${String(id).padStart(6, "0")}`,
+      rep: { id: rep.id, name: rep.name },
+      declared,
+      status: received === null ? "pending" : "confirmed",
+      created_at: when.toISOString(),
+      ...(received === null
+        ? {}
+        : { received, confirmed_at: new Date(when.getTime() + 20 * 60_000).toISOString(), confirmed_by: { id: accountant.id, name: accountant.name }, ...(declared > received ? { short: declared - received } : {}) }),
+    });
+  };
+  const cashOn = (rep: DbUser, day: string) =>
+    db.payments.filter((p) => p.received_by.id === rep.id && p.method === "cash" && !p.reversed && !p.reversal_of && dayOf(new Date(p.date)) === day).reduce((t, p) => t + p.amount, 0);
+  for (let d = 45; d >= 1; d--) {
+    const day = dayOf(addDays(now, -d));
+    for (const rep of reps) {
+      const cash = cashOn(rep, day);
+      if (!cash) continue;
+      if (d === 1 && (rep.id === 4 || rep.id === 5)) continue; // still with them
+      if (rep.id === 5 && d === 2) continue; // …and the day before
+      if (d === 1 && rep.id === 6) {
+        hand(rep, cash, new Date(Math.min(at(0, 8, 40).getTime(), now.getTime() - 1_800_000)), null);
+        continue;
+      }
+      const short = rep.id === 5 && d === 9 ? Math.min(25_000, cash) : 0;
+      hand(rep, cash, at(d, 19, int(0, 40)), cash - short);
+    }
+  }
+
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);
   db.notifications.forEach((n) => {
