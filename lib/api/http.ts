@@ -152,6 +152,8 @@ export const httpApi = {
   deleteItem: (id: number) => del<{ result: "removed" | "hidden" }>(`/items/${id}`),
   /** image: a data URL from the page (the backend stores the file and returns its link in item.image), or null to remove. */
   setItemImage: (id: number, image: string | null) => post<Item>(`/items/${id}/image`, { image }),
+  /** video: the uploaded file's link (the backend takes the file: multipart, ≤ 20 MB, ≤ 30 s) or null to remove. */
+  setItemVideo: (id: number, video: string | null) => post<Item>(`/items/${id}/video`, { video }),
   itemBatches: (itemId: number) => get<Batch[]>(`/items/${itemId}/batches`),
   listBatches: (warehouseId?: number) => get<Batch[]>("/batches", { warehouse_id: warehouseId }),
   shelfStock: () => get<ShelfRow[]>("/stock"),
@@ -312,6 +314,9 @@ export const httpApi = {
   listNotifications: () => get<AppNotification[]>("/notifications"),
   markRead: (id: number) => post<null>(`/notifications/${id}/read`),
   markAllRead: () => post<null>("/notifications/read-all"),
+  /** This phone's Web Push address (the browser's subscription): the server sends each new notification to it. */
+  savePushSubscription: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) => post<null>("/push-subscriptions", sub),
+  deletePushSubscription: (endpoint: string) => post<null>("/push-subscriptions/delete", { endpoint }),
 
   /** Demo only: the real backend has no such thing. */
   resetDemo: async () => {},

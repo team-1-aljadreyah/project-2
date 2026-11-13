@@ -94,6 +94,8 @@ export interface Db {
   chat: ChatMessage[];
   /** «قوائمي»: the shops' saved lists. */
   shop_lists?: ShopList[];
+  /** Phones that asked for push notifications (Web Push subscriptions), per person. */
+  push_subs?: { user_id: number; endpoint: string; keys: { p256dh: string; auth: string }; at: string }[];
   /** The last message id each side has seen, per shop: { "<customer id>": { shop, staff } }. */
   chat_reads: Record<number, { shop: number; staff: number }>;
 }

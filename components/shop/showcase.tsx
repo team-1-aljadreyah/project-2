@@ -6,7 +6,8 @@
 // «التفاصيل» opens the product window. CSS motion only (no library); less motion for those who ask for it.
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Heart, Info, Plus, Share2, ShoppingBag } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, Info, Plus, Share2, ShoppingBag, Volume2, VolumeX } from "lucide-react";
+import { useVideoSrc } from "@/lib/media-store";
 import { ItemSheet } from "@/components/shop-store";
 import { useMyShop } from "@/components/shop/kit";
 import { ACCENTS, CatIcon } from "@/components/product-art";
@@ -28,6 +29,8 @@ export function Showcase() {
   const [cat, setCat] = useState("all");
   const [open, setOpen] = useState<Item | null>(null);
   const [burst, setBurst] = useState<number | null>(null);
+  // Videos start muted (the browser's rule for playing by itself); one tap turns the sound on for all.
+  const [muted, setMuted] = useState(true);
   // The keyboard's arrows move between products at once (the box takes the focus when it opens).
   useEffect(() => {
     box.current?.focus({ preventScroll: true });
@@ -113,6 +116,9 @@ export function Showcase() {
               <div className="relative mx-auto flex h-full w-full max-w-xl flex-col">
               {/* The product */}
               <div className="relative flex flex-1 items-center justify-center px-10 pt-14">
+                {it.video ? (
+                  <ReelVideo video={it.video} poster={it.image} active={i === at} muted={muted} label={name(it)} />
+                ) : (
                 <div className="reel-art relative">
                   {it.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -124,11 +130,17 @@ export function Showcase() {
                   )}
                   <span className="reel-shadow absolute -bottom-8 left-1/2 h-4 w-3/4 -translate-x-1/2 rounded-[50%] bg-black/50 blur-md" aria-hidden />
                 </div>
+                )}
                 {burst === i && <Heart className="reel-burst absolute size-28 fill-[#e11d48] text-[#e11d48]" aria-hidden />}
               </div>
 
               {/* The side buttons */}
               <div className="absolute bottom-40 end-3 z-10 flex flex-col items-center gap-4">
+                {it.video && (
+                  <Side label={muted ? tr("شغّل الصوت", "Sound on") : tr("اكتم الصوت", "Sound off")} onClick={() => setMuted((m) => !m)} text={muted ? tr("الصوت", "Sound") : tr("كتم", "Mute")}>
+                    {muted ? <VolumeX className="size-6" /> : <Volume2 className="size-6" />}
+                  </Side>
+                )}
                 <Side label={fav ? tr("أزل من المفضلة", "Remove from favourites") : tr("أعجبني", "Like")} onClick={() => shop.toggleFav(it.id)} text={fav ? tr("مفضلة", "Liked") : tr("أعجبني", "Like")}>
                   <Heart className={cn("size-6", fav && "fill-[#e11d48] text-[#e11d48]")} />
                 </Side>
@@ -246,5 +258,33 @@ function Side({ label, onClick, text, children }: { label: string; onClick: () =
       <span className="flex size-12 items-center justify-center rounded-full bg-white/12 backdrop-blur">{children}</span>
       {text}
     </button>
+  );
+}
+
+/** A product's video: plays only on the slide in view (the others wait, paused), loops, its picture as the cover.
+ *  If the file isn't on this device (demo), nothing plays and the cover stays. */
+function ReelVideo({ video, poster, active, muted, label }: { video: string; poster?: string; active: boolean; muted: boolean; label: string }) {
+  const src = useVideoSrc(video);
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (active) v.play().catch(() => {});
+    else v.pause();
+  }, [active, src]);
+  return (
+    <div className="relative overflow-hidden rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.55)]">
+      <video
+        ref={ref}
+        src={src ?? undefined}
+        poster={poster}
+        muted={muted}
+        loop
+        playsInline
+        preload={active ? "auto" : "metadata"}
+        aria-label={label}
+        className="max-h-[52vh] max-w-[78vw] bg-black object-contain sm:max-w-md"
+      />
+    </div>
   );
 }

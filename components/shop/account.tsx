@@ -8,6 +8,7 @@ import Link from "next/link";
 import { BellRing, ChevronLeft, ChevronRight, CreditCard, FileText, Headset, LogOut, MapPin, Phone, ReceiptText, Sparkles, Type, UserRound, Volume2 } from "lucide-react";
 import { Avatar, MyAccountDialog } from "@/components/my-account";
 import { useMyShop } from "@/components/shop/kit";
+import { PhoneNotifySwitch } from "@/components/phone-notify-switch";
 import { LanguageSwitch, ThemeToggle } from "@/components/switches";
 import { startTour } from "@/components/tour";
 import { ErrorBox, LimitBar, LoadingRows, Switch } from "@/components/ui";
@@ -126,6 +127,7 @@ export function ShopAccount() {
             </span>
           }
         />
+        <PhoneNotifySwitch />
         <button type="button" onClick={startTour} className="flex w-full items-center gap-2 py-2 text-sm text-text hover:text-action">
           <Sparkles className="size-4" /> {tr("جولة تعريفية", "Guided tour")}
         </button>

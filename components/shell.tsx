@@ -12,6 +12,8 @@ import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
 import { NotificationAlerts } from "@/components/notification-alerts";
 import { ChatAlerts } from "@/components/chat-alerts";
+import { PhoneNotifySwitch } from "@/components/phone-notify-switch";
+import { keepPhoneNotify } from "@/lib/phone-notify";
 import dynamic from "next/dynamic";
 // The support chat is for shop owners only: loaded only for them (not in everyone's first load).
 const ChatWidget = dynamic(() => import("@/components/support/chat-widget").then((m) => m.ChatWidget), { ssr: false });
@@ -518,6 +520,9 @@ function AccountMenu({ user, onClose, onAccount }: { user: User; onClose: () => 
         >
           <Volume2 className="size-3.5" /> {tr("جرّب الصوتين", "Try both sounds")}
         </button>
+        <div className="mt-2 border-t border-line pt-2">
+          <PhoneNotifySwitch />
+        </div>
       </div>
       {/* Language and day/night: here when the top bar has no room for them. */}
       <div className="mx-1 my-1 flex items-center justify-between gap-2 rounded-xl bg-card-2 px-3 py-2 2xl:hidden">
@@ -652,6 +657,8 @@ function QueueSender() {
 
 function Bell2({ user }: { user: User }) {
   const { tr } = useFmt();
+  // Phone notifications: the worker is registered again on each visit, for whoever turned them on.
+  useEffect(() => keepPhoneNotify(), []);
   const list = useLoad<AppNotification[]>(() => api.listNotifications(), [user.id]);
   useRealtime(["notifications"], () => list.reload());
   const unread = list.data?.filter((n) => !n.read).length ?? 0;
