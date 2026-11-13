@@ -166,6 +166,19 @@ The server must filter and hide, not only the pages:
   `clearance: true` on the line). Starting one in the shops' warehouse notifies every shop owner (`clearance`, link
   `/search?item=<id>`); it goes to the activity log as a price change. `GET /clearances` (manager, accountant,
   keepers, staff): the last 100, running first, with `left`.
+- **«تغيير الأسعار من تاريخ».** `POST /price-schedule {item_ids, start, percent? | prices?, note?}` (manager):
+  1–200 items not deleted; `start` from today to 90 days ahead; `percent` −50…+100 and not 0 (every tier: the
+  carton rounded to 250 IQD, the piece to 50, then the item's unit rule), or `prices` (per tier, all > 0) for exactly
+  one item. An item already waiting for a change refuses a second (409). Each item gets `direction` up / down /
+  mixed. On its day (start ≤ today, checked before every request, so at the first request of the morning) the
+  prices change: every old tier price goes to the price history (`price_changes` with `until`), the change becomes
+  `applied`, and it goes to the activity log. Shop owners who ordered any of the items in the last 60 days
+  (not cancelled / expired) get one `price_change` notification each, naming only their items: a rise when it is
+  set («يرتفع سعر … يوم … · اطلب قبله»), a fall on its day («انخفض سعر …»); `told` counts them. `POST
+  /price-schedule/:id/cancel` before its day. An order changed later is priced as of the moment it was written
+  (`created_at`), so open orders written before the day keep the old prices. `GET /items/:id/price-history`
+  (manager, accountant): per tier the old prices with `from`/`until`, the current one, and the scheduled ones with
+  their `next` prices. `GET /price-schedule`: the last 60, waiting first.
 - **A shop owner** sees only his current shop (`customer_id`): its orders, invoices, statement, chat; only his
   own price (his tier or his special price).
 - **The delivery PIN** (`order.delivery.pin`) is sent only to that order's shop owner.
@@ -301,10 +314,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 158 endpoints, generated from lib/api/http.ts -->
+<!-- 162 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -384,6 +397,10 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `listClearances` | GET | `/clearances` |  | `Clearance[]` | «عروض التصريف» The clearances, running ones first (manager, accountant, keepers). The running one also comes on its item. |
 | `startClearance` | POST | `/clearances` | `input: { batch_id: number; percent: number }` | `Clearance` | The manager sells a near-expiry batch at a discount (5–70%) until it is sold or expires. |
 | `cancelClearance` | POST | `/clearances/:id/cancel` | `id: number` | `Clearance` | The manager stops a clearance early. |
+| `listScheduledPrices` | GET | `/price-schedule` |  | `ScheduledPrice[]` | «تغيير الأسعار من تاريخ» The price changes set for a day: waiting first (manager, accountant). |
+| `schedulePrice` | POST | `/price-schedule` | `input: ScheduledPriceInput` | `ScheduledPrice` | The manager sets new prices from a day (a percent for many items, or one item's exact prices). |
+| `cancelScheduledPrice` | POST | `/price-schedule/:id/cancel` | `id: number` | `ScheduledPrice` | The manager drops a change before its day. |
+| `priceHistory` | GET | `/items/:itemId/price-history` | `itemId: number` | `PriceHistory` | One item's prices over time, and what is scheduled (manager, accountant). |
 
 ### Receiving, supply orders, transfers, counts
 

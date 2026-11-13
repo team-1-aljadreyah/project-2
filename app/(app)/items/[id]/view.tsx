@@ -2,7 +2,8 @@
 import { CustomFieldsCard } from "@/components/custom-fields";
 
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+import { CalendarClock, Pencil } from "lucide-react";
+import { PriceHistoryCard, PriceScheduleDialog } from "@/components/price-schedule";
 import { ItemForm } from "@/components/item-form";
 import { ItemPhoto } from "@/components/item-photo";
 import { ItemVideo } from "@/components/item-video";
@@ -26,6 +27,7 @@ export default function ItemView() {
   const it = itemById.get(id);
   const batches = useLoad(() => api.itemBatches(id), [id]);
   const [edit, setEdit] = useState(false);
+  const [schedule, setSchedule] = useState(false);
   if (!it) return <ErrorBox error={null} />;
   const live = (batches.data ?? []).filter((b) => b.qty_left > 0);
   const low = it.stock.total < it.min_stock;
@@ -63,9 +65,14 @@ export default function ItemView() {
         subtitle={`${it.category} · ${it.pieces_per_carton > 1 ? `${un(it, "carton")} = ${it.pieces_per_carton} ${un(it, "piece")}` : un(it, "piece")}${soldUnits(it).length === 1 && it.pieces_per_carton > 1 ? tr(` · يُباع بال${un(it, soldUnits(it)[0])} فقط`, ` · ${un(it, soldUnits(it)[0])} only`) : ""}`}
         actions={
           user.role === "manager" && (
-            <Button onClick={() => setEdit(true)}>
-              <Pencil className="size-4" /> {tr("تعديل المادة والأسعار", "Edit item and prices")}
-            </Button>
+            <>
+              <Button onClick={() => setSchedule(true)}>
+                <CalendarClock className="size-4" /> {tr("سعر جديد من تاريخ", "New price from a day")}
+              </Button>
+              <Button onClick={() => setEdit(true)}>
+                <Pencil className="size-4" /> {tr("تعديل المادة والأسعار", "Edit item and prices")}
+              </Button>
+            </>
           )
         }
       />
@@ -119,6 +126,9 @@ export default function ItemView() {
       <div className="mb-4">
         <CustomFieldsCard object="item" id={it.id} values={it.custom} onSaved={reloadItems} />
       </div>
+      {/* Its prices over time, and what is scheduled (manager, accountant). */}
+      {(user.role === "manager" || user.role === "accountant") && <PriceHistoryCard itemId={it.id} />}
+      {schedule && <PriceScheduleDialog preset={[it.id]} onClose={() => setSchedule(false)} />}
       <Card>
         <CardHeader title={tr("الدفعات (الأقدم صلاحية أولاً)", "Batches (oldest expiry first)")} subtitle={tr("هذا هو الترتيب الذي تخرج به البضاعة عند البيع. المنتهية لا تُباع.", "Goods leave in this order when sold. Expired batches are never sold.")} />
         {batches.state.status === "loading" ? (

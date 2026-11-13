@@ -780,7 +780,8 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
   const wanted = (input.lines ?? []).filter((l) => l.qty > 0);
   if (!wanted.length) fail(422, "VALIDATION", "الطلب فارغ. لإلغائه استخدم زر الإلغاء", "The order is empty. To drop it, cancel it");
   const customer = db.customers.find((c) => c.id === o.customer_id)!;
-  const lines = orderLines(db, customer.tier_id, wanted, customer.id, undefined, o.warehouse_id);
+  // Priced as of the moment it was written: a price change since then doesn't touch it.
+  const lines = orderLines(db, customer.tier_id, wanted, customer.id, o.created_at, o.warehouse_id);
   // Its own held stock doesn't count against it.
   checkStock(db, o.warehouse_id, lines, now, o.id);
   const subtotal = lines.reduce((s, l) => s + l.total, 0);

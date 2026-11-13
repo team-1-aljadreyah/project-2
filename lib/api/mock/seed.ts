@@ -26,6 +26,7 @@ import {
   sweep,
 } from "./rules";
 import { weekDayOf } from "./visits";
+import { schedulePrice } from "./price-schedule";
 import type { NoOrderReason, Visit, WeekDay } from "../types";
 
 export const DEMO_PASSWORD = "123456";
@@ -710,6 +711,10 @@ export function makeSeed(now = new Date()): Db {
       },
     ];
   }
+
+  // «تغيير الأسعار من تاريخ»: sugar goes up 8% in three days (the supplier's new price); the shops that buy it
+  // were told this morning.
+  safe(() => schedulePrice(db, manager, { item_ids: [3], start: dayOf(addDays(now, 3)), percent: 8, note: "سعر المورد الجديد" }, new Date(Math.min(at(0, 8, 0).getTime(), now.getTime() - 3_600_000))));
 
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);
