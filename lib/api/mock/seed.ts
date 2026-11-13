@@ -675,9 +675,14 @@ export function makeSeed(now = new Date()): Db {
     }
   }
 
-  // «أعلمني عند التوفر»: two hours ago a buyer at the main warehouse took the last orange juice and cheese
-  // triangles (a counter sale); أحمد جبار (ماركت الزهراء) asked to be told when they are back.
-  const soldOut = [21, 18].map((id) => ({ id, left: sellableQty(db, id, 1, now) })).filter((x) => x.left > 0);
+  // «أعلمني عند التوفر»: two hours ago a buyer at the main warehouse took the last of the two items it had least
+  // of (a counter sale); أحمد جبار (ماركت الزهراء) asked to be told when they are back.
+  const soldOut = db.items
+    .filter((it) => it.active)
+    .map((it) => ({ id: it.id, left: sellableQty(db, it.id, 1, now) }))
+    .filter((x) => x.left > 0)
+    .sort((x, y) => x.left - y.left)
+    .slice(0, 2);
   if (soldOut.length)
     safe(() =>
       counterSale(
@@ -688,7 +693,7 @@ export function makeSeed(now = new Date()): Db {
       ),
     );
   const ahmed = users.find((u) => u.id === 9)!;
-  db.stock_alerts = [21, 18].filter((id) => sellableQty(db, id, 1, now) <= 0).map((item_id, i) => ({ customer_id: 2, user_id: ahmed.id, item_id, at: new Date(now.getTime() - (90 - i * 30) * 60_000).toISOString() }));
+  db.stock_alerts = soldOut.map((x) => x.id).filter((id) => sellableQty(db, id, 1, now) <= 0).map((item_id, i) => ({ customer_id: 2, user_id: ahmed.id, item_id, at: new Date(now.getTime() - (90 - i * 30) * 60_000).toISOString() }));
 
   // «عروض التصريف»: the manager put the main warehouse's batch closest to its expiry (3+ days away) on clearance
   // this morning, with the suggested discount.

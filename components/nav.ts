@@ -32,6 +32,7 @@ import {
   HandCoins,
   Banknote,
   Coins,
+  Newspaper,
   type LucideIcon,
   Clapperboard,
   Search,
@@ -58,6 +59,8 @@ export const NAV: NavItem[] = [
   { href: "/support", ar: "الدعم", en: "Support", icon: Headset, roles: ["staff", "manager"], group: "main", mobile: ["staff"] },
   { href: "/decisions", ar: "قراراتي اليوم", en: "My decisions", icon: ListChecks, roles: ["manager"], group: "main", mobile: ["manager"] },
   { href: "/dashboard", ar: "لوحة التحكم", en: "Dashboard", icon: LayoutDashboard, roles: ["manager", "accountant"], group: "main" },
+  // «ملخص اليوم»: the day's numbers against yesterday and last week (its notification comes in the evening).
+  { href: "/summary", ar: "ملخص اليوم", en: "Day summary", icon: Newspaper, roles: ["manager", "accountant"], group: "main" },
   { href: "/accounts", ar: "ملف الحساب", en: "Account file", icon: Contact, roles: ["accountant"], group: "main", mobile: ["accountant"] },
   { href: "/hall", ar: "قاعة التجهيز", en: "Picking hall", icon: Warehouse, roles: ["warehouse"], group: "main", mobile: ["warehouse"] },
   { href: "/map", ar: "خريطة المخازن", en: "Warehouse map", icon: MapIcon, roles: ["manager", "warehouse", "accountant", "staff"], group: "main" },

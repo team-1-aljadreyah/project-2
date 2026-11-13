@@ -18,6 +18,7 @@ import type {
   ScheduledPriceInput,
   LateShop,
   ReorderDue,
+  DaySummary,
   VisitsReport,
   ShopList,
   ShopListInput,
@@ -327,6 +328,9 @@ export const httpApi = {
   myReorder: () => get<ReorderDue[]>("/reorder/due"),
   /** Shops later than usual with their next order (a rep: his own; manager, accountant: all). */
   lateShops: () => get<LateShop[]>("/reorder/late-shops"),
+  /** «ملخص اليوم»: a day's numbers against the day before and the same day last week, best rep, late deliveries
+   *  and low stock now (manager, accountant; the profit only for who sees it). */
+  daySummary: (date: string) => get<DaySummary>("/reports/day-summary", { date }),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */
