@@ -39,6 +39,7 @@ import { afterOffer, clearPrice, clearanceOn, offerOff, offerOn } from "@/lib/un
 import { useSite } from "@/lib/site";
 import { ListEditor } from "@/components/shop/lists";
 import { NotifyMe } from "@/components/shop/notify-me";
+import { ReorderCard } from "@/components/reorder";
 import { ListChecks, SlidersHorizontal } from "lucide-react";
 import { enqueue, isNetworkError } from "@/lib/offline";
 import { cn, piecesOf, priceOf, today } from "@/lib/utils";
@@ -327,6 +328,9 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
           document.getElementById("all-items")?.scrollIntoView({ behavior: "smooth", block: "start" });
         }}
       />
+      {/* «قارب ينفد عندك؟»: what he usually orders again about now */}
+      {!bag.edit && <ReorderCard available={available} inBag={(id) => !!lineOf(id)} onAdd={(it, unit, qty) => setLine(it.id, { unit, qty })} />}
+
       {brands.length > 0 && (
         <>
           <RowHead title={tr("العلامات التجارية", "Brands")} href="/search?by=brand" />

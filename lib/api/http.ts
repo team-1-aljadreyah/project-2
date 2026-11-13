@@ -16,6 +16,8 @@ import type {
   PriceHistory,
   ScheduledPrice,
   ScheduledPriceInput,
+  LateShop,
+  ReorderDue,
   VisitsReport,
   ShopList,
   ShopListInput,
@@ -320,6 +322,11 @@ export const httpApi = {
   cancelScheduledPrice: (id: number) => post<ScheduledPrice>(`/price-schedule/${id}/cancel`),
   /** One item's prices over time, and what is scheduled (manager, accountant). */
   priceHistory: (itemId: number) => get<PriceHistory>(`/items/${itemId}/price-history`),
+  // «قارب ينفد عندك؟»
+  /** The shop owner's items he usually orders again about now (from his own orders). */
+  myReorder: () => get<ReorderDue[]>("/reorder/due"),
+  /** Shops later than usual with their next order (a rep: his own; manager, accountant: all). */
+  lateShops: () => get<LateShop[]>("/reorder/late-shops"),
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */
