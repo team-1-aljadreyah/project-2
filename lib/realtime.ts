@@ -82,9 +82,12 @@ function topics() {
 
 function connect() {
   if (!WS_URL || !isBrowser || ws) return;
-  setStatus("connecting");
+  // Not signed in (the landing pages, the login page): the server only takes a signed-in person, so no socket
+  // yet. Once signed in, the pages subscribe again and connect.
   const token = getToken();
-  const sock = new WebSocket(`${WS_URL}${WS_URL.includes("?") ? "&" : "?"}${token ? `token=${encodeURIComponent(token)}` : ""}`);
+  if (!token) return;
+  setStatus("connecting");
+  const sock = new WebSocket(`${WS_URL}${WS_URL.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`);
   ws = sock;
   sock.onopen = () => {
     retry = 0;

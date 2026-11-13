@@ -156,7 +156,8 @@ export function peopleToday(orders: Order[], invoices: Invoice[], reps: { id: nu
     if (rep && !out.has(rep.name)) out.set(rep.name, { name: rep.name, warehouseId: o.warehouse_id, kind: "rep" });
   }
   for (const inv of invoices) {
-    if (dayOfIso(inv.date) !== t || out.has(inv.created_by.name)) continue;
+    // Who made it (an older server may not send it: then it isn't on the map).
+    if (dayOfIso(inv.date) !== t || !inv.created_by || out.has(inv.created_by.name)) continue;
     out.set(inv.created_by.name, { name: inv.created_by.name, warehouseId: inv.warehouse_id, kind: "staff" });
   }
   return [...out.values()];
