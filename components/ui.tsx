@@ -859,10 +859,17 @@ export function Dialog({
   const { tr } = useFmt();
   const id = useId();
   const ref = useRef<HTMLDivElement>(null);
+  // The latest onClose, kept aside: pages pass a new function on every redraw, and the opening below must run
+  // only when the dialog opens. (It depended on onClose: a page redrawing while you type — the shop's bag
+  // saving its note at each letter — ran it again, and it moved the cursor out of the field after one letter.)
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
   useEffect(() => {
     if (!open) return;
     openDialogs.push(id);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && openDialogs[openDialogs.length - 1] === id && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && openDialogs[openDialogs.length - 1] === id && closeRef.current();
     document.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -876,7 +883,7 @@ export function Dialog({
       const i = openDialogs.lastIndexOf(id);
       if (i >= 0) openDialogs.splice(i, 1);
     };
-  }, [open, onClose, id]);
+  }, [open, id]);
   if (!open) return null;
   // Drawn at the end of <body>, not inside the page: a dialog opened from inside another dialog would
   // otherwise be trapped in the first one's box (its opening animation makes it the frame for anything

@@ -9,8 +9,9 @@ export type Urgency = "ok" | "soon" | "late" | "blocked";
 export interface MissionLine {
   item: Item;
   pieces: number;
-  zone: MapZone;
-  cell: MapCell;
+  /** Where it lives in this warehouse (none: the item has no place on the map yet — still picked, by hand). */
+  zone?: MapZone;
+  cell?: MapCell;
   /** The batch to take first: the oldest expiry that is not expired (FEFO), like the system will use. */
   batch?: Batch;
 }
@@ -66,15 +67,17 @@ export function buildMissions({
       if (order.prep_parts && (l.warehouse_id ?? order.warehouse_id) !== view.wh.id) continue;
       const item = items.find((i) => i.id === l.item_id);
       const at = where.get(l.item_id);
-      if (!item || !at) continue;
+      if (!item) continue;
       const batch = batches
         .filter((b) => b.item_id === item.id && b.warehouse_id === view.wh.id && b.qty_left > 0 && b.status !== "expired")
         .sort((a, b) => a.expiry_date.localeCompare(b.expiry_date))[0];
-      lines.push({ item, pieces: piecesOf(item, l.unit, l.qty), zone: at.zone, cell: at.cell, batch });
+      lines.push({ item, pieces: piecesOf(item, l.unit, l.qty), ...(at ? { zone: at.zone, cell: at.cell } : {}), batch });
     }
     // Walk the hall from the receiving side to the loading dock, column by column, so the path never goes back.
-    lines.sort((a, b) => walkOrder(a.zone.index) - walkOrder(b.zone.index) || a.cell.code.localeCompare(b.cell.code));
-    const stops = [...new Map(lines.map((l) => [l.zone.code, l.zone])).values()];
+    // (Lines with no place on the map come last.)
+    const walk = (l: MissionLine) => (l.zone ? walkOrder(l.zone.index) : Number.MAX_SAFE_INTEGER);
+    lines.sort((a, b) => walk(a) - walk(b) || (a.cell?.code ?? "").localeCompare(b.cell?.code ?? ""));
+    const stops = [...new Map(lines.filter((l) => l.zone).map((l) => [l.zone!.code, l.zone!])).values()];
 
     const minutesLeft = order.reserved_until ? Math.round((new Date(order.reserved_until).getTime() - now) / 60000) : null;
     let urgency: Urgency = "ok";

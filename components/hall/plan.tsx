@@ -84,7 +84,7 @@ export function HallPlan({
       {racks.map((r) => {
         const on = pickZones.has(r.zone.code);
         const slotW = (r.w - 20 - (SLOT_COLS - 1) * 4) / SLOT_COLS;
-        const slotH = (r.h - 48 - (SLOT_ROWS - 1) * 4) / SLOT_ROWS;
+        const slotH = (r.h - 54 - (SLOT_ROWS - 1) * 4) / SLOT_ROWS;
         const total = SLOT_COLS * SLOT_ROWS;
         const filled = Math.round(r.zone.fill * total);
         return (
@@ -100,21 +100,21 @@ export function HallPlan({
               className={cn("fill-[var(--iso-top)] transition-[stroke]", on ? "stroke-action" : "stroke-[var(--line-strong)]")}
               strokeWidth={on ? 3 : 1.5}
             />
-            <rect x={r.x + 8} y={r.y + 8} width="40" height="22" rx="6" className={on ? "fill-action" : "fill-primary"} />
-            <text x={r.x + 28} y={r.y + 23.5} textAnchor="middle" className={cn("text-[13px] font-bold", on ? "fill-[var(--on-action)]" : "fill-[var(--on-primary)]")}>
+            <rect x={r.x + 6} y={r.y + 8} width="32" height="22" rx="6" className={on ? "fill-action" : "fill-primary"} />
+            <text x={r.x + 22} y={r.y + 23.5} textAnchor="middle" className={cn("text-[12px] font-bold", on ? "fill-[var(--on-action)]" : "fill-[var(--on-primary)]")}>
               {r.zone.code}
             </text>
             {/* The section's name stays inside its box, after the code badge: a long one ends with «…»
                 (the full name is in the box's title, on hover). SVG text has no width limit, so it is HTML here. */}
-            <foreignObject x={r.x + 54} y={r.y + 7} width={Math.max(0, r.w - 62)} height="24">
-              <div dir="rtl" className="truncate text-end text-[16px] leading-6 font-bold text-text">
+            <foreignObject x={r.x + 42} y={r.y + 5} width={Math.max(0, r.w - 48)} height="38">
+              <div dir="rtl" className="line-clamp-2 text-end text-[13px] leading-[17px] font-bold break-words text-text">
                 {r.zone.category}
               </div>
             </foreignObject>
             {Array.from({ length: total }, (_, i) => {
               const cell = r.zone.cells[i];
               const x = r.x + 10 + (i % SLOT_COLS) * (slotW + 4);
-              const y = r.y + 40 + Math.floor(i / SLOT_COLS) * (slotH + 4);
+              const y = r.y + 46 + Math.floor(i / SLOT_COLS) * (slotH + 4);
               const pick = cell && pickItems.has(cell.item.id);
               return (
                 <rect

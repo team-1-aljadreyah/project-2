@@ -349,6 +349,7 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
   const payAmount = amount === "" ? 0 : amount;
   const zcLow = method === "zaincash" && payAmount < ZAINCASH.min;
   const [paid, setPaid] = useState<DoorPayment>();
+  const [notSaved, setNotSaved] = useState<string | null>(null);
 
   async function send() {
     if ((needPhoto && !photo) || pin.length !== 4 || (method && (!payAmount || zcLow))) return;
@@ -363,9 +364,23 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
       });
       if (r.ok) {
         setPaid(r.order.delivery?.payment);
+        // A server without «paid at the door» ignores it quietly: then the cash is recorded as a normal payment
+        // for this invoice — or, if that is refused too, the driver is told (the money must not get lost).
+        if (method && !r.order.delivery?.payment) {
+          if (method === "cash") {
+            try {
+              const p = await api.createPayment({ client_ref: `door:${order.id}`, customer_id: order.customer_id, amount: payAmount, method: "cash", note: tr(`نقداً عند تسليم ${order.number}`, `Cash at delivery of ${order.number}`), ...(r.order.invoice_id ? { invoice_id: r.order.invoice_id } : {}) });
+              setPaid({ method: "cash", amount: p.amount, status: "paid", at: p.date, payment_id: p.id, paid_amount: p.amount, paid_at: p.date });
+            } catch {
+              setNotSaved(tr(`لم يُسجَّل المبلغ (${payAmount.toLocaleString("en")} د.ع) في حساب الزبون: سلّمه للمحاسب ليسجّله.`, `The amount wasn't recorded on the customer's account: hand it to the accountant to record.`));
+            }
+          } else {
+            setNotSaved(tr("لم يُرسل طلب الدفع لصاحب المحل: الخادم لا يدعمه بعد. يدفع من كشف حسابه.", "The payment request wasn't sent: the server doesn't support it yet. The shop pays from its statement."));
+          }
+        }
         setDone(true);
         toast("success", tr(`تم تسليم ${order.number} إلى ${shop}`, `${order.number} delivered to ${shop}`));
-        setTimeout(onClose, method ? 3200 : 1400);
+        if (!method) setTimeout(onClose, 1400);
       } else {
         setPin("");
         setMsg(
@@ -411,6 +426,12 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
             <p className="mt-2 rounded-xl bg-success-soft px-3 py-2 text-sm font-semibold text-success">
               {tr("استلمت نقداً", "You took in cash")} <Money value={paid.amount} /> · {tr("سُجّل في عهدتك، سلّمه للمحاسب", "it is in your custody; hand it to the accountant")}
             </p>
+          )}
+          {notSaved && <p className="mt-2 rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger">{notSaved}</p>}
+          {method && (
+            <Button className="mt-3" onClick={onClose}>
+              {tr("تم", "Done")}
+            </Button>
           )}
           {paid?.status === "requested" && (
             <p className="mt-2 rounded-xl bg-card-2 px-3 py-2 text-sm font-semibold">

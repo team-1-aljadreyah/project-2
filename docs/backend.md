@@ -369,7 +369,8 @@ The pages read them, but the server must **apply** them:
 - **Paid at the door (optional).** `POST /orders/:id/deliver` may carry `payment: {method: "cash" | "qi" |
   "zaincash", amount}` (a whole number > 0, ZainCash ≥ 1,000; checked before the PIN). After the invoice is made,
   amount ≤ the shop's whole debt (this invoice included), else 422 `errors.payment` and nothing is saved.
-  `cash`: a normal payment (method `cash`, `client_ref: "door:<order id>"`) in the **delivery rep's** name — even
+  `cash`: a normal payment (method `cash`, `client_ref: "door:<order id>"`, **this delivery's invoice paid first**,
+  the rest to the oldest) in the **delivery rep's** name — even
   when the shop isn't his (it isn't the sales rep's check) — so it is in his custody. `qi` / `zaincash`: nothing is
   paid yet; the shop owner gets a request (notification linking `/orders/:id?pay=1`) and pays from that page with
   `POST /payments/online {…, order_id}`. Kept on the shipment: `delivery.payment {method, amount, status: "paid" |
@@ -378,7 +379,8 @@ The pages read them, but the server must **apply** them:
 
 **Money**
 - **Payments** are spread over the customer's open invoices oldest first (`previewAllocation` shows it before
-  saving); method `cash` / `transfer` / `online` (Qi Card, section 7). A payment is never deleted: it is
+  saving) — except `NewPayment.invoice_id` (money paid for one invoice, e.g. at its delivery, or an online payment
+  for an order's door request): that invoice first, then the oldest; method `cash` / `transfer` / `online` (Qi Card, section 7). A payment is never deleted: it is
   **reversed** with a reason — all of it or any part: `POST /payments/:id/reverse {reason, amount?}` (missing =
   all that is left; a whole number, ≤ what is left, else 422 `errors.amount`). It can be reversed again until
   nothing is left. Each reverse is its own entry (negative amount, `reversal_of`), taken back from the newest
