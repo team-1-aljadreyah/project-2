@@ -5,7 +5,7 @@
 //   - The shop owner also: his password, removing one of his shops, and deleting the whole account. Each of
 //     those asks for his password first, and the server refuses while money or orders are still open.
 import { useRef, useState } from "react";
-import { Camera, KeyRound, LogOut, Store, Trash2 } from "lucide-react";
+import { Camera, KeyRound, LogOut, Store, Trash2, Phone } from "lucide-react";
 import { useAppRouter } from "@/lib/app-path";
 import { api, ApiError } from "@/lib/api";
 import type { User } from "@/lib/api/types";
@@ -16,6 +16,7 @@ import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 import { jobName } from "@/components/status";
 import { Button, Dialog, errorText, Field, Input, Notice, useToast } from "@/components/ui";
+import { OtpDialog } from "@/components/otp";
 
 /** A person's picture, or the first letter of the name on a colored circle. */
 export function Avatar({ user, size = 32, className }: { user: Pick<User, "name" | "photo">; size?: number; className?: string }) {
@@ -39,6 +40,7 @@ export function MyAccountDialog({ user, onClose }: { user: User; onClose: () => 
     <Dialog open onClose={onClose} title={tr("حسابي", "My account")} footer={<Button onClick={onClose}>{tr("إغلاق", "Close")}</Button>}>
       <div className="space-y-5">
         <PhotoPart user={user} />
+        {shop && <PhonePart user={user} />}
         {shop && <PasswordPart />}
         {shop && <ShopsPart user={user} />}
         {shop && <DeletePart />}
@@ -97,6 +99,55 @@ function PhotoPart({ user }: { user: User }) {
       </div>
       <input ref={input} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
     </div>
+  );
+}
+
+/** A new phone number (the login): a code goes to the new number, then it is saved. */
+function PhonePart({ user }: { user: User }) {
+  const { tr } = useFmt();
+  const toast = useToast();
+  const [phone, setPhone] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const clean = phone.replace(/[\s-]/g, "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  const ok = /^07\d{9}$/.test(clean) && clean !== user.phone;
+  return (
+    <Section icon={<Phone className="size-4" />} title={tr("رقم الهاتف", "Phone number")}>
+      <p className="mb-2 text-sm text-muted">
+        {tr("رقمك الحالي", "Your number now")}:{" "}
+        <b className="num text-text" dir="ltr">
+          {user.phone}
+        </b>{" "}
+        · {tr("تدخل به إلى حسابك", "you sign in with it")}
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label={tr("الرقم الجديد", "The new number")} error={err ?? undefined} className="min-w-48 flex-1">
+          <Input value={phone} onChange={(e) => (setPhone(e.target.value), setErr(null))} inputMode="tel" dir="ltr" placeholder="07XX XXX XXXX" />
+        </Field>
+        <Button variant="primary" size="sm" disabled={!ok} onClick={() => setVerifying(true)}>
+          {tr("أرسل رمز التحقق", "Send the code")}
+        </Button>
+      </div>
+      {verifying && (
+        <OtpDialog
+          phone={clean}
+          purpose="phone"
+          title={tr("تحقّق من الرقم الجديد", "Verify the new number")}
+          onClose={() => setVerifying(false)}
+          onVerified={async (token) => {
+            try {
+              updateUser(await api.changeMyPhone({ phone: clean, otp_token: token ?? "" }));
+              setVerifying(false);
+              setPhone("");
+              toast("success", tr("تغيّر رقم هاتفك: ادخل به من الآن", "Your number changed: sign in with it from now on"));
+            } catch (e) {
+              setVerifying(false);
+              setErr(errorText(e, tr));
+            }
+          }}
+        />
+      )}
+    </Section>
   );
 }
 

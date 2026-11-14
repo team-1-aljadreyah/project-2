@@ -108,6 +108,24 @@ The server must filter and hide, not only the pages:
   (manager; keeper / staff of that warehouse): the rep is required, `vehicle_id: null` = no vehicle; a new rep is
   told; both go to the activity log. Splitting across vehicles (`POST /orders/:id/shipments`): each load may carry
   `driver_id` (a delivery rep); none = the vehicle's own driver.
+- **«رمز التحقق» (OTP), sent through Wevlix.** `POST /otp/send {phone, purpose}` (no sign-in for `register` /
+  `reset`; signed in for `phone`): phone `07` + 9 digits. `register`: 409 if the number has an account; `phone`:
+  not your current number, not another account's (409); `reset`: the same answer whether the number has an
+  account or not (nothing is sent when it doesn't: nobody learns which numbers exist). Limits: 60 s before another
+  code for the same number and purpose (429 `RATE_LIMITED`), 5 codes an hour per number (429). The server calls
+  Wevlix `POST https://api.wevlix.com/v1/otp/send` (header `X-API-Key`, server-side only; `to` in E.164: `07…` →
+  `+9647…`; `otpMode: "generated"`; `locale: "ar"`; `clientMessageId` = our `request_id`), keeps Wevlix's `messageId`
+  with our `request_id`, and answers `{request_id, expires_at (+5 min), resend_at (+60 s)}` — never the code.
+  WhatsApp first, then Telegram, then SMS: set in the Wevlix project's fallback settings (not in the request).
+  `POST /otp/verify {request_id, code}`: Wevlix `POST /v1/otp/verify {messageId, code}`; wrong → 422 on `code`
+  («الرمز غير صحيح، باقي n محاولات»), 5 wrong → 429, after 5 min → 410; right → `{otp_token, expires_at (+15 min)}`,
+  a token for that phone and purpose, usable once. It is required by: `POST /auth/register` (`otp_token`, purpose
+  `register`, for the form's phone), `POST /auth/reset-password {phone, otp_token, password ≥ 6}` (purpose
+  `reset`: sets that account's password; the old sessions should end), and `POST /me/phone {phone, otp_token}`
+  (purpose `phone`: the signed-in person's login phone; returns the user). Missing / wrong token → 422 on
+  `otp_token`. Development: a Wevlix development key (sandbox: `simulated: true`, only to its test numbers, no
+  charge). The demo instead returns `sandbox_code` and shows it on the screen — the real server never sends it.
+  Until `/otp/send` exists the site lets sign-up go on without a token (any 404 there).
 - **Map names**: the map draws Arabic street, area and place names from OpenFreeMap's tiles and fonts (no key);
   the Arabic text plugin is served by the site itself (`public/vendor/mapbox-gl-rtl-text.min.js`, BSD licence).
 - **Item units** (`pack_name`, `piece_name`, `sells` on the item; none = كارتون / قطعة, both sold): the two levels
@@ -344,10 +362,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `CarrierPick`, `DaySummary`, `DayNumbers`, `ReorderDue`, `LateShop`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `OtpSent`, `OtpVerified`, `CarrierPick`, `DaySummary`, `DayNumbers`, `ReorderDue`, `LateShop`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 166 endpoints, generated from lib/api/http.ts -->
+<!-- 170 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -355,6 +373,10 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 |---|---|---|---|---|---|
 | `login` | POST | `/auth/login` | `phone: string, password: string` | `Session` |  |
 | `register` | POST | `/auth/register` | `input: RegisterInput` | `Session` |  |
+| `sendOtp` | POST | `/otp/send` | `phone: string, purpose: OtpPurpose` | `OtpSent` | «رمز التحقق» (OTP): WhatsApp, then Telegram, then SMS (the server sends it through Wevlix). Send a code to a phone. register / reset: no sign-in; phone: the signed-in person's new number. |
+| `verifyOtp` | POST | `/otp/verify` | `requestId: string, code: string` | `OtpVerified` | Check the code: the right one gives a token for the next request. |
+| `resetPassword` | POST | `/auth/reset-password` | `input: { phone: string; otp_token: string; password: string }` | `null` | A forgotten password: a new one, with the token of a code sent to that phone (purpose reset). |
+| `changeMyPhone` | POST | `/me/phone` | `input: { phone: string; otp_token: string }` | `User` | Change my phone number (my login), with the token of a code sent to the new number (purpose phone). |
 | `logout` | POST | `/auth/logout` |  | `void` |  |
 | `me` | GET | `/me` |  | `User` |  |
 | `myShops` | GET | `/me/shops` |  | `MyShop[]` | A shop owner with several shops |

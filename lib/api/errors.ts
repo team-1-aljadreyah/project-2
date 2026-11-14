@@ -10,6 +10,7 @@ export type ErrorCode =
   | "ALREADY_REVERSED"
   | "MONTH_CLOSED"
   | "BAD_STATE"
+  | "RATE_LIMITED"
   | "NETWORK";
 
 export class ApiError extends Error {
