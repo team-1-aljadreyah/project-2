@@ -3,7 +3,7 @@
 // The real backend must do the same things (see the client's requirements).
 import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
-import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type RuleOp, type RuleTrigger, type ShipmentLoad, type Vehicle } from "../types";
+import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type RuleOp, type RuleTrigger, type ShipmentLoad, type CarrierPick, type Vehicle } from "../types";
 import { linesWeight } from "../vehicles";
 import { clearPrice, offerOff, soldUnits, unitName } from "../../units";
 import { clearanceFor } from "./clearance-price";
@@ -949,7 +949,7 @@ export function prepPlan(db: Db, actor: DbUser, id: number, now: Date): PrepLine
  *  (one order can come from both) and his own part is prepared.
  *  A part in the other warehouse is prepared by THAT warehouse's keeper only (later call, warehouses ignored).
  *  When every part is ready, the shipment label (QR) and the shop's PIN are made. Nothing is invoiced yet. */
-export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Record<number, number>, now: Date): Order {
+export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Record<number, number>, now: Date, carrier?: CarrierPick): Order {
   need(actor, ["warehouse", "manager"]);
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status !== "approved") fail(409, "BAD_STATE", o.status === "pending" ? "الطلب لم يُعتمد بعد: يعتمده المحاسب أو المدير" : "الطلب ليس معتمداً للتجهيز", "The order isn't approved for preparing");
@@ -975,6 +975,11 @@ export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Reco
     o.prep_parts = used.map((wid) => ({ warehouse_id: wid }));
   }
 
+  // A driver / vehicle chosen before the last part is ready: checked now, used when the label is made.
+  if (carrier && (carrier.rep_id || carrier.vehicle_id !== undefined)) {
+    pickCarrier(db, carrier);
+    o.carrier_pick = carrier;
+  }
   // Which parts this person prepares now: a keeper only his own warehouse's part; the manager every open part.
   const mine = o.prep_parts.filter((p) => !p.prepared_by && (!keeperWhs || keeperWhs.includes(p.warehouse_id)));
   // He put every line on the other warehouse: his decision is saved, and that keeper prepares it.
@@ -995,12 +1000,21 @@ export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Reco
   }
   // Every part is ready: the shipment label, the PIN, and the delivery rep.
   o.delivery = newDelivery();
-  const carrier = deliveryRepFor(db, o.rep_id);
-  if (carrier) o.delivery.rep = person(carrier);
-  // The vehicle of that delivery rep carries it. Too heavy for it: the warehouse and the manager are told,
-  // and the order page suggests how to split it across vehicles (it stays one order for the shop).
-  const vehicle = vehiclesOf(db).find((v) => v.active && v.driver_id === carrier?.id);
+  // Who takes it out: what the keeper chose (now, or with the other warehouse's part), else the usual one.
+  const pick = carrier && (carrier.rep_id || carrier.vehicle_id !== undefined) ? carrier : o.carrier_pick;
+  const chosen = pick ? pickCarrier(db, pick) : null;
+  delete o.carrier_pick;
+  const carrierRep = chosen?.rep ?? deliveryRepFor(db, o.rep_id);
+  if (carrierRep) o.delivery.rep = person(carrierRep);
+  // The vehicle (the chosen one, or that delivery rep's own). Too heavy for it: the warehouse and the manager are
+  // told, and the order page suggests how to split it across vehicles (it stays one order for the shop).
+  // No vehicle chosen: the driver's own vehicle, if he has one.
+  const vehicle = chosen?.vehicle ?? vehiclesOf(db).find((v) => v.active && v.driver_id === carrierRep?.id);
   if (vehicle) o.delivery.vehicle = { id: vehicle.id, name: vehicle.name };
+  if (chosen) {
+    audit(db, actor, "update", "order", o.id, `${o.number}: يوصله ${carrierRep?.name ?? "-"}${vehicle ? ` على ${vehicle.name}` : ""}`, `${o.number}: ${carrierRep?.name ?? "-"} delivers it`, now);
+    if (carrierRep) notify(db, { type: "order_accepted", roles: ["rep"], user_id: carrierRep.id, title: `شحنة لك: ${o.number}`, title_en: `A shipment for you: ${o.number}`, body: vehicle ? `على ${vehicle.name}، جاهزة في المخزن` : "جاهزة في المخزن", body_en: "Ready at the warehouse", link: `/orders/${o.id}` }, now);
+  }
   const kg = linesWeight(o.lines, (id) => db.items.find((i) => i.id === id));
   if (vehicle && kg > vehicle.capacity_kg) {
     const n = {
@@ -1014,6 +1028,37 @@ export function prepareOrder(db: Db, actor: DbUser, id: number, warehouses: Reco
     notify(db, { ...n, roles: ["warehouse"] }, now);
     notify(db, { ...n, roles: ["manager"] }, now);
   }
+  return o;
+}
+
+/** The delivery rep and the vehicle a keeper chose, checked: an active rep who delivers, an active vehicle.
+ *  A vehicle with no rep chosen: its own driver (else the usual one). No vehicle: none. */
+export function pickCarrier(db: Db, pick: CarrierPick): { rep?: DbUser; vehicle?: Vehicle } {
+  const vehicle = pick.vehicle_id ? (vehiclesOf(db).find((v) => v.id === pick.vehicle_id && v.active) ?? fail(422, "VALIDATION", "سيارة غير موجودة أو موقوفة", "Unknown or stopped vehicle", { vehicle_id: msg("اختر سيارة أخرى", "Pick another vehicle") })) : undefined;
+  const repId = pick.rep_id ?? vehicle?.driver_id;
+  const rep = repId ? db.users.find((u) => u.id === repId) : undefined;
+  if (pick.rep_id && !(rep && rep.role === "rep" && rep.active && (!rep.rep_kinds?.length || rep.rep_kinds.includes("delivery"))))
+    fail(422, "VALIDATION", "اختر مندوب توصيل", "Pick a delivery rep", { rep_id: msg("هذا ليس مندوب توصيل فعّالاً", "Not an active delivery rep") });
+  return { rep: rep && rep.active ? rep : undefined, vehicle };
+}
+
+/** Change who takes a prepared shipment out, until it is loaded: the delivery rep, and the vehicle (or none). */
+export function setCarrier(db: Db, actor: DbUser, id: number, pick: CarrierPick, now: Date): Order {
+  need(actor, ["manager", "warehouse", "staff"]);
+  const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
+  if ((actor.role === "warehouse" || actor.role === "staff") && !worksIn(actor, o.warehouse_id)) fail(403, "FORBIDDEN", "هذا الطلب من مخزن آخر", "This order is from another warehouse");
+  const d = o.delivery;
+  if (!d || d.status !== "ready" || o.shipments?.length) fail(409, "BAD_STATE", "يُغيَّر السائق بعد التجهيز وقبل خروج الشحنة", "The driver changes after preparing and before it leaves");
+  if (d.loaded_at) fail(409, "BAD_STATE", "حُمّلت الشحنة: لا يمكن تغيير سائقها الآن", "The shipment is loaded: its driver can't change now");
+  if (!pick.rep_id) fail(422, "VALIDATION", "اختر مندوب التوصيل", "Pick the delivery rep", { rep_id: msg("مطلوب", "Required") });
+  const { rep, vehicle } = pickCarrier(db, pick);
+  const before = d.rep?.id;
+  d.rep = person(rep!);
+  if (vehicle) d.vehicle = { id: vehicle.id, name: vehicle.name };
+  else delete d.vehicle;
+  audit(db, actor, "update", "order", o.id, `${o.number}: يوصله ${rep!.name}${vehicle ? ` على ${vehicle.name}` : " بلا سيارة محددة"}`, `${o.number}: ${rep!.name} delivers it`, now);
+  if (before !== rep!.id)
+    notify(db, { type: "order_accepted", roles: ["rep"], user_id: rep!.id, title: `شحنة لك: ${o.number}`, title_en: `A shipment for you: ${o.number}`, body: vehicle ? `على ${vehicle.name}، جاهزة في المخزن` : "جاهزة في المخزن", body_en: "Ready at the warehouse", link: `/orders/${o.id}` }, now);
   return o;
 }
 
@@ -1049,7 +1094,7 @@ export function planShipments(db: Db, actor: DbUser, id: number, loads: Shipment
   if (d.loaded_at) fail(409, "BAD_STATE", "حُمّلت الشحنة من قبل: لا يمكن توزيعها الآن", "The shipment is already loaded");
   const vehicles = vehiclesOf(db);
   const itemOf = (iid: number) => db.items.find((i) => i.id === iid);
-  const clean = loads.map((l) => ({ vehicle_id: l.vehicle_id, lines: l.lines.filter((x) => x.qty > 0) })).filter((l) => l.lines.length);
+  const clean = loads.map((l) => ({ vehicle_id: l.vehicle_id, driver_id: l.driver_id, lines: l.lines.filter((x) => x.qty > 0) })).filter((l) => l.lines.length);
   if (!clean.length) fail(422, "VALIDATION", "ضع الطلب على سيارة واحدة على الأقل", "Put the order on one vehicle at least");
   if (new Set(clean.map((l) => l.vehicle_id)).size !== clean.length) fail(422, "VALIDATION", "سيارة مكررة: اجمع حمولتها في سطر واحد", "A vehicle twice: put its load in one place");
   // Together the loads carry exactly the order: every line, all of it.
@@ -1066,12 +1111,13 @@ export function planShipments(db: Db, actor: DbUser, id: number, loads: Shipment
       fail(422, "VALIDATION", `${v.name} لا تتسع: ${Math.round(kg)} كغم والحمولة القصوى ${v.capacity_kg} كغم. أضف سيارة ثانية.`, `${v.name} is full: ${Math.round(kg)} kg for a ${v.capacity_kg} kg load. Add another vehicle.`);
     }
   }
-  const driverOf = (v: Vehicle) => (v.driver_id ? db.users.find((u) => u.id === v.driver_id && u.active) : undefined);
+  // Each vehicle's driver: the one chosen for it (a delivery rep), else its own.
+  const driverFor = (x: { vehicle_id: number; driver_id?: number }) => pickCarrier(db, { vehicle_id: x.vehicle_id, rep_id: x.driver_id }).rep;
 
   if (clean.length === 1) {
     const v = vehicles.find((y) => y.id === clean[0].vehicle_id)!;
     d.vehicle = { id: v.id, name: v.name };
-    const driver = driverOf(v);
+    const driver = driverFor(clean[0]);
     if (driver) d.rep = person(driver);
     audit(db, actor, "update", "order", o.id, `${o.number} على ${v.name}${driver ? ` مع ${driver.name}` : ""}`, `${o.number} on ${v.name}`, now);
     return o;
@@ -1081,7 +1127,7 @@ export function planShipments(db: Db, actor: DbUser, id: number, loads: Shipment
   const priceOf = (iid: number, unit: string) => o.lines.find((l) => l.item_id === iid && l.unit === unit)!;
   o.shipments = clean.map((x, k) => {
     const v = vehicles.find((y) => y.id === x.vehicle_id)!;
-    const driver = driverOf(v);
+    const driver = driverFor(x);
     const sid = nextId(db, "order");
     const lines = x.lines.map((y) => {
       const base = priceOf(y.item_id, y.unit);

@@ -8,7 +8,8 @@
 // The weights and the suggestion are worked out in lib/api/vehicles.ts (the API checks them the same way).
 import Link from "next/link";
 import { useState } from "react";
-import { AlertTriangle, Plus, Sparkles, Trash2, Truck, Weight } from "lucide-react";
+import { AlertTriangle, Plus, Sparkles, Trash2, Truck, UserRound, Weight } from "lucide-react";
+import { CarrierDialog, useCarriers } from "@/components/carrier-pick";
 import { useApp } from "@/components/shell";
 import { Badge, Button, Card, CardHeader, Dialog, Field, Input, Notice, NumberInput, Select, Switch, errorText, useToast } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -163,7 +164,7 @@ function VehicleForm({ vehicle, onClose }: { vehicle?: Vehicle; onClose: () => v
 
 // ---------- a prepared order on the vehicles ----------
 
-type Draft = { vehicle_id: number | ""; qty: Record<string, number> };
+type Draft = { vehicle_id: number | ""; driver_id?: number; qty: Record<string, number> };
 const key = (l: { item_id: number; unit: Unit }) => `${l.item_id}:${l.unit}`;
 
 /** Does this order need more room than its vehicle has? (For the warning on the order page.) */
@@ -180,9 +181,10 @@ export function LoadPlanner({ order, onClose, onDone }: { order: Order; onClose:
   const toast = useToast();
   const itemOf = (id: number) => itemById.get(id);
   const vehicles = lookups.vehicles.filter((v) => v.active);
+  const { drivers } = useCarriers();
   const total = linesWeight(order.lines, itemOf);
   const first = order.delivery?.vehicle?.id ?? vehicles[0]?.id ?? "";
-  const [loads, setLoads] = useState<Draft[]>([{ vehicle_id: first, qty: Object.fromEntries(order.lines.map((l) => [key(l), l.qty])) }]);
+  const [loads, setLoads] = useState<Draft[]>([{ vehicle_id: first, driver_id: order.delivery?.rep?.id, qty: Object.fromEntries(order.lines.map((l) => [key(l), l.qty])) }]);
   const [busy, setBusy] = useState(false);
 
   const used = loads.map((l) => l.vehicle_id).filter((x): x is number => !!x);
@@ -207,7 +209,7 @@ export function LoadPlanner({ order, onClose, onDone }: { order: Order; onClose:
   async function save() {
     setBusy(true);
     try {
-      const body: ShipmentLoad[] = loads.filter((d) => d.vehicle_id).map((d) => ({ vehicle_id: Number(d.vehicle_id), lines: order.lines.map((l) => ({ item_id: l.item_id, unit: l.unit, qty: d.qty[key(l)] ?? 0 })).filter((x) => x.qty > 0) }));
+      const body: ShipmentLoad[] = loads.filter((d) => d.vehicle_id).map((d) => ({ vehicle_id: Number(d.vehicle_id), ...(d.driver_id ? { driver_id: d.driver_id } : {}), lines: order.lines.map((l) => ({ item_id: l.item_id, unit: l.unit, qty: d.qty[key(l)] ?? 0 })).filter((x) => x.qty > 0) }));
       await api.planShipments(order.id, body);
       toast("success", body.length > 1 ? tr(`وُزّع الطلب على ${body.length} سيارات: لكل شحنة ملصقها وفاتورتها`, `Split across ${body.length} vehicles: each shipment has its label and invoice`) : tr("حُفظت السيارة", "Vehicle saved"));
       onDone();
@@ -257,11 +259,33 @@ export function LoadPlanner({ order, onClose, onDone }: { order: Order; onClose:
             <div key={i} className={cn("rounded-2xl border p-3", full ? "border-danger/50 bg-danger-soft/40" : "border-line")}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="num flex size-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-on-primary">{i + 1}</span>
-                <Select value={d.vehicle_id} onChange={(e) => setLoads((x) => x.map((y, j) => (j === i ? { ...y, vehicle_id: Number(e.target.value) || "" } : y)))} className="w-auto min-w-48 flex-1">
+                <Select
+                  value={d.vehicle_id}
+                  onChange={(e) => {
+                    // A vehicle brings its own driver in; he can still be changed next to it.
+                    const id = Number(e.target.value) || "";
+                    const own = vehicles.find((v) => v.id === id)?.driver_id;
+                    setLoads((x) => x.map((y, j) => (j === i ? { ...y, vehicle_id: id, driver_id: own ?? y.driver_id } : y)));
+                  }}
+                  className="w-auto min-w-48 flex-1"
+                >
                   <option value="">{tr("اختر سيارة", "Choose a vehicle")}</option>
                   {vehicles.map((x) => (
                     <option key={x.id} value={x.id} disabled={x.id !== d.vehicle_id && used.includes(x.id)}>
                       {x.name} · {num(x.capacity_kg)} {tr("كغم", "kg")}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  value={d.driver_id ?? ""}
+                  onChange={(e) => setLoads((x) => x.map((y, j) => (j === i ? { ...y, driver_id: Number(e.target.value) || undefined } : y)))}
+                  className="w-auto min-w-44 flex-1"
+                  aria-label={tr("السائق", "Driver")}
+                >
+                  <option value="">{tr("سائق السيارة", "The vehicle's driver")}</option>
+                  {drivers.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
                     </option>
                   ))}
                 </Select>
@@ -334,9 +358,11 @@ export function LoadPlanner({ order, onClose, onDone }: { order: Order; onClose:
 export function VehicleBox({ order, canPlan, onDone }: { order: Order; canPlan: boolean; onDone: () => void }) {
   const { tr, num } = useFmt();
   const [open, setOpen] = useState(false);
+  const [carrier, setCarrier] = useState(false);
   const { kg, vehicle, over, none } = useOverweight(order);
   const d = order.delivery;
   if (!d) return null;
+  const canChange = canPlan && d.status === "ready" && !d.loaded_at && !order.shipments?.length;
   return (
     <Card className={cn("p-4", over && "border-danger/50")}>
       <div className="flex flex-wrap items-center gap-3">
@@ -346,9 +372,19 @@ export function VehicleBox({ order, canPlan, onDone }: { order: Order; canPlan: 
         <div className="min-w-0 flex-1">
           <p className="font-bold">{vehicle ? vehicle.name : tr("لم تُحدَّد السيارة", "No vehicle yet")}</p>
           <p className="text-xs text-muted">
+            {d.rep && (
+              <>
+                <UserRound className="inline size-3.5" /> {d.rep.name} ·{" "}
+              </>
+            )}
             {tr("وزن الشحنة", "Shipment weight")} <span className="num">{num(Math.round(kg))}</span> {tr("كغم", "kg")}
           </p>
         </div>
+        {canChange && (
+          <Button size="sm" onClick={() => setCarrier(true)}>
+            <UserRound className="size-4" /> {tr("السائق والسيارة", "Driver and vehicle")}
+          </Button>
+        )}
         {canPlan && d.status === "ready" && !d.loaded_at && (
           <Button size="sm" variant={over || none ? "action" : undefined} onClick={() => setOpen(true)}>
             <Truck className="size-4" /> {over ? tr("وزّع على السيارات", "Split across vehicles") : tr("السيارة والحمولة", "Vehicle and load")}
@@ -364,6 +400,7 @@ export function VehicleBox({ order, canPlan, onDone }: { order: Order; canPlan: 
         </div>
       )}
       {open && <LoadPlanner order={order} onClose={() => setOpen(false)} onDone={onDone} />}
+      {carrier && <CarrierDialog order={order} onClose={() => setCarrier(false)} onDone={onDone} />}
     </Card>
   );
 }

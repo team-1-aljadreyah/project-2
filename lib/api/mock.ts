@@ -74,6 +74,7 @@ import {
   traceBatch,
   prepPlan,
   prepareOrder,
+  setCarrier,
   createOrder,
   createPayment,
   createReceipt,
@@ -1883,7 +1884,8 @@ export const mockApi: Api = {
   myReorder: () => read((db, a, now) => myReorder(db, a, now)),
   lateShops: () => read((db, a, now) => lateShops(db, a, now)),
   prepPlan: (id) => read((db, a, now) => prepPlan(db, a, id, now)),
-  prepareOrder: (id, warehouses) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now), a)),
+  prepareOrder: (id, warehouses, carrier) => write((db, a, now) => orderView(prepareOrder(db, a, id, warehouses, now, carrier), a)),
+  setCarrier: (id, carrier) => write((db, a, now) => orderView(setCarrier(db, a, id, carrier, now), a)),
   approveOrder: (id) => write((db, a, now) => approveOrder(db, a, id, now)),
   updateOrder: (id, input) => write((db, a, now) => orderView(updateOrder(db, a, id, input, now), a)),
   setOrderDiscount: (id, percent) =>

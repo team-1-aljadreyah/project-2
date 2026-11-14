@@ -62,6 +62,7 @@ import type {
   Vehicle,
   VehicleInput,
   ShipmentLoad,
+  CarrierPick,
   WarehouseInput,
   WarehouseLayout,
   WarehouseCover,
@@ -334,7 +335,10 @@ export const httpApi = {
   /** For the keeper: free stock per warehouse for each line, and the suggested warehouse. */
   prepPlan: (id: number) => get<PrepLine[]>(`/orders/${id}/prep-plan`),
   /** The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. */
-  prepareOrder: (id: number, warehouses: Record<number, number>) => post<Order>(`/orders/${id}/prepare`, { warehouses }),
+  /** carrier: the delivery rep and the vehicle the keeper chose (optional; none = the usual). */
+  prepareOrder: (id: number, warehouses: Record<number, number>, carrier?: CarrierPick) => post<Order>(`/orders/${id}/prepare`, { warehouses, ...carrier }),
+  /** Change who takes a prepared shipment out (before it is loaded): the delivery rep, and the vehicle or none. */
+  setCarrier: (id: number, carrier: CarrierPick) => post<Order>(`/orders/${id}/delivery/carrier`, carrier),
   approveOrder: (id: number) => post<Order>(`/orders/${id}/approve`),
   /** The shop owner changes his order before it is confirmed. */
   updateOrder: (id: number, input: OrderEdit) => patch<Order>(`/orders/${id}`, input),
