@@ -6,7 +6,7 @@ import { ApiError, NETWORK_ERROR, type ErrorCode } from "./errors";
 import { dataChanged } from "../live";
 
 // Calls to these paths never get the login token.
-const PUBLIC_PATHS = ["/auth/login", "/auth/register", "/auth/refresh"];
+const PUBLIC_PATHS = ["/auth/login", "/auth/register", "/auth/refresh", "/auth/reset-password", "/otp/"];
 
 interface Envelope {
   success: boolean;

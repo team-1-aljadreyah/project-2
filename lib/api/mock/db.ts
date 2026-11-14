@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { ScheduledPrice, CashHandover, Visit, ShopList, CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
+import type { OtpPurpose, ScheduledPrice, CashHandover, Visit, ShopList, CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -106,6 +106,8 @@ export interface Db {
   reorder_told?: Record<number, string>;
   /** «ملخص اليوم»: the last day its notification went out. */
   summary_told?: string;
+  /** «رمز التحقق»: the codes sent in the last hour (the real server keeps them hashed). */
+  otps?: { request_id: string; phone: string; purpose: OtpPurpose; code: string; at: string; tries: number; token?: string; token_until?: string; used?: boolean }[];
   /** «قوائمي»: the shops' saved lists. */
   shop_lists?: ShopList[];
   /** Phones that asked for push notifications (Web Push subscriptions), per person. */

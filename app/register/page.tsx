@@ -15,6 +15,7 @@ import { homeOf, setSession, takeNext, useSession } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
 import { AddressCard } from "@/components/address-form";
 import { cn } from "@/lib/utils";
+import { OtpDialog } from "@/components/otp";
 
 // Areas of Karbala the company already delivers to (you can still type another one).
 const AREAS = ["حي الحسين", "سيف سعد", "حي العباس", "الإسكان", "حي الغدير", "باب بغداد", "حي الأسرة", "البلدية", "حي الموظفين", "حي النقيب", "عون", "حي رمضان", "المعملجي"];
@@ -30,6 +31,8 @@ export default function RegisterPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  // The phone's code (OTP) window, between the form and the new account.
+  const [verifying, setVerifying] = useState(false);
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
   const set = (p: Partial<Form>) => {
     setF((x) => ({ ...x, ...p }));
@@ -60,16 +63,22 @@ export default function RegisterPage() {
     return e;
   }
 
-  async function submit() {
+  /** The form is right: first the phone, by a code (then `register` runs with its token). */
+  function submit() {
     const e = check();
     setErr(e);
     setError(null);
     if (Object.keys(e).length) return;
+    setVerifying(true);
+  }
+
+  async function register(otpToken: string | null) {
+    setVerifying(false);
     setBusy(true);
     try {
       const { confirm: _c, ...input } = f;
       void _c;
-      const s = await api.register(input);
+      const s = await api.register({ ...input, phone: cleanPhone, ...(otpToken ? { otp_token: otpToken } : {}) });
       setSession(s);
       router.replace(takeNext() ?? "/shop");
       // Next keeps this page's state for later: leave it empty and not "busy", or after logging out
@@ -83,6 +92,8 @@ export default function RegisterPage() {
     }
   }
 
+  const cleanPhone = f.phone.replace(/\s/g, "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+
   // How strong the password is: length plus mixing letters and numbers.
   const strength = Math.min(3, (f.password.length >= 6 ? 1 : 0) + (f.password.length >= 10 ? 1 : 0) + (/\d/.test(f.password) && /\D/.test(f.password) ? 1 : 0));
 
@@ -91,6 +102,7 @@ export default function RegisterPage() {
       <BrandPanel variant="register" />
 
       <main className="relative flex min-h-dvh flex-col">
+        {verifying && <OtpDialog phone={cleanPhone} purpose="register" onVerified={register} onClose={() => setVerifying(false)} />}
         <PhoneBand />
         <AuthTopBar />
 

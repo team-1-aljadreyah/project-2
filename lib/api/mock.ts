@@ -139,6 +139,7 @@ import { cancelClearance, checkClearances, listClearances, startClearance } from
 import { clearanceFor } from "./mock/clearance-price";
 import { applyScheduledPrices, cancelScheduledPrice, listScheduledPrices, priceHistory, schedulePrice } from "./mock/price-schedule";
 import { lateShops, myReorder, remindReorders } from "./mock/reorder";
+import { changeMyPhone, resetPassword, sendOtp, spendOtpToken, verifyOtp } from "./mock/otp";
 import { fullSite, ordered } from "./site-defaults";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
@@ -660,6 +661,8 @@ export const mockApi: Api = {
   register: (input) =>
     write(
       (db, _a, now): Session => {
+        // The phone is proved by a code first (OTP, purpose register).
+        spendOtpToken(db, input.otp_token, input.phone, "register", now);
         const { user } = registerShop(db, input, now);
         const { password: _p, ...rest } = user;
         void _p;
@@ -667,6 +670,24 @@ export const mockApi: Api = {
       },
       { anonymous: true },
     ),
+  // «رمز التحقق»: no sign-in needed (except a new phone number).
+  sendOtp: (phone, purpose) => write((db, _a, now) => sendOtp(db, purpose === "phone" ? actorOf(db) : null, phone, purpose, now), { anonymous: true }),
+  verifyOtp: (requestId, code) => write((db, _a, now) => verifyOtp(db, requestId, code, now), { anonymous: true }),
+  resetPassword: (input) =>
+    write(
+      (db, _a, now) => {
+        resetPassword(db, input, now);
+        return null;
+      },
+      { anonymous: true },
+    ),
+  changeMyPhone: (input) =>
+    selfWrite((db, a, now) => {
+      const { password: _p, covering: _c, ...user } = changeMyPhone(db, a, input, now);
+      void _p;
+      void _c;
+      return user;
+    }),
   logout: async () => {
     await wait(100);
   },

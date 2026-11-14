@@ -86,7 +86,7 @@ export function ShopAccount() {
         <Row rtl={lang === "ar"} icon={FileText} label={tr("كشف حسابي", "My statement")} sub={tr("الفواتير والتسديدات والمرتجعات والرصيد", "Invoices, payments, returns, balance")} href="/statement" />
         <Row rtl={lang === "ar"} icon={BellRing} label={tr("الإشعارات", "Notifications")} href="/notifications" />
         <Row rtl={lang === "ar"} icon={Headset} label={tr("المساعدة والدعم", "Help and support")} sub={tr("محادثة مع موظفي الشركة", "Chat with the company's staff")} onClick={() => window.dispatchEvent(new Event(OPEN_CHAT_EVENT))} tone="bg-success-soft text-success" />
-        <Row rtl={lang === "ar"} icon={UserRound} label={tr("تعديل معلومات الحساب", "Edit my details")} sub={tr("الصورة وكلمة المرور ومحلاتي", "Picture, password and my shops")} onClick={() => setDetails(true)} />
+        <Row rtl={lang === "ar"} icon={UserRound} label={tr("تعديل معلومات الحساب", "Edit my details")} sub={tr("الصورة ورقم الهاتف وكلمة المرور ومحلاتي", "Picture, phone number, password and my shops")} onClick={() => setDetails(true)} />
         {brand.phone && <Row rtl={lang === "ar"} icon={Phone} label={tr("اتصل بالشركة", "Call the company")} sub={brand.phone} href={`tel:${brand.phone.replace(/\s/g, "")}`} />}
       </div>
 

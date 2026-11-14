@@ -63,6 +63,9 @@ import type {
   VehicleInput,
   ShipmentLoad,
   CarrierPick,
+  OtpPurpose,
+  OtpSent,
+  OtpVerified,
   WarehouseInput,
   WarehouseLayout,
   WarehouseCover,
@@ -123,6 +126,15 @@ const save = <T>(base: string, id: number | null, body: unknown) => (id ? patch<
 export const httpApi = {
   login: (phone: string, password: string) => post<Session>("/auth/login", { phone, password }),
   register: (input: RegisterInput) => post<Session>("/auth/register", input),
+  // «رمز التحقق» (OTP): WhatsApp, then Telegram, then SMS (the server sends it through Wevlix).
+  /** Send a code to a phone. register / reset: no sign-in; phone: the signed-in person's new number. */
+  sendOtp: (phone: string, purpose: OtpPurpose) => post<OtpSent>("/otp/send", { phone, purpose }),
+  /** Check the code: the right one gives a token for the next request. */
+  verifyOtp: (requestId: string, code: string) => post<OtpVerified>("/otp/verify", { request_id: requestId, code }),
+  /** A forgotten password: a new one, with the token of a code sent to that phone (purpose reset). */
+  resetPassword: (input: { phone: string; otp_token: string; password: string }) => post<null>("/auth/reset-password", input),
+  /** Change my phone number (my login), with the token of a code sent to the new number (purpose phone). */
+  changeMyPhone: (input: { phone: string; otp_token: string }) => post<User>("/me/phone", input),
   logout: () => post<void>("/auth/logout"),
   me: () => get<User>("/me"),
   /** The values of the manager's own fields on one record (only the ones this person may change). */

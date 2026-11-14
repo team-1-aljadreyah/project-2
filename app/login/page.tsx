@@ -16,6 +16,7 @@ import { canOpen } from "@/components/nav";
 import { roleName } from "@/components/status";
 import { LanguageSwitch, ThemeToggle } from "@/components/switches";
 import { errorText } from "@/components/ui";
+import { ForgotPassword } from "@/components/otp";
 import { api } from "@/lib/api";
 import type { Role } from "@/lib/api/types";
 import { homeOf, setSession, takeNext, useSession } from "@/lib/auth";
@@ -49,6 +50,8 @@ export default function LoginPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forgot, setForgot] = useState(false);
+  // After a reset by a code: «تغيّرت كلمة المرور» above the form.
+  const [resetDone, setResetDone] = useState(false);
   const Back = lang === "ar" ? ArrowRight : ArrowLeft;
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
 
@@ -183,9 +186,21 @@ export default function LoginPage() {
                   </button>
                 </div>
                 {forgot && (
-                  <p className="anim-drop-in -mt-3 flex items-start gap-2 overflow-hidden rounded-xl bg-card-2 p-3 text-xs text-muted">
-                      <Info className="mt-0.5 size-3.5 shrink-0" />
-                    {tr("كلمات المرور يضبطها مدير الشركة. اتصل به ليعطيك كلمة مرور جديدة.", "Passwords are set by the company manager. Call him for a new one.")}
+                  <ForgotPassword
+                    phone={phone}
+                    onClose={() => setForgot(false)}
+                    onDone={(p) => {
+                      setPhone(p);
+                      setPassword("");
+                      setForgot(false);
+                      setResetDone(true);
+                    }}
+                  />
+                )}
+                {resetDone && (
+                  <p className="anim-drop-in -mt-3 flex items-start gap-2 overflow-hidden rounded-xl bg-success-soft p-3 text-xs text-success">
+                    <Info className="mt-0.5 size-3.5 shrink-0" />
+                    {tr("تغيّرت كلمة المرور: سجّل الدخول بها الآن.", "Your password changed: sign in with it now.")}
                   </p>
                 )}
 

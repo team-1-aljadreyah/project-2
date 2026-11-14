@@ -1390,6 +1390,8 @@ export interface CustomerInput {
 
 /** A shop owner signing up on the website. */
 export interface RegisterInput {
+  /** The phone checked by a code (OTP, purpose "register"). */
+  otp_token?: string;
   address_info?: ShopAddress;
   shop_name: string;
   owner_name: string;
@@ -1815,4 +1817,25 @@ export interface DaySummary {
   low: { item_id: number; name: string; name_en: string; qty: number; min: number }[];
   /** The hour the summary's notification goes out. */
   hour: number;
+}
+
+// ---------- «رمز التحقق» (OTP) ----------
+
+/** Why a code is asked for: signing up a shop, a forgotten password, a new phone number. */
+export type OtpPurpose = "register" | "reset" | "phone";
+
+export interface OtpSent {
+  /** The code's request (to verify it). */
+  request_id: string;
+  expires_at: string;
+  /** No new code before this. */
+  resend_at: string;
+  /** The demo only (it has no WhatsApp): the code itself, shown on the screen. The real server never sends it. */
+  sandbox_code?: string;
+}
+
+/** The right code: proof of the phone for the next request (15 minutes, once). */
+export interface OtpVerified {
+  otp_token: string;
+  expires_at: string;
 }
