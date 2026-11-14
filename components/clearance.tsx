@@ -11,7 +11,9 @@ import { Button, Card, CardHeader, Dialog, Field, NumberInput, errorText, useToa
 import { api } from "@/lib/api";
 import type { Batch, NearExpiryRow } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
-import { clearPrice, suggestClearance } from "@/lib/units";
+import { clearPrice } from "@/lib/units";
+import { suggestedClearance } from "@/lib/api/advanced";
+import { useRules } from "@/lib/use-rules";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,8 @@ const daysAr = (n: number) => (n === 1 ? "يوم واحد" : n === 2 ? "يومي
 
 export function ClearancePanel({ rows }: { rows: NearExpiryRow[] }) {
   const { tr, name, num, qty, date } = useFmt();
+  const rules = useRules();
+  const suggestClearance = (days: number) => suggestedClearance(rules.clearance, days);
   const toast = useToast();
   const { user, itemById, lookups } = useApp();
   const list = useLoad(() => api.listClearances(), []);
@@ -112,6 +116,8 @@ export function ClearancePanel({ rows }: { rows: NearExpiryRow[] }) {
 
 function StartDialog({ row, onClose }: { row: NearExpiryRow; onClose: () => void }) {
   const { tr, name, money, num, date, qty, unit } = useFmt();
+  const rules = useRules();
+  const suggestClearance = (days: number) => suggestedClearance(rules.clearance, days);
   const toast = useToast();
   const { itemById, lookups } = useApp();
   const it = itemById.get(row.batch.item_id);

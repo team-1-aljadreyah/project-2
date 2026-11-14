@@ -17,13 +17,51 @@ import { useFmt } from "@/lib/i18n";
 import { AddressCard } from "@/components/address-form";
 import { cn } from "@/lib/utils";
 import { OtpDialog } from "@/components/otp";
+import { usePublicRules } from "@/lib/use-rules";
+import { useBrand } from "@/lib/site";
 
 // Areas of Karbala the company already delivers to (you can still type another one).
 const AREAS = ["حي الحسين", "سيف سعد", "حي العباس", "الإسكان", "حي الغدير", "باب بغداد", "حي الأسرة", "البلدية", "حي الموظفين", "حي النقيب", "عون", "حي رمضان", "المعملجي"];
 
 type Form = RegisterInput & { confirm: string };
 
+/** Signing up online, unless the manager closed it (advanced settings → features): then a short notice. */
 export default function RegisterPage() {
+  const live = usePublicRules();
+  return live.self_signup ? <RegisterForm passwordMin={live.password_min} /> : <SignupClosed />;
+}
+
+function SignupClosed() {
+  const { tr } = useFmt();
+  const brand = useBrand();
+  return (
+    <div className="grid min-h-dvh bg-bg lg:grid-cols-[1.05fr_1fr]">
+      <BrandPanel variant="register" />
+      <main className="relative flex min-h-dvh flex-col">
+        <AuthTopBar />
+        <div className="flex flex-1 items-center justify-center px-4">
+          <div className="w-full max-w-md rounded-3xl border border-line bg-card p-8 text-center">
+            <LogoMark size={56} />
+            <p className="mt-4 text-xl font-bold">{tr("التسجيل من الموقع متوقف الآن", "Signing up online is closed now")}</p>
+            <p className="mt-2 text-sm text-muted">
+              {tr("لفتح حساب لمحلك تواصل مع الشركة", "To open an account for your shop, contact the company")}
+              {brand.phone && (
+                <a href={`tel:${brand.phone}`} className="num ms-1 font-bold text-action" dir="ltr">
+                  {brand.phone}
+                </a>
+              )}
+            </p>
+            <Link href="/login" className="mt-6 inline-flex h-11 items-center rounded-full bg-action px-6 font-bold text-on-action">
+              {tr("تسجيل الدخول", "Log in")}
+            </Link>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function RegisterForm({ passwordMin }: { passwordMin: number }) {
   const { tr, lang } = useFmt();
   const router = useRouter();
   const session = useSession();
@@ -59,7 +97,7 @@ export default function RegisterPage() {
     if (!/^07\d{9}$/.test(phone)) e.phone = tr("رقم عراقي من 11 رقم يبدأ بـ 07", "An 11-digit Iraqi number starting with 07");
     if (!f.area.trim()) e.area = tr("اختر المنطقة", "Choose the area");
     if (!f.address_info) e.address_info = tr("أضف عنوان المحل وحدّده على الخريطة", "Add the shop's address and pin it on the map");
-    if (f.password.length < 6) e.password = tr("6 أحرف على الأقل", "At least 6 characters");
+    if (f.password.length < passwordMin) e.password = tr(`${passwordMin} أحرف على الأقل`, `At least ${passwordMin} characters`);
     else if (f.confirm !== f.password) e.confirm = tr("كلمتا المرور غير متطابقتين", "The passwords don't match");
     return e;
   }
@@ -96,7 +134,7 @@ export default function RegisterPage() {
   const cleanPhone = f.phone.replace(/\s/g, "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
 
   // How strong the password is: length plus mixing letters and numbers.
-  const strength = Math.min(3, (f.password.length >= 6 ? 1 : 0) + (f.password.length >= 10 ? 1 : 0) + (/\d/.test(f.password) && /\D/.test(f.password) ? 1 : 0));
+  const strength = Math.min(3, (f.password.length >= passwordMin ? 1 : 0) + (f.password.length >= 10 ? 1 : 0) + (/\d/.test(f.password) && /\D/.test(f.password) ? 1 : 0));
 
   return (
     <div className="grid min-h-dvh bg-bg lg:grid-cols-[1.05fr_1fr]">

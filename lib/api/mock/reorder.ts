@@ -4,7 +4,7 @@
 // These are the backend's rules (docs/backend.md → «قارب ينفد عندك؟»).
 import type { LateShop, Order, ReorderDue } from "../types";
 import type { Db, DbUser } from "./db";
-import { dayOf, need, notify } from "./rules";
+import { R, dayOf, need, notify } from "./rules";
 
 const DAY = 86_400_000;
 const days = (a: string, b: string) => Math.round((new Date(`${b}T12:00:00`).getTime() - new Date(`${a}T12:00:00`).getTime()) / DAY);
@@ -41,7 +41,8 @@ export function dueFor(db: Db, customerId: number, now: Date): ReorderDue[] {
     const r = rhythm(e.days);
     if (!r) continue;
     const since = days(r.last, today);
-    if (since >= Math.max(1, r.every - 1) && since <= r.every * 3) out.push({ item_id: itemId, every_days: r.every, days_since: since, last_at: e.last.at, last_unit: e.last.unit, last_qty: e.last.qty });
+    // Reminded this many days before its usual time (the manager's setting; a day unless he changed it).
+    if (since >= Math.max(1, r.every - R().reorder_early_days) && since <= r.every * 3) out.push({ item_id: itemId, every_days: r.every, days_since: since, last_at: e.last.at, last_unit: e.last.unit, last_qty: e.last.qty });
   }
   // The most overdue (for its own rhythm) first.
   return out.sort((a, b) => b.days_since / b.every_days - a.days_since / a.every_days).slice(0, 12);
@@ -49,6 +50,7 @@ export function dueFor(db: Db, customerId: number, now: Date): ReorderDue[] {
 
 /** The shop owner's: for the shop he works on now. */
 export function myReorder(db: Db, a: DbUser, now: Date): ReorderDue[] {
+  if (!R().features.reorder) return [];
   need(a, ["shop"]);
   return a.customer_id ? dueFor(db, a.customer_id, now) : [];
 }
@@ -56,6 +58,7 @@ export function myReorder(db: Db, a: DbUser, now: Date): ReorderDue[] {
 /** Shops later than usual with their next order: a quarter past their usual gap and two days at least.
  *  A rep: his own shops; the manager and the accountant: every shop. */
 export function lateShops(db: Db, a: DbUser, now: Date): LateShop[] {
+  if (!R().features.reorder) return [];
   need(a, ["rep", "manager", "accountant"]);
   const today = dayOf(now);
   const out: LateShop[] = [];
@@ -73,7 +76,7 @@ export function lateShops(db: Db, a: DbUser, now: Date): LateShop[] {
 
 /** Runs before every request: each shop owner with items due gets one reminder a day (from 9 in the morning). */
 export function remindReorders(db: Db, now: Date) {
-  if (now.getHours() < 9) return;
+  if (!R().features.reorder || now.getHours() < 9) return;
   const today = dayOf(now);
   db.reorder_told ??= {};
   for (const u of db.users) {

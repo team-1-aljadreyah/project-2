@@ -37,6 +37,7 @@ import type {
   HealthCheck,
   LoginFail,
   SiteCustom,
+  Settings,
   CustomField,
   CustomObject,
   CustomValue,
@@ -118,6 +119,8 @@ import {
   saveStocktake,
   sellableQty,
   sweep,
+  takeRules,
+  R,
   expensesOf,
   createExpense,
   decideExpense,
@@ -141,6 +144,7 @@ import { applyScheduledPrices, cancelScheduledPrice, listScheduledPrices, priceH
 import { lateShops, myReorder, remindReorders } from "./mock/reorder";
 import { changeMyPhone, resetPassword, sendOtp, spendOtpToken, verifyOtp } from "./mock/otp";
 import { fullSite, ordered } from "./site-defaults";
+import { changedRules, checkRules, publicRules, rulesOf } from "./advanced";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
 import { unitName } from "../units";
@@ -200,6 +204,7 @@ async function read<T>(fn: (db: Db, actor: DbUser, now: Date) => T): Promise<T> 
   const db = db0();
   const now = new Date();
   const before = db.audit.length + db.notifications.length;
+  takeRules(db);
   sweep(db, now);
   checkStockAlerts(db, now);
   checkClearances(db, now);
@@ -219,6 +224,7 @@ async function write<T>(fn: (db: Db, actor: DbUser, now: Date) => T, opts: { ano
   if (isOffline()) throw new ApiError(NETWORK_ERROR, msg("لا يوجد اتصال بالإنترنت", "No internet connection"), undefined, "NETWORK");
   const draft = structuredClone(db0());
   const now = new Date();
+  takeRules(draft);
   sweep(draft, now);
   checkStockAlerts(draft, now);
   checkClearances(draft, now);
@@ -638,13 +644,25 @@ export const mockApi: Api = {
         const clean = phone.replace(/\s/g, "");
         const u = db.users.find((x) => x.phone === clean);
         // A failed attempt is written down for the health page (outside this request, which is thrown away).
-        const refuse = (reason: LoginFail, status: number, code: "UNAUTHENTICATED" | "FORBIDDEN", ar: string, en: string): never => {
+        const refuse = (reason: LoginFail, status: number, code: "UNAUTHENTICATED" | "FORBIDDEN" | "LOCKED", ar: string, en: string): never => {
           const live = db0();
           (live.login_log ??= []).push({ phone: clean, ...(u ? { user_id: u.id } : {}), ok: false, reason, at: now.toISOString() });
           live.login_log = live.login_log.slice(-2000);
           saveDb(live);
           return fail(status, code, ar, en);
         };
+        // Too many wrong passwords in a row (the manager's setting): this number waits some minutes, even with the right one.
+        const { login_lock_after: lockAfter, login_lock_minutes: lockMin } = R();
+        if (lockAfter > 0) {
+          const mine = (db.login_log ?? []).filter((x) => x.phone === clean);
+          let i = mine.length - 1;
+          while (i >= 0 && !mine[i].ok) i--;
+          const wrong = mine.slice(i + 1).filter((x) => x.reason === "wrong");
+          if (wrong.length >= lockAfter) {
+            const left = Math.ceil((new Date(wrong[wrong.length - 1].at).getTime() + lockMin * 60_000 - now.getTime()) / 60_000);
+            if (left > 0) return refuse("locked", 423, "LOCKED", `محاولات خاطئة كثيرة: حاول بعد ${left} دقيقة`, `Too many wrong tries: try again in ${left} min`);
+          }
+        }
         if (!u || u.password !== password) return refuse("wrong", 401, "UNAUTHENTICATED", "رقم الهاتف أو كلمة المرور غير صحيحة", "Wrong phone number or password");
         if (!u.active) return refuse("stopped", 403, "FORBIDDEN", "هذا الحساب موقوف، راجع المدير", "This account is disabled. Contact the manager");
         const hours = profileFor(u)?.hours;
@@ -765,7 +783,7 @@ export const mockApi: Api = {
       const day = now.getTime() - 86_400_000;
       const log = (db.login_log ?? []).filter((x) => new Date(x.at).getTime() >= day);
       const failed = log.filter((x) => !x.ok);
-      const reasons: Record<LoginFail, number> = { wrong: 0, stopped: 0, hours: 0 };
+      const reasons: Record<LoginFail, number> = { wrong: 0, stopped: 0, hours: 0, locked: 0 };
       for (const f of failed) reasons[f.reason ?? "wrong"]++;
       const live = db.users.filter((u) => !u.deleted);
       const active = live.filter((u) => u.active);
@@ -899,7 +917,7 @@ export const mockApi: Api = {
       if (!input.name.trim()) errors.name = msg("الاسم مطلوب", "Name is required");
       if (!/^07\d{9}$/.test(phone)) errors.phone = msg("رقم عراقي من 11 رقم يبدأ بـ 07", "An 11-digit Iraqi number starting with 07");
       else if (db.users.some((u) => u.phone === phone && u.id !== id)) errors.phone = msg("هذا الرقم مستخدم", "This number is already used");
-      if (!id && (!input.password || input.password.length < 6)) errors.password = msg("6 أحرف على الأقل", "At least 6 characters");
+      if (!id && (!input.password || input.password.length < R().password_min)) errors.password = msg(`${R().password_min} أحرف على الأقل`, `At least ${R().password_min} characters`);
       if ((input.role === "warehouse" || input.role === "staff") && !input.warehouse_id) errors.warehouse_id = msg("اختر المخزن", "Choose the warehouse");
       if (input.role === "shop" && !input.customer_id) errors.customer_id = msg("اختر المحل", "Choose the shop");
       if (input.role === "rep" && input.rep_kinds && !input.rep_kinds.length) errors.rep_kinds = msg("اختر عمله: تسويق أو توصيل أو الاثنين", "Choose: marketing, delivery or both");
@@ -944,12 +962,40 @@ export const mockApi: Api = {
     }),
 
   // Settings
-  saveSettings: (s) =>
+  saveSettings: (s, how) =>
     write((db, a, now) => {
       need(a, ["manager"]);
+      // The advanced rules: checked whole (the defaults filled in), saved as only what differs from the defaults.
+      const rules = rulesOf(s);
+      const bad = checkRules(rules, db.tiers.map((t) => t.id));
+      if (Object.keys(bad).length) fail(422, "VALIDATION", "تحقق من الإعدادات المؤشرة", "Check the marked settings", bad);
+      s = { ...s, auto_confirm_rep_orders: rules.auto_confirm_rep_orders, advanced: changedRules(rules) };
       if (!(s.reservation_hours >= 1 && s.reservation_hours <= 72)) fail(422, "VALIDATION", "مدة الحجز بين 1 و 72 ساعة", "Reservation must be 1 to 72 hours", { reservation_hours: "1-72" });
       if (s.expense_approval_above !== undefined && !(s.expense_approval_above >= 0)) fail(422, "VALIDATION", "حد موافقة الصرفيات غير صحيح", "The expense limit is wrong", { expense_approval_above: "≥ 0" });
       if (s.summary_hour !== undefined && !(Number.isInteger(s.summary_hour) && s.summary_hour >= 0 && s.summary_hour <= 23)) fail(422, "VALIDATION", "ساعة الملخص من 0 إلى 23", "The summary hour is 0 to 23", { summary_hour: "0-23" });
+      // The history: each setting that changed, from → to. A setting of several parts (features, the code, the
+      // matrix…) by each part, so the history reads «محادثة الدعم: مفعّلة ← متوقفة»; the banner by its text.
+      const flat = (x: Settings) => {
+        const { advanced: _a, ...top } = x;
+        void _a;
+        const out: Record<string, unknown> = { ...top };
+        for (const [k, v] of Object.entries(rulesOf(x))) {
+          if (k === "announcement") out[`advanced.${k}`] = (v as { text?: string } | null)?.text ?? null;
+          else if (v && typeof v === "object" && !Array.isArray(v)) for (const [sub, w] of Object.entries(v)) out[`advanced.${k}.${sub}`] = w;
+          else out[`advanced.${k}`] = v;
+        }
+        return out;
+      };
+      const before = flat(db.settings);
+      const after = flat(s);
+      const changes = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+        .filter((k) => k !== "advanced.auto_confirm_rep_orders" && JSON.stringify(before[k]) !== JSON.stringify(after[k]))
+        .map((k) => ({ key: k, from: before[k] ?? null, to: after[k] ?? null }));
+      if (changes.length) {
+        db.settings_log ??= [];
+        db.settings_log.push({ id: (db.settings_log.at(-1)?.id ?? 0) + 1, at: now.toISOString(), by: person(a), changes, ...(how ? { how } : {}) });
+        db.settings_log = db.settings_log.slice(-300);
+      }
       db.settings = s;
       audit(
         db,
@@ -965,8 +1011,15 @@ export const mockApi: Api = {
     }),
   site: async () => {
     await wait(40);
-    return structuredClone(db0().custom ?? null);
+    const db = db0();
+    // The rules everyone needs before logging in ride along (self sign-up, maintenance, the announcement).
+    return { ...fullSite(db.custom), live: publicRules(rulesOf(db.settings)) };
   },
+  settingsHistory: () =>
+    read((db, a) => {
+      need(a, ["manager"]);
+      return (db.settings_log ?? []).slice().reverse();
+    }),
   // The public catalog: anyone (no session). Only what a visitor may see: never prices, quantities or costs.
   catalog: async () => {
     await wait(150);
@@ -1837,6 +1890,7 @@ export const mockApi: Api = {
   rateDelivery: (id, input) =>
     write((db, a, now) => {
       need(a, ["shop"]);
+      if (!R().features.ratings) fail(403, "FEATURE_OFF", "تقييم التوصيل متوقف الآن", "Delivery ratings are turned off");
       const o = db.orders.find((x) => x.id === id && x.customer_id === a.customer_id) ?? notFound();
       const d = o.delivery;
       if (!d || d.status !== "delivered" || !d.delivered_at) fail(409, "BAD_STATE", "يُقيَّم التوصيل بعد استلام الطلب", "A delivery is rated after it arrives");
@@ -1849,7 +1903,7 @@ export const mockApi: Api = {
       const shopName = db.customers.find((c) => c.id === o.customer_id)?.name ?? "";
       audit(db, a, "update", "order", o.id, `تقييم توصيل ${o.number}: ${stars} من 5${note ? ` («${note}»)` : ""}`, `Delivery of ${o.number} rated ${stars}/5`, now);
       // A low one: the manager hears of it at once.
-      if (stars <= 2)
+      if (stars <= R().low_rating_stars)
         notify(db, { type: "needs_approval", roles: ["manager"], title: `تقييم منخفض للتوصيل: ${shopName}`, title_en: `Low delivery rating: ${shopName}`, body: `${o.number} · ${stars} من 5${note ? ` · ${note}` : ""}`, body_en: `${o.number} · ${stars}/5`, link: `/orders/${o.id}` }, now);
       else if (first && stars === 5 && o.rating.rep) notify(db, { type: "order_confirmed", roles: ["rep"], user_id: o.rating.rep.id, title: `⭐ 5 من 5 من ${shopName}`, title_en: `5/5 from ${shopName}`, body: note ?? o.number, body_en: note ?? o.number, link: `/orders/${o.id}` }, now);
       return orderView(o, a);

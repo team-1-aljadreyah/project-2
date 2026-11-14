@@ -18,6 +18,7 @@ import { isPhoneApp } from "./nav";
 import { useApp } from "./shell";
 import { DiscountPicker, canDiscount } from "./discount";
 import { Badge, Button, Card, Dialog, Empty, LimitBar, Money, Notice, SearchBox, Segmented, Select, Stepper, Textarea, errorText, useToast, Pager, usePages } from "./ui";
+import { useRules } from "@/lib/use-rules";
 
 interface Line {
   item_id: number;
@@ -54,6 +55,8 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useAppRouter();
   const toast = useToast();
+  // Saved on the phone when there is no internet: only if the manager allows working offline.
+  const offlineOk = useRules().features.offline;
   const offline = useOffline();
   const customers = useLoad(() => api.listCustomers().then((cs) => cs.filter((c) => !c.walk_in)), []);
 
@@ -163,7 +166,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
       );
       router.push(`/orders/${order.id}`);
     } catch (e) {
-      if (isNetworkError(e)) {
+      if (isNetworkError(e) && offlineOk) {
         enqueue({ kind: "order", client_ref: body.client_ref, body: { ...body, offline: true, recorded_at: body.recorded_at ?? new Date().toISOString() }, label: `${customer.name} · ${money(total)}`, saved_at: new Date().toISOString() });
         fresh();
         toast("primary", tr("لا يوجد إنترنت: حُفظ «طلباً مبدئياً» على الجوال. أعطِ الزبون أنه مبدئي: يصبح ملزماً بعد المزامنة وفحص المخزون.", "No internet: saved as a provisional order. Tell the shop it becomes binding after it syncs and the stock is checked."));

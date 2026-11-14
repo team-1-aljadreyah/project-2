@@ -12,7 +12,8 @@ import { shopPlace } from "@/components/delivery/live-map";
 import { useApp } from "@/components/shell";
 import { Button, Card, CardHeader, Dialog, Empty, ErrorBox, Input, LoadingRows, Segmented, Stat, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import { VISIT_NEAR_M, type Customer, type NoOrderReason, type VisitOutcome, type WeekDay } from "@/lib/api/types";
+import type { Customer, NoOrderReason, VisitOutcome, WeekDay } from "@/lib/api/types";
+import { useRules } from "@/lib/use-rules";
 import { metres } from "@/lib/geo";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -50,6 +51,7 @@ type Place = "wait" | "none" | { lat: number; lng: number };
 
 export function VisitSheet({ customer, onClose }: { customer: Customer; onClose: () => void }) {
   const { tr, num } = useFmt();
+  const VISIT_NEAR_M = useRules().visit_near_m;
   const toast = useToast();
   // Inside the reps' app (/driver/…) the order and payment pages open in the app.
   const router = useAppRouter();
@@ -279,6 +281,7 @@ export function VisitPlan() {
 
 export function VisitsReport() {
   const { tr, num, date, ago } = useFmt();
+  const VISIT_NEAR_M = useRules().visit_near_m;
   const [from, setFrom] = useState(today(-6));
   const [to, setTo] = useState(today());
   const r = useLoad(() => api.visitsReport(from, to), [from, to]);

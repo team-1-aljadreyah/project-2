@@ -2,9 +2,9 @@
 // visit from the shop (where his phone was, and what came out of it), and the manager sees the visits missed.
 // These are the backend's rules (docs/backend.md → «خط السير»).
 import type { NoOrderReason, Visit, VisitInput, VisitOutcome, VisitsReport, WeekDay } from "../types";
-import { VISIT_NEAR_M, repDoes } from "../types";
+import { repDoes } from "../types";
 import { nextId, type Db, type DbCustomer, type DbUser } from "./db";
-import { addDays, dayOf, fail, msg, need } from "./rules";
+import { R, addDays, dayOf, fail, msg, need, notify } from "./rules";
 import { metres } from "../../geo";
 
 const OUTCOMES: VisitOutcome[] = ["order", "payment", "no_order", "closed"];
@@ -46,12 +46,29 @@ export function recordVisit(db: Db, a: DbUser, input: VisitInput, now: Date): Vi
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الزيارة", "Check the visit", errors);
   const pin = c.address_info?.lat !== undefined && c.address_info?.lng !== undefined ? { lat: c.address_info.lat, lng: c.address_info.lng } : null;
   const distance = hasPlace && pin ? metres({ lat: input.lat!, lng: input.lng! }, pin) : undefined;
+  const far = distance !== undefined ? distance > R().visit_near_m : undefined;
+  // The manager asked to hear of a far visit at once.
+  if (far && R().far_visit_alert) {
+    notify(
+      db,
+      {
+        type: "needs_approval",
+        roles: ["manager"],
+        title: `زيارة بعيدة عن المحل: ${c.name}`,
+        title_en: `A visit far from the shop: ${c.name}`,
+        body: `${a.name} سجّلها على بعد ${Math.round(distance!).toLocaleString("en")} م من موقع المحل`,
+        body_en: `${a.name} recorded it ${Math.round(distance!).toLocaleString("en")} m from the shop's pin`,
+        link: "/routes",
+      },
+      now,
+    );
+  }
   return put(db, a, c, now, {
     outcome: input.outcome,
     reason: input.outcome === "no_order" ? (input.reason ?? "other") : undefined,
     note: input.note?.trim() || undefined,
     distance_m: distance,
-    far: distance !== undefined ? distance > VISIT_NEAR_M : undefined,
+    far,
   });
 }
 

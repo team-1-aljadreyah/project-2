@@ -3,11 +3,13 @@
 // The real backend must do the same things (see the client's requirements).
 import { currentLocale } from "../../boot";
 import { ApiError, type ErrorCode } from "../errors";
-import { DISCOUNT_MAX, EXPENSE_APPROVAL_ABOVE, STAFF_DISCOUNT_MAX, workWarehouses, worksIn, type Expense, type NewExpense, type RuleOp, type RuleTrigger, type ShipmentLoad, type CarrierPick, type Vehicle } from "../types";
+import { EXPENSE_APPROVAL_ABOVE, workWarehouses, worksIn, type Expense, type NewExpense, type RuleOp, type RuleTrigger, type ShipmentLoad, type CarrierPick, type Vehicle } from "../types";
 import { linesWeight } from "../vehicles";
 import { clearPrice, offerOff, soldUnits, unitName } from "../../units";
 import { clearanceFor } from "./clearance-price";
 import { fullSite } from "../site-defaults";
+import { DEFAULT_NOTIFY, roundBy } from "../advanced";
+import { R, takeRules } from "./current-rules";
 import { missingValue, supplyGaps } from "../supply";
 import type {
   AppNotification,
@@ -258,8 +260,27 @@ export function audit(
   });
 }
 
+// ---------- the company's rules (the manager's advanced settings) ----------
+// R(): the rules in force for this request (./current-rules: taken at its start).
+export { R, takeRules };
+
+/** A user who isn't a person: what the site does by itself (an auto-approved order). */
+const AUTO = { id: 0, name: "اعتماد تلقائي", phone: "", role: "accountant", active: true, password: "" } as DbUser;
+
+/** Send a notification. The manager's matrix (who gets which kind) decides: a job he unticked doesn't get it,
+ *  a job he added gets its own copy (once per event). */
 export function notify(db: Db, n: Omit<AppNotification, "id" | "read" | "created_at">, now: Date) {
-  db.notifications.push({ ...n, id: nextId(db, "notification"), read: false, created_at: now.toISOString() });
+  const put = (x: Omit<AppNotification, "id" | "read" | "created_at">) => db.notifications.push({ ...x, id: nextId(db, "notification"), read: false, created_at: now.toISOString() });
+  const allowed = R().notify_matrix[n.type];
+  if (!allowed) return put(n);
+  const roles = n.roles.filter((r) => allowed.includes(r));
+  if (roles.length) put({ ...n, roles });
+  const added = allowed.filter((r) => !(DEFAULT_NOTIFY[n.type] ?? []).includes(r) && !n.roles.includes(r));
+  if (added.length && !db.notifications.some((x) => x.type === n.type && x.link === n.link && x.created_at === now.toISOString() && !x.user_id && added.every((r) => x.roles.includes(r)))) {
+    const { user_id: _u, ...rest } = n;
+    void _u;
+    put({ ...rest, roles: added });
+  }
 }
 
 /** Alert the manager and the warehouse when an item goes under its minimum (once, until it is refilled). */
@@ -475,6 +496,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     if (outside.length) fail(403, "FORBIDDEN", `خارج أصنافك: ${outside.map((i) => i.name).join("، ")}`, `Outside your categories: ${outside.map((i) => i.name_en).join(", ")}`);
   }
   if (actor.role === "shop" && actor.customer_id !== customer.id) fail(403, "FORBIDDEN", "لا تستطيع الطلب لمحل آخر", "You can't order for another shop");
+  if (actor.role === "shop" && R().maintenance.on) fail(503, "MAINTENANCE", R().maintenance.message || "التطبيق في صيانة الآن", R().maintenance.message_en || "The app is under maintenance");
   if (customer.walk_in) fail(409, "BAD_STATE", "الزبون المباشر يُباع له من «بيع مباشر» في المخزن", "Walk-in buyers are sold to from the warehouse's counter sale");
   if (!customer.active) {
     if (customer.pending) fail(409, "BAD_STATE", "الحساب بانتظار موافقة الشركة، ويمكنك الطلب بعد الموافقة", "This account is waiting for approval. You can order after it is approved");
@@ -483,7 +505,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
 
   const warehouseId = input.warehouse_id ?? db.warehouses[0].id;
   // The price is fixed when the order is recorded (offline: the moment on the rep's phone, at most 3 days back).
-  const recordedAt = input.recorded_at && input.recorded_at < now.toISOString() && input.recorded_at > new Date(now.getTime() - 3 * 86_400_000).toISOString() ? input.recorded_at : undefined;
+  const recordedAt = input.recorded_at && input.recorded_at < now.toISOString() && input.recorded_at > new Date(now.getTime() - R().offline_max_days * 86_400_000).toISOString() ? input.recorded_at : undefined;
   let lines = orderLines(db, customer.tier_id, input.lines, customer.id, recordedAt, input.warehouse_id);
   // Written offline: we never sell more than is there. What is there goes ahead; the rest waits for the goods.
   let waiting: typeof lines = [];
@@ -513,7 +535,13 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   const subtotal = lines.reduce((s, l) => s + l.total, 0);
   const discount = makeDiscount(actor, subtotal, input.discount_percent ?? 0, now);
   const [total, rounding] = roundTotal(subtotal - (discount?.amount ?? 0));
-  const overLimit = committedDebt(db, customer.id, now.toISOString()) + total > customer.debt_limit;
+  if (actor.role === "shop" && R().min_shop_order > 0 && total < R().min_shop_order) {
+    fail(422, "MIN_ORDER", `أقل طلب ${R().min_shop_order.toLocaleString("en")} د.ع`, `The smallest order is ${R().min_shop_order.toLocaleString("en")} IQD`, { lines: msg(`أضف ما يصل بالطلب إلى ${R().min_shop_order.toLocaleString("en")} د.ع`, `Add up to ${R().min_shop_order.toLocaleString("en")} IQD`) });
+  }
+  const passes = committedDebt(db, customer.id, now.toISOString()) + total > customer.debt_limit;
+  // Over the limit: waits for the manager (as always), is refused, or goes through with a notice (the manager decides).
+  if (passes && R().over_limit === "block") fail(409, "DEBT_LIMIT", "الطلب يتجاوز سقف دين الزبون", "The order passes the customer's debt limit");
+  const overLimit = passes && R().over_limit === "approval";
   const approval_for = [...(overLimit ? (["debt"] as const) : []), ...(discount?.needs_approval ? (["discount"] as const) : [])];
   const src: Order["source"] = source ?? (actor.role === "shop" ? "shop" : actor.role === "rep" ? "rep" : "office");
   const id = nextId(db, "order");
@@ -571,6 +599,14 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     notify(db, { ...msgBase, roles: ["rep"], user_id: customer.rep_id }, now);
   }
   if (waiting.length) waitingOrder(db, actor, { ...input, client_ref: `${input.client_ref}-rest` }, customer, warehouseId, waiting, now, order);
+  if (passes && R().over_limit === "allow") {
+    notify(db, { type: "needs_approval", roles: ["manager"], title: `طلب تجاوز سقف الدين (سُمح به): ${customer.name}`, title_en: `Order over the debt limit (allowed): ${customer.name}`, body: `${order.number} · ${order.total.toLocaleString("en")} د.ع`, body_en: order.number, link: `/orders/${id}` }, now);
+  }
+  // A rep's order approves itself when the manager set it so (and nothing else holds it).
+  if (order.status === "pending" && src === "rep" && R().auto_confirm_rep_orders) {
+    acceptOrder(db, AUTO, order.id, now);
+    return order;
+  }
   // Every order (rep or shop) waits for the accountant or the manager to approve it.
   if (order.status === "pending") {
     notify(
@@ -722,11 +758,11 @@ export function traceBatch(db: Db, actor: DbUser, batchId: number) {
 }
 
 // ---------- rounding ----------
-// The total of an order (and its invoice) is rounded to the nearest 250 IQD, the smallest note in use.
+// The total of an order (and its invoice) is rounded to the company's step (the manager's setting; 250 IQD,
+// the smallest note in use, unless he changed it).
 
 export function roundTotal(raw: number): [number, number] {
-  const total = Math.round(raw / 250) * 250;
-  return [total, total - raw];
+  return roundBy(R().round_to, raw);
 }
 function setTotal(o: Order, raw: number) {
   const [total, rounding] = roundTotal(raw);
@@ -743,8 +779,9 @@ function makeDiscount(actor: DbUser, subtotal: number, percent: number, now: Dat
   const p = Math.round((Number(percent) || 0) * 10) / 10;
   if (p === 0) return undefined;
   if (!["manager", "rep", "accountant"].includes(actor.role)) fail(403, "FORBIDDEN", "لا تستطيع إعطاء خصم", "You can't give a discount");
-  if (p < 0 || p > DISCOUNT_MAX) fail(422, "VALIDATION", `الخصم بين 0 و ${DISCOUNT_MAX}%`, `The discount is between 0 and ${DISCOUNT_MAX}%`, { discount_percent: msg(`حتى ${DISCOUNT_MAX}%`, `Up to ${DISCOUNT_MAX}%`) });
-  const needsOk = actor.role !== "manager" && p > STAFF_DISCOUNT_MAX;
+  const { discount_max: max, staff_discount_max: alone } = R();
+  if (p < 0 || p > max) fail(422, "VALIDATION", `الخصم بين 0 و ${max}%`, `The discount is between 0 and ${max}%`, { discount_percent: msg(`حتى ${max}%`, `Up to ${max}%`) });
+  const needsOk = actor.role !== "manager" && p > alone;
   return {
     percent: p,
     amount: Math.round((subtotal * p) / 100),
@@ -762,8 +799,8 @@ function notifyDiscount(db: Db, o: Order, customerName: string, now: Date) {
       roles: ["manager"],
       title: `خصم ${o.discount!.percent}% يحتاج موافقتك: ${customerName}`,
       title_en: `${o.discount!.percent}% discount needs your OK: ${customerName}`,
-      body: `${o.discount!.by.name} أعطى خصماً أكثر من ${STAFF_DISCOUNT_MAX}% على ${o.number}`,
-      body_en: `${o.discount!.by.name} gave more than ${STAFF_DISCOUNT_MAX}% on ${o.number}`,
+      body: `${o.discount!.by.name} أعطى خصماً أكثر من ${R().staff_discount_max}% على ${o.number}`,
+      body_en: `${o.discount!.by.name} gave more than ${R().staff_discount_max}% on ${o.number}`,
       link: `/orders/${o.id}`,
     },
     now,
@@ -777,6 +814,11 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (actor.role === "shop" && actor.customer_id !== o.customer_id) fail(403, "FORBIDDEN", "هذا الطلب ليس لمحلك", "This order isn't for your shop");
   if (o.status !== "pending" && o.status !== "needs_approval") fail(409, "BAD_STATE", "ثُبّت الطلب أو أُلغي، ولا يمكن تعديله الآن", "The order was confirmed or cancelled; it can't change now");
+  // The manager may give the shop owner only some minutes to change his order.
+  const editMin = R().shop_edit_minutes;
+  if (actor.role === "shop" && editMin > 0 && now.getTime() - new Date(o.created_at).getTime() > editMin * 60_000) {
+    fail(409, "EDIT_CLOSED", `انتهى وقت التعديل (${editMin} دقيقة بعد الإرسال)`, `The time to change it is over (${editMin} minutes after sending)`);
+  }
   const wanted = (input.lines ?? []).filter((l) => l.qty > 0);
   if (!wanted.length) fail(422, "VALIDATION", "الطلب فارغ. لإلغائه استخدم زر الإلغاء", "The order is empty. To drop it, cancel it");
   const customer = db.customers.find((c) => c.id === o.customer_id)!;
@@ -793,7 +835,9 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
   }
   setTotal(o, subtotal - (o.discount?.amount ?? 0));
   if (input.note !== undefined) o.note = input.note.trim() || undefined;
-  const overLimit = committedDebt(db, customer.id, now.toISOString(), o.id) + o.total > customer.debt_limit;
+  const passes = committedDebt(db, customer.id, now.toISOString(), o.id) + o.total > customer.debt_limit;
+  if (passes && R().over_limit === "block") fail(409, "DEBT_LIMIT", "الطلب يتجاوز سقف دين الزبون", "The order passes the customer's debt limit");
+  const overLimit = passes && R().over_limit === "approval";
   const reasons = [...(overLimit ? (["debt"] as const) : []), ...(o.discount?.needs_approval ? (["discount"] as const) : [])];
   if (reasons.length) {
     o.status = "needs_approval";
@@ -1436,6 +1480,39 @@ export function createPayment(db: Db, actor: DbUser, input: NewPayment, now: Dat
   return addPayment(db, actor, input, now);
 }
 
+/** The cash a rep holds now: his cash payments (less what was reversed of them) − what the accountant counted. */
+export function repHolding(db: Db, repId: number): number {
+  const cash = db.payments.filter((p) => p.received_by.id === repId && p.received_by.role === "rep" && p.method === "cash" && !p.reversal_of).reduce((s, p) => s + p.amount - (p.reversed_amount ?? 0), 0);
+  const handed = (db.handovers ?? []).filter((h) => h.rep.id === repId && h.status === "confirmed").reduce((s, h) => s + (h.received ?? 0), 0);
+  return cash - handed;
+}
+
+/** The manager's cash limit per rep: a rep who takes cash while above it — the accountant and the manager are told
+ *  (at most once a day per rep, so a busy day doesn't flood them). */
+function custodyCapCheck(db: Db, rep: DbUser, now: Date) {
+  const cap = R().custody_cap;
+  if (!(cap > 0)) return;
+  const after = repHolding(db, rep.id);
+  const today = dayOf(now);
+  db.custody_told ??= {};
+  if (after > cap && db.custody_told[rep.id] !== today) {
+    db.custody_told[rep.id] = today;
+    notify(
+      db,
+      {
+        type: "custody",
+        roles: ["accountant", "manager"],
+        title: `${rep.name} تجاوز حد العهدة`,
+        title_en: `${rep.name} passed the cash limit`,
+        body: `بيده ${after.toLocaleString("en")} د.ع، والحد ${cap.toLocaleString("en")} د.ع. اطلب تسليمها`,
+        body_en: `He holds ${after.toLocaleString("en")} IQD; the limit is ${cap.toLocaleString("en")} IQD. Ask for a handover`,
+        link: "/custody",
+      },
+      now,
+    );
+  }
+}
+
 /** Records money received (no role check: createPayment checks people, the gateway is checked by its session). */
 export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, gateway?: GatewayInfo): Payment {
   const same = db.payments.find((p) => p.client_ref === input.client_ref);
@@ -1471,6 +1548,7 @@ export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, 
     reversed: false,
   };
   db.payments.push(p);
+  if (actor.role === "rep" && p.method === "cash") custodyCapCheck(db, actor, now);
   audit(db, actor, "create", "payment", id, `تسديد ${p.number} من ${customer.name}: ${input.amount.toLocaleString("en")} د.ع`, `Payment ${p.number} from ${customer.name}: ${input.amount.toLocaleString("en")} IQD`, now);
   // The rep earns his commission when the shop pays (not when it buys on credit): tell him what he earned.
   const earned = new Map<number, number>();
@@ -1504,7 +1582,13 @@ export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, 
  *  later until nothing is left. Each reverse is its own entry (a negative payment), never a deletion. */
 export function reversePayment(db: Db, actor: DbUser, id: number, reason: string, now: Date, amount?: number): Payment {
   need(actor, ["manager", "accountant"]);
+  if (!R().reverse_roles.includes(actor.role)) fail(403, "FORBIDDEN", "عكس التسديد للمدير فقط", "Only the manager reverses payments");
   const p = db.payments.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "التسديد غير موجود", "Payment not found");
+  // An old payment: only the manager (when he set a limit in days).
+  const days = R().reverse_days;
+  if (days > 0 && actor.role !== "manager" && now.getTime() - new Date(p.date).getTime() > days * 86_400_000) {
+    fail(403, "TOO_OLD", `التسديد أقدم من ${days} يوماً: يعكسه المدير فقط`, `The payment is older than ${days} days: only the manager reverses it`);
+  }
   if (p.reversal_of) fail(409, "BAD_STATE", "هذه عملية عكسية أصلاً", "This is already a reverse entry");
   const left = p.amount - (p.reversed_amount ?? 0);
   if (p.reversed || left <= 0) fail(409, "ALREADY_REVERSED", "تم عكس هذا التسديد كله من قبل", "All of this payment was already reversed");
@@ -2131,6 +2215,7 @@ export function closeMonth(db: Db, actor: DbUser, month: string, now: Date) {
  * rep and debt limit and approves him. A wholesale company sells on credit, so nobody orders before that.
  */
 export function registerShop(db: Db, input: RegisterInput, now: Date) {
+  if (!R().features.self_signup) fail(403, "SIGNUP_CLOSED", "التسجيل من الموقع متوقف الآن. تواصل مع الشركة", "Signing up online is closed now. Contact the company");
   const phone = input.phone.replace(/\s/g, "").replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
   const errors: Record<string, string> = {};
   if (input.shop_name.trim().length < 3) errors.shop_name = msg("اكتب اسم المحل", "Enter the shop name");
@@ -2140,7 +2225,7 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
     errors.phone = msg("هذا الرقم مسجّل من قبل، سجّل الدخول", "This number already has an account. Log in instead");
   }
   if (!input.area.trim()) errors.area = msg("اختر المنطقة", "Choose the area");
-  if (input.password.length < 6) errors.password = msg("6 أحرف على الأقل", "At least 6 characters");
+  if (input.password.length < R().password_min) errors.password = msg(`${R().password_min} أحرف على الأقل`, `At least ${R().password_min} characters`);
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول المؤشرة", "Check the marked fields", errors);
 
   const addr = cleanAddress(input.address_info, true);
@@ -2155,8 +2240,9 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
     }))
     .sort((a, b) => b.same - a.same || a.all - b.all);
   const rep = ranked[0]?.r;
-  // The careful start: small-shop prices and no credit, until the manager decides.
-  const tier = db.tiers.find((t) => t.id === 3) ?? db.tiers[db.tiers.length - 1];
+  // The start the manager chose (by default the careful one: the last price tier, no credit, wait for him).
+  const tier = signupTier(db);
+  const auto = R().signup_auto_approve;
 
   const customer: DbCustomer = {
     id: nextId(db, "customer"),
@@ -2168,9 +2254,9 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
     ...(addr.info ? { address_info: addr.info } : {}),
     tier_id: tier.id,
     rep_id: rep?.id ?? 0,
-    debt_limit: 0,
-    active: false,
-    pending: true,
+    debt_limit: R().signup_debt_limit,
+    active: auto,
+    pending: !auto,
   };
   const user: DbUser = { id: nextId(db, "user"), name: customer.owner_name, phone, role: "shop", customer_id: customer.id, active: true, password: input.password };
   db.customers.push(customer);
@@ -2183,8 +2269,8 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
       roles: ["manager"],
       title: `محل جديد سجّل من الموقع: ${customer.name}`,
       title_en: `New shop signed up: ${customer.name}`,
-      body: `${customer.owner_name} · ${area}. حدد نوع السعر وسقف الدين ووافق عليه`,
-      body_en: `${customer.owner_name} · ${area}. Set the price tier and debt limit, then approve`,
+      body: auto ? `${customer.owner_name} · ${area}. فُعّل تلقائياً بحسب إعداداتك` : `${customer.owner_name} · ${area}. حدد نوع السعر وسقف الدين ووافق عليه`,
+      body_en: auto ? `${customer.owner_name} · ${area}. Approved by itself (your settings)` : `${customer.owner_name} · ${area}. Set the price tier and debt limit, then approve`,
       link: `/customers/${customer.id}`,
     },
     now,
@@ -2198,7 +2284,7 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
         user_id: rep.id,
         title: `محل جديد في منطقتك: ${customer.name}`,
         title_en: `New shop in your area: ${customer.name}`,
-        body: `سجّل من الموقع وينتظر موافقة المدير · ${phone}`,
+        body: auto ? `سجّل من الموقع وفُعّل · ${phone}` : `سجّل من الموقع وينتظر موافقة المدير · ${phone}`,
         body_en: `Signed up online, waiting for the manager · ${phone}`,
         link: `/customers/${customer.id}`,
       },
@@ -2347,7 +2433,8 @@ export function addShop(db: Db, actor: DbUser, input: NewShopInput, now: Date): 
   else if (db.customers.some((c) => c.name.trim() === name)) errors.shop_name = msg("يوجد محل بهذا الاسم", "A shop with this name exists");
   if (!area) errors.area = msg("اختر المنطقة", "Choose the area");
   if (!/^07\d{9}$/.test(phone)) errors.phone = msg("رقم عراقي من 11 رقم يبدأ بـ 07", "An 11-digit Iraqi number starting with 07");
-  if (shopsOf(actor).length >= 10) errors.shop_name = msg("حتى 10 محلات لكل حساب", "Up to 10 shops per account");
+  const most = R().max_shops_per_account;
+  if (shopsOf(actor).length >= most) errors.shop_name = msg(`حتى ${most} محلات لكل حساب`, `Up to ${most} shops per account`);
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول المؤشرة", "Check the marked fields", errors);
 
   const addr = cleanAddress(input.address_info, true);
@@ -2356,7 +2443,8 @@ export function addShop(db: Db, actor: DbUser, input: NewShopInput, now: Date): 
   const rep = reps
     .map((r) => ({ r, same: db.customers.filter((c) => c.rep_id === r.id && c.area === area).length, all: db.customers.filter((c) => c.rep_id === r.id).length }))
     .sort((a, b) => b.same - a.same || a.all - b.all)[0]?.r;
-  const tier = db.tiers.find((t) => t.id === 3) ?? db.tiers[db.tiers.length - 1];
+  const tier = signupTier(db);
+  const auto = R().signup_auto_approve;
   const c: DbCustomer = {
     id: nextId(db, "customer"),
     name,
@@ -2367,9 +2455,9 @@ export function addShop(db: Db, actor: DbUser, input: NewShopInput, now: Date): 
     ...(addr.info ? { address_info: addr.info } : {}),
     tier_id: tier.id,
     rep_id: rep?.id ?? 0,
-    debt_limit: 0,
-    active: false,
-    pending: true,
+    debt_limit: R().signup_debt_limit,
+    active: auto,
+    pending: !auto,
   };
   db.customers.push(c);
   actor.customer_ids = [...shopsOf(actor), c.id];
@@ -2387,7 +2475,13 @@ export function addShop(db: Db, actor: DbUser, input: NewShopInput, now: Date): 
     },
     now,
   );
-  return { id: c.id, name: c.name, area: c.area, active: false, pending: true };
+  return { id: c.id, name: c.name, area: c.area, active: auto, pending: !auto };
+}
+
+/** A self-registered shop's price tier: the manager's choice, or the last tier (the careful start). */
+function signupTier(db: Db) {
+  const want = R().signup_tier_id;
+  return (want !== null && db.tiers.find((t) => t.id === want)) || db.tiers.find((t) => t.id === 3) || db.tiers[db.tiers.length - 1];
 }
 
 /** The manager approved the shop (from the customer form, with its tier, rep and limit). */
@@ -2473,6 +2567,7 @@ export function onlineView(o: DbOnline): OnlinePayment {
 
 export function startOnline(db: Db, actor: DbUser, input: StartOnlinePayment, now: Date): OnlinePayment {
   need(actor, ["shop", "manager", "accountant"]);
+  if (!R().features.online_pay) fail(403, "FEATURE_OFF", "الدفع الأونلاين متوقف الآن", "Online payment is turned off");
   // A second press (or a retry) gives back the same payment, never a second one.
   const same = db.online_payments.find((o) => o.key === input.key);
   if (same) return onlineView(same);
@@ -2595,7 +2690,8 @@ export function settleZainCash(db: Db, paymentId: string, status: OnlineStatus, 
 
 // ---------- Delivery proof (no fake deliveries) ----------
 
-const MAX_PIN_TRIES = 5;
+/** Wrong delivery PINs before the shipment locks (the manager's setting; 5 unless he changed it). */
+const maxPinTries = () => R().pin_tries;
 
 /** A random number from the browser's secure random source (Math.random can be guessed). */
 function secureInt(max: number) {
@@ -2678,19 +2774,24 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
   if (d.status === "ready") fail(409, "BAD_STATE", "امسح رمز QR للشحنة في المخزن أولاً", "Scan the shipment's QR at the warehouse first");
   if (d.status === "delivered") fail(409, "BAD_STATE", "هذه الشحنة سُلِّمت من قبل", "This shipment was already delivered");
   if (d.locked) return { ok: false, left: 0, locked: true };
-  if (!/^data:image\/(jpeg|png|webp);base64,/.test(input.photo ?? "")) {
+  const photo = input.photo ?? "";
+  const hasPhoto = !!photo;
+  if (hasPhoto ? !/^data:image\/(jpeg|png|webp);base64,/.test(photo) : R().photo_required) {
     fail(422, "VALIDATION", "صوّر الشحنة عند المحل أولاً", "Take a photo of the packages first", { photo: msg("الصورة مطلوبة", "A photo is required") });
   }
-  if (input.photo.length > 600_000) fail(422, "VALIDATION", "الصورة كبيرة جداً", "The photo is too big", { photo: msg("التقط الصورة مرة أخرى", "Take the photo again") });
+  if (hasPhoto && photo.length > 600_000) fail(422, "VALIDATION", "الصورة كبيرة جداً", "The photo is too big", { photo: msg("التقط الصورة مرة أخرى", "Take the photo again") });
   const pay = input.payment;
   if (pay) {
     if (!["cash", "qi", "zaincash"].includes(pay.method)) fail(422, "VALIDATION", "اختر طريقة الدفع", "Choose how the shop pays", { payment: msg("نقداً أو Qi أو زين كاش", "Cash, Qi or ZainCash") });
+    const online = pay.method !== "cash";
+    if (!R().door_methods.includes(pay.method) || (online && !R().features.online_pay)) fail(403, "FEATURE_OFF", "طريقة الدفع هذه غير مسموحة عند التسليم", "This way of paying isn't allowed at the door", { payment: msg("غير مسموحة", "Not allowed") });
     if (!(pay.amount > 0) || !Number.isInteger(pay.amount)) fail(422, "VALIDATION", "المبلغ غير صحيح", "Amount is not valid", { payment: msg("اكتب مبلغاً صحيحاً بالدينار", "Enter a whole amount in dinars") });
     if (pay.method === "zaincash" && pay.amount < 1000) fail(422, "VALIDATION", "زين كاش يقبل من 1,000 د.ع", "ZainCash takes 1,000 IQD or more", { payment: msg("زين كاش يقبل من 1,000 د.ع فأكثر", "ZainCash takes 1,000 IQD or more") });
   }
 
   if (input.pin.trim() !== d.pin) {
     d.pin_attempts += 1;
+    const MAX_PIN_TRIES = maxPinTries();
     const left = Math.max(0, MAX_PIN_TRIES - d.pin_attempts);
     if (left === 0) {
       d.locked = true;
@@ -2724,9 +2825,9 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
   }
   if (!delivered.length) fail(422, "VALIDATION", "لم يُسلَّم شيء: إذا رفض المحل البضاعة، استخدم «تعذّر التسليم»", "Nothing delivered: if the shop refused it, use “Can't deliver”");
 
-  Object.assign(d, { status: "delivered", delivered_at: now.toISOString(), delivered_by: person(actor), has_photo: true });
+  Object.assign(d, { status: "delivered", delivered_at: now.toISOString(), delivered_by: person(actor), has_photo: hasPhoto });
   delete d.problem;
-  db.delivery_photos[o.id] = input.photo;
+  if (hasPhoto) db.delivery_photos[o.id] = photo;
   const customer = db.customers.find((c) => c.id === o.customer_id);
   // The invoice is made now, for what was delivered; the debt counts from now.
   if (!o.invoice_id) {
@@ -2783,7 +2884,7 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
     }
   }
   syncShipments(db, o);
-  audit(db, actor, "update", "order", o.id, `تسليم ${o.number} إلى ${customer?.name ?? ""} برمز الاستلام وصورة`, `${o.number} delivered with PIN and photo`, now);
+  audit(db, actor, "update", "order", o.id, hasPhoto ? `تسليم ${o.number} إلى ${customer?.name ?? ""} برمز الاستلام وصورة` : `تسليم ${o.number} إلى ${customer?.name ?? ""} برمز الاستلام`, `${o.number} delivered with PIN${hasPhoto ? " and photo" : ""}`, now);
   const shopUser = shopOwnerOf(db, o.customer_id);
 
   // Paid at the door (optional; any part of the debt, which now includes this invoice).
@@ -2969,6 +3070,7 @@ function addChat(db: Db, actor: DbUser, customerId: number, from: "shop" | "staf
 /** The shop owner sends a message. */
 export function sendChat(db: Db, actor: DbUser, text: string, now: Date): ChatMessage {
   need(actor, ["shop"]);
+  if (!R().features.support_chat) fail(403, "FEATURE_OFF", "الدعم بالمحادثة متوقف الآن. اتصل بالشركة", "Support chat is turned off. Call the company");
   if (!actor.customer_id) fail(403, "FORBIDDEN", "حسابك غير مرتبط بمحل", "Your account isn't linked to a shop");
   return addChat(db, actor, actor.customer_id, "shop", text, now);
 }
@@ -3045,7 +3147,7 @@ export function changeMyPassword(db: Db, actor: DbUser, current: string, next: s
   const u = db.users.find((x) => x.id === actor.id) ?? gone();
   const errors: Record<string, string> = {};
   if (u.password !== current) errors.current = msg("كلمة المرور الحالية غير صحيحة", "The current password is wrong");
-  if ((next ?? "").length < 6) errors.next = msg("6 أحرف على الأقل", "At least 6 characters");
+  if ((next ?? "").length < R().password_min) errors.next = msg(`${R().password_min} أحرف على الأقل`, `At least ${R().password_min} characters`);
   else if (next === current) errors.next = msg("اختر كلمة مرور مختلفة عن الحالية", "Choose a password different from the current one");
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
   u.password = next;

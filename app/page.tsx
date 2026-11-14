@@ -16,10 +16,12 @@ import { LanguageSwitch } from "@/components/switches";
 import { homeOf, useSession } from "@/lib/auth";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { usePublicRules } from "@/lib/use-rules";
 
 export default function LandingPage() {
   const { tr, lang } = useFmt();
   const session = useSession();
+  const live = usePublicRules();
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
   const enter = session ? homeOf(session.user.role, session.user.rep_kinds) : "/login";
   const enterLabel = session ? tr("ادخل إلى حسابك", "Go to my account") : tr("تسجيل الدخول", "Log in");
@@ -60,7 +62,7 @@ export default function LandingPage() {
               </a>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 {/* New shops register by themselves; the company approves them before the first order. */}
-                {!session && (
+                {!session && live.self_signup && (
                   <Link href="/register" className="inline-flex h-12 items-center gap-2 rounded-full bg-action px-7 font-bold text-on-action shadow-[0_0_40px_rgb(225_105_43/0.45)] transition hover:bg-action-hover">
                     <UserPlus className="size-5" /> {tr("سجّل محلك", "Register your shop")}
                   </Link>

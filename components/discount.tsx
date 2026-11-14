@@ -7,15 +7,18 @@ import { useState } from "react";
 import { BadgePercent, Clock, ShieldCheck } from "lucide-react";
 import { Button, Dialog, Input, Money, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import { DISCOUNT_MAX, STAFF_DISCOUNT_MAX, type Order, type Role } from "@/lib/api/types";
+import type { Order, Role } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { useRules } from "@/lib/use-rules";
 
 export const canDiscount = (role: Role) => role === "manager" || role === "rep" || role === "accountant";
 
 /** The percent field with quick chips, and what it means (amount, needs approval or not). */
 export function DiscountPicker({ value, onChange, subtotal, role }: { value: number; onChange: (v: number) => void; subtotal: number; role: Role }) {
   const { tr, money } = useFmt();
+  // The manager's limits (advanced settings): what staff give alone, and the most anyone gives.
+  const { staff_discount_max: STAFF_DISCOUNT_MAX, discount_max: DISCOUNT_MAX } = useRules();
   const needsOk = role !== "manager" && value > STAFF_DISCOUNT_MAX;
   return (
     <div className="space-y-2">

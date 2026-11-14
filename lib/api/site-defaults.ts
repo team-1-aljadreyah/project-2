@@ -39,6 +39,8 @@ export function fullSite(s: Partial<SiteCustom> | null | undefined): SiteCustom 
     fields: s?.fields ?? [],
     rules: s?.rules ?? [],
     banners: s?.banners ?? [],
+    // Read only (the server works it out from the advanced settings): kept as it came.
+    ...(s?.live ? { live: s.live } : {}),
   };
 }
 

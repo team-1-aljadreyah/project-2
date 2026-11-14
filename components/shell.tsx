@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Bell, CloudOff, Compass, Volume2, VolumeX, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Type, Wifi, WifiOff, X } from "lucide-react";
+import { Bell, CloudOff, Compass, Volume2, VolumeX, LogOut, Menu, MoreHorizontal, RefreshCw, ShieldAlert, Type, Wifi, WifiOff, Wrench, X } from "lucide-react";
 import { api, type Lookups } from "@/lib/api";
 import type { AppNotification, Item, User } from "@/lib/api/types";
 import { signOut, rememberNext, homeOf, updateUser, useSession } from "@/lib/auth";
@@ -43,6 +43,10 @@ import { canOpen, customNav, GROUPS, isPhoneApp, NAV, navFor } from "./nav";
 import { jobName } from "./status";
 import { LanguageSwitch, ThemeToggle } from "./switches";
 import { Button, Empty, IconButton, Skeleton, Switch, useToast } from "./ui";
+import { usePublicRules } from "@/lib/use-rules";
+import { AnnouncementBar } from "@/components/advanced-rules";
+import type { Announcement } from "@/lib/api/advanced";
+import type { Role } from "@/lib/api/types";
 
 interface AppData {
   user: User;
@@ -88,6 +92,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function Loaded({ user, children }: { user: User; children: ReactNode }) {
   const { tr } = useFmt();
+  // The manager's banner and the shop app's maintenance (advanced settings), known before the lookups load.
+  const live = usePublicRules();
+  const closed = user.role === "shop" && live.maintenance.on;
   const lookups = useLoad(() => api.lookups(), []);
   const items = useLoad(() => api.listItems(), []);
   const me = useLoad(() => api.me(), [user.id]);
@@ -169,6 +176,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
           </div>
         )}
         {user.role === "manager" && <CustomizeBar />}
+        {live.announcement && <SiteBanner a={live.announcement} role={user.role} />}
         <main className={cn("mx-auto w-full flex-1 px-3 pt-4 pb-28 sm:px-5", phone ? "max-w-5xl" : "max-w-7xl md:pb-10")}>
           {!allowed ? (
             <Empty
@@ -179,9 +187,9 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
             />
           ) : value ? (
             <Ctx.Provider value={value}>
-              {children}
+              {closed ? <Maintenance m={live.maintenance} /> : children}
               {/* The shop owner's help circle: FAQ + live support chat */}
-              {user.role === "shop" && <ChatWidget />}
+              {user.role === "shop" && !closed && <ChatWidget />}
             </Ctx.Provider>
           ) : (
             <div className="space-y-3">
@@ -470,6 +478,7 @@ function TopBar({ user, warehouses, usdRate, phone }: { user: User; warehouses: 
 
 function AccountMenu({ user, onClose, onAccount }: { user: User; onClose: () => void; onAccount: () => void }) {
   const { tr } = useFmt();
+  const offlineOn = usePublicRules().features.offline;
   const router = useRouter();
   const toast = useToast();
   const ref = useRef<HTMLDivElement>(null);
@@ -565,18 +574,21 @@ function AccountMenu({ user, onClose, onAccount }: { user: User; onClose: () => 
       {USE_MOCK && (
         <div className="mx-1 my-1 rounded-xl bg-card-2 px-3 py-2">
           <p className="mb-1 text-xs font-medium text-faint">{tr("أدوات العرض التجريبي", "Demo tools")}</p>
-          <Switch
-            checked={sim}
-            onChange={(v) => {
-              setSim(v);
-              setSimulatedOffline(v);
-            }}
-            label={
-              <span className="flex items-center gap-2">
-                <CloudOff className="size-4" /> {tr("تجربة بدون إنترنت", "Try without internet")}
-              </span>
-            }
-          />
+          {/* Only while the manager allows working offline (advanced settings → features). */}
+          {offlineOn && (
+            <Switch
+              checked={sim}
+              onChange={(v) => {
+                setSim(v);
+                setSimulatedOffline(v);
+              }}
+              label={
+                <span className="flex items-center gap-2">
+                  <CloudOff className="size-4" /> {tr("تجربة بدون إنترنت", "Try without internet")}
+                </span>
+              }
+            />
+          )}
           <button
             type="button"
             className="mt-1 flex w-full items-center gap-2 rounded-lg py-1.5 text-sm text-muted hover:text-text"
@@ -709,5 +721,45 @@ function CurrencySwitch({ rate }: { rate: number }) {
       <span className="text-faint">/</span>
       <span className={cn("num", usd && "text-success")}>$</span>
     </button>
+  );
+}
+
+/** The manager's banner (advanced settings → banner): for everyone or some jobs, until it ends; hidden for this
+ *  tab when closed (it comes back if the manager changes its text). */
+function SiteBanner({ a, role }: { a: Announcement; role: Role }) {
+  const key = `nahrain.banner.${a.text.length}.${a.text.slice(0, 24)}`;
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return sessionStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [now] = useState(() => Date.now());
+  if (hidden || (a.roles.length && !a.roles.includes(role)) || (a.until && new Date(a.until).getTime() < now)) return null;
+  return (
+    <div className="no-print mx-auto w-full max-w-7xl px-3 pt-3 sm:px-5">
+      <AnnouncementBar
+        a={a}
+        onClose={() => {
+          setHidden(true);
+          try {
+            sessionStorage.setItem(key, "1");
+          } catch {}
+        }}
+      />
+    </div>
+  );
+}
+
+/** The shop owners' app while the manager has it in maintenance: his message, nothing to order. */
+function Maintenance({ m }: { m: { message: string; message_en?: string } }) {
+  const { tr, lang } = useFmt();
+  return (
+    <Empty
+      icon={<Wrench className="size-6" />}
+      title={tr("التطبيق في صيانة الآن", "The app is under maintenance")}
+      body={(lang === "en" && m.message_en) || m.message}
+    />
   );
 }

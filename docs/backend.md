@@ -266,6 +266,46 @@ The pages read them, but the server must **apply** them:
    `GET /setup/health` returns the last 24 h logins, the users' access (never logged in, idle 30+ days, weak
    passwords: checked at login time and stored as a flag, never the password), and the 6 checks with their
    weights (see `health` in `lib/api/mock.ts`).
+6. **The company's rules** (`Settings.advanced`, saved with `PATCH /settings`). Every value, its default (what
+   the site did before) and its limits are in **`lib/api/advanced.ts`** (`DEFAULT_RULES`, `checkRules`): use the
+   same file's numbers. Save only what differs from the defaults; refuse a wrong set with 422 and
+   `errors` = `checkRules`'s keys. A login that fails over these: 423 `LOCKED`; a switched-off feature: 403
+   `FEATURE_OFF`. What each one changes on the server:
+   - **Orders:** `staff_discount_max` / `discount_max` (replace the 3% / 30%); `auto_confirm_rep_orders` (a rep's
+     order with nothing else holding it is approved at once, by «اعتماد تلقائي»); `offline_max_days` (replaces the
+     3 days); `round_to` (0 / 50 / 100 / 250 / 500 / 1000; replaces 250 in every total); `shop_edit_minutes`
+     (0 = until approved; else a shop owner's change after that many minutes → 409 `EDIT_CLOSED`);
+     `min_shop_order` (a shop owner's new order under it → 422 `MIN_ORDER`); `over_limit`: `approval` (as now),
+     `block` (409 `DEBT_LIMIT`, nothing saved), `allow` (no approval; notify the manager «سُمح به»).
+   - **New shops:** `features.self_signup` false → `POST /auth/register` 403 `SIGNUP_CLOSED`; `signup_tier_id`
+     (null = the last tier), `signup_debt_limit`, `signup_auto_approve` (active at once, not pending) — also for
+     an owner's added shop; `max_shops_per_account` (replaces 10).
+   - **Delivery:** `pin_tries` (replaces 5); `photo_required` false → `photo` optional on deliver (`has_photo`
+     false without one); `low_rating_stars` (0 = never; replaces «≤ 2»); `door_methods` (a method not in it, or
+     Qi / ZainCash while `features.online_pay` is off → 403 `FEATURE_OFF`).
+   - **Money:** `custody_cap` (0 = none): a rep who takes cash while holding more → notify accountant + manager,
+     at most once a day per rep; `reverse_roles` (always has manager); `reverse_days` (0 = any age; an older
+     payment → only the manager, else 403 `TOO_OLD`).
+   - **Visits:** `visit_near_m` (replaces 200 m); `far_visit_alert` → notify the manager of a far visit.
+   - **Stock:** `clearance {near_days, near_percent, mid_days, mid_percent, far_percent}` (the suggested %);
+     `reorder_early_days` (replaces the 1 day); `features.clearance` off → no clearance price anywhere and
+     starting one 403; `features.reorder` off → no reminders, empty lists.
+   - **Security:** `otp {code_minutes, resend_seconds, per_hour, tries}` (replace 5 / 60 / 5 / 5);
+     `login_lock_after` (0 = never) + `login_lock_minutes`: that many wrong passwords in a row since the last
+     good login → refuse even the right one until the minutes pass (write it to the login log as `locked`);
+     `password_min` (sign-up, reset, change, new users; replaces 6).
+   - **Features** (`features.*`, all on by default): `online_pay` (`POST /payments/online` 403), `ratings`
+     (`POST /orders/:id/rating` 403), `notify_me` (`POST /stock-alerts` with `on: true` 403; no back-in-stock notices), `support_chat`
+     (`POST /chat/me` 403), `offline` (the pages stop queueing), `clearance`, `reorder`, `self_signup` (above).
+   - **Notification matrix** `notify_matrix {type: Role[]}`: a type not in it → as always. In it: send the
+     notification only to the listed jobs (one aimed at a person goes only if his job is listed); a job listed
+     that the type never had gets its own copy for everyone in that job, once per event.
+   - **Banner** `announcement {text, text_en?, roles (empty = everyone), tone, until?}` and **maintenance**
+     `{on, message, message_en?}`: while on, a shop owner's new order → 503 `MAINTENANCE` (staff as usual).
+   - **Public part:** `GET /site` also returns `live = {self_signup, features, maintenance, announcement,
+     password_min}` (no login needed: the login, sign-up and shop pages read it).
+   - **History:** every save writes who changed which setting from → to (a setting of several parts, by part;
+     `how`: `import` / `reset` sent with the save). `GET /settings/history` (manager), newest first.
 
 ---
 
@@ -421,8 +461,9 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 |---|---|---|---|---|---|
 | `saveCustomValues` | PATCH | `/custom/:object/:id` | `object: CustomObject, id: number, values: Record<string, CustomValue \| null>` | `Record<string, CustomValue>` | The values of the manager's own fields on one record (only the ones this person may change). |
 | `lookups` | GET | `/lookups` |  | `Lookups` |  |
-| `saveSettings` | PATCH | `/settings` | `s: Settings` | `Settings` |  |
-| `site` | GET | `/site` |  | `SiteCustom \| null` | The site's customization. Reading it needs no login (the login page shows the name and logo). |
+| `saveSettings` | PATCH | `/settings` | `s: Settings, how?: "import" \| "reset"` | `Settings` | With `advanced` (the company's rules, section 3.6): checked whole, saved as what differs from the defaults, written to the history. |
+| `settingsHistory` | GET | `/settings/history` |  | `SettingsChange[]` | Who changed which setting and when (manager), newest first. |
+| `site` | GET | `/site` |  | `SiteCustom \| null` | The site's customization. Reading it needs no login (the login page shows the name and logo). Also `live`: the public part of the company's rules (section 3.6). |
 | `saveSite` | PATCH | `/settings/site` | `s: SiteCustom` | `SiteCustom` |  |
 | `renameCategory` | POST | `/categories/rename` | `from: string, to: string` | `void` |  |
 | `saveTier` | POST (new) / PATCH :id | `/price-tiers` | `id: number \| null, name: string, name_en: string` | `PriceTier` |  |

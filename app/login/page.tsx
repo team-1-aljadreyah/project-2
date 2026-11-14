@@ -24,6 +24,7 @@ import { splitAppPath } from "@/lib/app-path";
 import { USE_MOCK } from "@/lib/config";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { usePublicRules } from "@/lib/use-rules";
 
 // Demo accounts, so the client can try every role. Shown only while the site runs on fake data.
 const DEMO: { phone: string; role: Role; name: string; icon: LucideIcon; tag?: [string, string] }[] = [
@@ -42,6 +43,7 @@ const DEMO_PASSWORD = "123456";
 export default function LoginPage() {
   const site = useSite();
   const { tr, lang } = useFmt();
+  const live = usePublicRules();
   const router = useRouter();
   const session = useSession();
   const [phone, setPhone] = useState("");
@@ -222,12 +224,12 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              <p className="rise-item mt-5 text-center text-sm text-muted" style={{ animationDelay: "0.41s" }}>
+              {live.self_signup && <p className="rise-item mt-5 text-center text-sm text-muted" style={{ animationDelay: "0.41s" }}>
                 {tr("صاحب محل وليس لديك حساب؟", "A shop owner without an account?")}{" "}
                 <Link href="/register" className="inline-flex items-center gap-1 font-bold text-action hover:underline">
                   <UserPlus className="size-4" /> {tr("سجّل محلك", "Register your shop")}
                 </Link>
-              </p>
+              </p>}
             </div>
 
             {USE_MOCK && (

@@ -1,4 +1,5 @@
 // «عروض التصريف», the part the prices need (kept apart so the order rules can use it without a loop of imports).
+import { R } from "./current-rules";
 import type { ItemClearance } from "../types";
 import type { Db } from "./db";
 
@@ -11,6 +12,8 @@ const dayBefore = (day: string) => {
 
 /** The clearance running on an item in a warehouse today: its batch still has pieces and isn't expired. */
 export function clearanceFor(db: Db, itemId: number, warehouseId: number | undefined, day: string): ItemClearance | undefined {
+  // The manager turned clearance off: no clearance price anywhere (the batches keep their records).
+  if (!R().features.clearance) return undefined;
   for (const c of db.clearances ?? []) {
     if (c.status !== "active" || c.item_id !== itemId || (warehouseId && c.warehouse_id !== warehouseId)) continue;
     const b = db.batches.find((x) => x.id === c.batch_id);

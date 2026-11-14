@@ -49,6 +49,7 @@ import type {
   SalesRow,
   Session,
   Settings,
+  SettingsChange,
   SiteCustom,
   ItemQuick,
   SlowItem,
@@ -153,7 +154,10 @@ export const httpApi = {
 
   listUsers: () => get<User[]>("/users"),
   saveUser: (id: number | null, input: UserInput) => save<User>("/users", id, input),
-  saveSettings: (s: Settings) => patch<Settings>("/settings", s),
+  /** `how`: "import" (from a file) or "reset" (back to the defaults), kept in the history. */
+  saveSettings: (s: Settings, how?: "import" | "reset") => patch<Settings>("/settings", how ? { ...s, how } : s),
+  /** «الإعدادات المتقدمة»: who changed which setting and when (newest first). */
+  settingsHistory: () => get<SettingsChange[]>("/settings/history"),
   // The site's customization. Reading it needs no login (the login page shows the name and logo).
   site: () => get<SiteCustom | null>("/site"),
   saveSite: (s: SiteCustom) => patch<SiteCustom>("/settings/site", s),

@@ -28,6 +28,7 @@ import { editOrderInBag } from "@/lib/shop-bag";
 import { PrepareOrder } from "@/components/prepare-order";
 import { ShipmentsCard, VehicleBox } from "@/components/vehicles";
 import { piecesOf, useIdParam } from "@/lib/utils";
+import { useRules } from "@/lib/use-rules";
 
 export default function OrderView() {
   const id = useIdParam();
@@ -38,6 +39,9 @@ export default function OrderView() {
   const toast = useToast();
   const order = useLoad(() => api.getOrder(id), [id]);
   const brand = useBrand();
+  const rules = useRules();
+  // When this page was opened (the edit window is checked against it; the server checks it again on save).
+  const [openedAt] = useState(() => Date.now());
   const locations = useRepLocations();
   useRealtime(["orders"], () => order.reload());
   const o = order.data;
@@ -72,7 +76,9 @@ export default function OrderView() {
   const canEditDiscount = open && (user.role === "manager" || (user.role === "rep" && o.rep_id === user.id) || user.role === "accountant");
   const waitsFor = o.approval_for ?? ["debt"];
   // The shop owner changes his own order until the warehouse confirms it.
-  const canEditLines = open && user.role === "shop" && user.customer_id === o.customer_id;
+  // The manager may give the shop owner only some minutes after sending (0 = until it is approved).
+  const editUntil = rules.shop_edit_minutes > 0 ? new Date(o.created_at).getTime() + rules.shop_edit_minutes * 60_000 : Infinity;
+  const canEditLines = open && user.role === "shop" && user.customer_id === o.customer_id && editUntil > openedAt;
 
   async function act(key: string, fn: () => Promise<unknown>, ok: string, after?: (r: unknown) => void) {
     setBusy(key);
@@ -207,7 +213,7 @@ export default function OrderView() {
           {user.role === "shop" && o.delivery?.status === "delivered" && c && (
             <>
               <OnlineReturn back={`/orders/${o.id}`} />
-              {(() => {
+              {rules.features.online_pay && (() => {
                 const dp = o.delivery.payment;
                 const asked = dp?.status === "requested" ? dp.amount : (invoice.data?.remaining ?? 0);
                 if (!asked || (c.balance ?? 0) <= 0) return null;

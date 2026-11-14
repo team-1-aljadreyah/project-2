@@ -12,6 +12,7 @@ import { ApiError, api } from "@/lib/api";
 import type { OtpPurpose, OtpSent } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { usePublicRules } from "@/lib/use-rules";
 
 /** Seconds until a time (0 when past), ticking every second. */
 function useSecondsTo(iso?: string) {
@@ -157,6 +158,7 @@ export function OtpDialog({
 /** «نسيت كلمة المرور؟»: your phone → a code to it → a new password. Then you sign in with it. */
 export function ForgotPassword({ phone: start = "", onDone, onClose }: { phone?: string; onDone: (phone: string) => void; onClose: () => void }) {
   const { tr } = useFmt();
+  const live = usePublicRules();
   const [step, setStep] = useState<"phone" | "code" | "password">("phone");
   const [phone, setPhone] = useState(start);
   const [token, setToken] = useState<string | null>(null);
@@ -181,7 +183,7 @@ export function ForgotPassword({ phone: start = "", onDone, onClose }: { phone?:
 
   const save = async () => {
     const e: Record<string, string> = {};
-    if (pw.next.length < 6) e.password = tr("6 أحرف على الأقل", "At least 6 characters");
+    if (pw.next.length < live.password_min) e.password = tr(`${live.password_min} أحرف على الأقل`, `At least ${live.password_min} characters`);
     else if (pw.next !== pw.again) e.again = tr("كلمتا المرور غير متطابقتين", "The passwords don't match");
     setErr(e);
     if (Object.keys(e).length) return;

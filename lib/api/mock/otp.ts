@@ -6,13 +6,10 @@
 // (docs/backend.md → «رمز التحقق»).
 import type { OtpPurpose, OtpSent, OtpVerified } from "../types";
 import type { Db, DbUser } from "./db";
-import { fail, msg } from "./rules";
+import { R, fail, msg } from "./rules";
 
-const CODE_MINUTES = 5;
+// The manager's settings (advanced → OTP); the token's 15 minutes stay fixed.
 const TOKEN_MINUTES = 15;
-const RESEND_SECONDS = 60;
-const MAX_SENDS_HOUR = 5;
-const MAX_TRIES = 5;
 
 const rand = (n: number) => {
   const a = new Uint32Array(1);
@@ -43,6 +40,7 @@ export function sendOtp(db: Db, actor: DbUser | null, phone: string, purpose: Ot
   // The wait before another code is per use; the hourly limit counts every code to this number.
   const mine = db.otps.filter((o) => o.phone === p);
   const last = mine.filter((o) => o.purpose === purpose).at(-1);
+  const { resend_seconds: RESEND_SECONDS, per_hour: MAX_SENDS_HOUR, code_minutes: CODE_MINUTES } = R().otp;
   if (last && t - new Date(last.at).getTime() < RESEND_SECONDS * 1000) {
     const wait = Math.ceil((RESEND_SECONDS * 1000 - (t - new Date(last.at).getTime())) / 1000);
     fail(429, "RATE_LIMITED", `انتظر ${wait} ثانية ثم أعد الإرسال`, `Wait ${wait} s and send again`);
@@ -68,6 +66,7 @@ export function verifyOtp(db: Db, requestId: string, code: string, now: Date): O
   if (!o) fail(404, "NOT_FOUND", "انتهت صلاحية الرمز: اطلب رمزاً جديداً", "The code expired: ask for a new one");
   const t = now.getTime();
   if (o.token) fail(409, "BAD_STATE", "استُخدم هذا الرمز من قبل", "This code was already used");
+  const { code_minutes: CODE_MINUTES, tries: MAX_TRIES } = R().otp;
   if (t - new Date(o.at).getTime() > CODE_MINUTES * 60_000) fail(410, "BAD_STATE", "انتهت صلاحية الرمز: اطلب رمزاً جديداً", "The code expired: ask for a new one");
   if (o.tries >= MAX_TRIES) fail(429, "RATE_LIMITED", "محاولات كثيرة: اطلب رمزاً جديداً", "Too many tries: ask for a new one");
   if (!/^\d{6}$/.test((code ?? "").trim()) || !o.code || o.code !== code.trim()) {
@@ -91,7 +90,7 @@ export function spendOtpToken(db: Db, token: string | undefined, phone: string, 
 /** A forgotten password: the phone's account gets a new one (with a token for this phone, purpose reset). */
 export function resetPassword(db: Db, input: { phone: string; otp_token: string; password: string }, now: Date) {
   const p = cleanPhone(input.phone);
-  if ((input.password ?? "").length < 6) fail(422, "VALIDATION", "تحقق من كلمة المرور", "Check the password", { password: msg("6 أحرف على الأقل", "At least 6 characters") });
+  if ((input.password ?? "").length < R().password_min) fail(422, "VALIDATION", "تحقق من كلمة المرور", "Check the password", { password: msg(`${R().password_min} أحرف على الأقل`, `At least ${R().password_min} characters`) });
   spendOtpToken(db, input.otp_token, p, "reset", now);
   const u = db.users.find((x) => x.phone === p && !x.deleted);
   if (!u) fail(404, "NOT_FOUND", "لا يوجد حساب بهذا الرقم", "No account with this number");

@@ -20,10 +20,16 @@ import { notifyPhone } from "@/lib/phone-notify";
 import { cn, matches } from "@/lib/utils";
 import { FAQ } from "./faq";
 import { Bubbles, SendBox } from "./messages";
+import { useRules } from "@/lib/use-rules";
 
 type View = "home" | "faq" | "chat";
 
+/** Hidden while the manager has the support chat turned off (advanced settings → features). */
 export function ChatWidget() {
+  return useRules().features.support_chat ? <ChatCircle /> : null;
+}
+
+function ChatCircle() {
   const { tr, lang } = useFmt();
   const { user } = useApp();
   const [open, setOpen] = useState(false);

@@ -1,6 +1,6 @@
 // The fake database of the prototype. It lives in the browser (localStorage), so the demo keeps its data
 // after a refresh, and two tabs (for example a rep and the manager) see each other's changes.
-import type { OtpPurpose, ScheduledPrice, CashHandover, Visit, ShopList, CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
+import type { SettingsChange, OtpPurpose, ScheduledPrice, CashHandover, Visit, ShopList, CustomValue, Expense, RuleRun, SiteCustom, Vehicle, SupplyOrder, UsdRate, SpecialPrice, CreditNote, Refund,
   AppNotification,
   AuditEntry,
   CommissionRow,
@@ -57,7 +57,11 @@ export interface Db {
   /** Every login attempt (the health page counts the failed ones). */
   /** The automation rules' log (the last 300 runs). */
   rule_runs?: RuleRun[];
-  login_log?: { phone: string; user_id?: number; ok: boolean; reason?: "wrong" | "stopped" | "hours"; at: string }[];
+  login_log?: { phone: string; user_id?: number; ok: boolean; reason?: "wrong" | "stopped" | "hours" | "locked"; at: string }[];
+  /** «الإعدادات المتقدمة»: every save of the settings (who changed what), newest last. */
+  settings_log?: SettingsChange[];
+  /** The custody limit's alert: the day each rep was last reported above it (once a day). */
+  custody_told?: Record<number, string>;
   customers: DbCustomer[];
   orders: Order[];
   invoices: DbInvoice[];
