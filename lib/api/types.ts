@@ -485,6 +485,23 @@ export interface Delivery {
   /** The delivery rep reported he can't deliver it (an accident, the shop closed...). Cleared when it is
    *  delivered or the manager / warehouse keeper takes it back into the warehouse. */
   problem?: DeliveryProblem;
+  /** Paid at the door (optional, any part of the debt): cash the delivery rep took (it goes into his custody),
+   *  or a Qi / ZainCash request sent to the shop owner's app ("requested" until he pays it there). */
+  payment?: DoorPayment;
+}
+
+export type DoorPayMethod = "cash" | "qi" | "zaincash";
+
+export interface DoorPayment {
+  method: DoorPayMethod;
+  /** Asked (Qi / ZainCash) or taken (cash). */
+  amount: number;
+  status: "paid" | "requested";
+  at: string;
+  /** What was recorded: the cash payment, or the shop owner's online payment once it succeeded. */
+  payment_id?: number;
+  paid_amount?: number;
+  paid_at?: string;
 }
 
 export type ProblemReason = "accident" | "vehicle" | "shop_closed" | "no_answer" | "refused" | "other";
@@ -514,6 +531,9 @@ export interface DeliverInput {
   lines?: { item_id: number; unit: Unit; qty: number }[];
   /** What happens to what wasn't delivered: stays as an open order, or is cancelled (the shop decides). */
   rest?: "keep" | "cancel";
+  /** Optional: the shop pays now, all or part. Cash is taken by the delivery rep (his custody);
+   *  Qi / ZainCash send the shop owner a request to pay from his app. */
+  payment?: { method: DoorPayMethod; amount: number };
 }
 
 /** Preparing an order: from which warehouse each line is taken. */
@@ -620,6 +640,8 @@ export interface StartOnlinePayment {
   key: string;
   /** Where the gateway sends the customer back to (a page of our site, as a path: "/client/statement"). */
   return_url: string;
+  /** Paying the request the delivery rep sent at the door (that order's shipment is marked paid on success). */
+  order_id?: number;
 }
 
 export interface Allocation {
@@ -641,11 +663,18 @@ export interface Payment {
   allocations: Allocation[];
   /** Only for online payments. */
   gateway?: GatewayInfo;
+  /** Fully reversed (all of it). A part reversed so far is in reversed_amount. */
   reversed: boolean;
   reversal_of?: number;
+  /** The latest reverse entry of it. */
   reversed_by_id?: number;
+  /** How much of it was reversed (one or more reverse entries, each any amount). */
+  reversed_amount?: number;
   reason?: string;
 }
+
+/** What a payment still counts for: its amount minus what was reversed from it (a reverse entry counts 0). */
+export const netPaid = (p: Pick<Payment, "amount" | "reversal_of" | "reversed_amount">) => (p.reversal_of ? 0 : p.amount - (p.reversed_amount ?? 0));
 
 export type Condition = "good" | "damaged";
 
@@ -879,6 +908,7 @@ export type NotificationType =
   | "price_change"
   | "reorder"
   | "day_summary"
+  | "door_payment"
   | "rule";
 
 export interface AppNotification {

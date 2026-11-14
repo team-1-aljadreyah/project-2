@@ -2032,7 +2032,7 @@ export const mockApi: Api = {
         .map(onlineView)
         .sort((x, y) => y.created_at.localeCompare(x.created_at));
     }),
-  reversePayment: (id, reason) => write((db, a, now) => reversePayment(db, a, id, reason, now)),
+  reversePayment: (id, reason, amount) => write((db, a, now) => reversePayment(db, a, id, reason, now, amount)),
 
   // Returns
   listReturns: () =>

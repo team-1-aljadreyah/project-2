@@ -2,7 +2,7 @@
 // to the accountant, who counts it and confirms what he received. A shortage stays in the rep's custody (and the
 // manager is told). The accountant may also take cash from a rep directly (counted at once).
 // These are the backend's rules (docs/backend.md → «العهدة»).
-import type { CashHandover, CustodyEntry, CustodyLog, CustodyRow } from "../types";
+import { netPaid, type CashHandover, type CustodyEntry, type CustodyLog, type CustodyRow } from "../types";
 import { nextId, type Db, type DbUser } from "./db";
 import { audit, dayOf, fail, msg, need, notify, person } from "./rules";
 
@@ -11,7 +11,11 @@ const fmt = (n: number) => n.toLocaleString("en");
 
 /** The cash payments a rep took (reversed ones left out), oldest first. */
 const cashOf = (db: Db, repId: number) =>
-  db.payments.filter((p) => p.received_by.id === repId && p.received_by.role === "rep" && p.method === "cash" && !p.reversed && !p.reversal_of).sort((a, b) => a.date.localeCompare(b.date));
+  db.payments
+    .filter((p) => p.received_by.id === repId && p.received_by.role === "rep" && p.method === "cash" && !p.reversed && !p.reversal_of)
+    // A partly reversed payment counts for what is left of it.
+    .map((p) => ({ ...p, amount: netPaid(p) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
 const handoversOf = (db: Db, repId: number) => (db.handovers ?? []).filter((h) => h.rep.id === repId);
 

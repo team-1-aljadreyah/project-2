@@ -17,7 +17,7 @@ import { MyCustody } from "@/components/custody";
 import { LateShops } from "@/components/reorder";
 import Link from "next/link";
 import { useApp } from "@/components/shell";
-import { repDoes } from "@/lib/api/types";
+import { netPaid, repDoes } from "@/lib/api/types";
 import { Button, Card, LimitBar, Notice, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { Customer } from "@/lib/api/types";
@@ -45,7 +45,7 @@ export default function RepHome() {
   const [visiting, setVisiting] = useState<Customer | null>(null);
 
   const todayOrders = (orders.data ?? []).filter((o) => dayOfIso(o.created_at) === t && o.status !== "cancelled");
-  const collected = (payments.data ?? []).filter((p) => dayOfIso(p.date) === t && !p.reversed && !p.reversal_of).reduce((s, p) => s + p.amount, 0);
+  const collected = (payments.data ?? []).filter((p) => dayOfIso(p.date) === t).reduce((s, p) => s + netPaid(p), 0);
   const all = (customers.data ?? []).slice().sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0));
   const shown = all.filter((c) => matches(q, c.name, c.owner_name, c.area, c.phone));
   const stops = customers.data ? buildStops(customers.data, now, weekDayOf(t)) : [];

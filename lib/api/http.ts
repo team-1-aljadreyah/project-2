@@ -370,7 +370,8 @@ export const httpApi = {
   startOnlinePayment: (input: StartOnlinePayment) => post<OnlinePayment>("/payments/online", input, input.key),
   getOnlinePayment: (id: string) => get<OnlinePayment>(`/payments/online/${id}`),
   listOnlinePayments: () => get<OnlinePayment[]>("/payments/online"),
-  reversePayment: (id: number, reason: string) => post<Payment>(`/payments/${id}/reverse`, { reason }),
+  /** Reverse all of a payment, or a part (amount; missing = all that is left). */
+  reversePayment: (id: number, reason: string, amount?: number) => post<Payment>(`/payments/${id}/reverse`, { reason, ...(amount !== undefined ? { amount } : {}) }),
 
   listReturns: () => get<Return[]>("/returns"),
   getReturn: (id: number) => get<Return>(`/returns/${id}`),

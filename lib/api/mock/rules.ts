@@ -1430,6 +1430,9 @@ export function createPayment(db: Db, actor: DbUser, input: NewPayment, now: Dat
   need(actor, ["manager", "rep", "accountant"]);
   // Online payments are never typed in by hand: only the gateway's "success" records them.
   if (input.method === "online") fail(422, "VALIDATION", "الدفع الأونلاين يُسجَّل تلقائياً من بوابة الدفع", "Online payments are recorded by the payment gateway");
+  // A rep collects from his own shops only (a delivery rep takes cash at the door through deliverOrder).
+  const customer = db.customers.find((c) => c.id === input.customer_id);
+  if (actor.role === "rep" && customer && customer.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذا الزبون ليس من زبائنك", "This customer isn't yours");
   return addPayment(db, actor, input, now);
 }
 
@@ -1438,7 +1441,6 @@ export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, 
   const same = db.payments.find((p) => p.client_ref === input.client_ref);
   if (same) return same;
   const customer = db.customers.find((c) => c.id === input.customer_id) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
-  if (actor.role === "rep" && customer.rep_id !== actor.id) fail(403, "FORBIDDEN", "هذا الزبون ليس من زبائنك", "This customer isn't yours");
   const balance = customerBalance(db, customer.id);
   if (!(input.amount > 0) || !Number.isInteger(input.amount)) {
     fail(422, "VALIDATION", "المبلغ غير صحيح", "Amount is not valid", { amount: msg("اكتب مبلغاً صحيحاً بالدينار", "Enter a whole amount in dinars") });
@@ -1498,35 +1500,55 @@ export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, 
 }
 
 /** A payment is never deleted: a reverse entry cancels it, and both stay in the statement. */
-export function reversePayment(db: Db, actor: DbUser, id: number, reason: string, now: Date): Payment {
+/** Reverse a payment, all of it or any part (amount missing = all that is left). It can be reversed again
+ *  later until nothing is left. Each reverse is its own entry (a negative payment), never a deletion. */
+export function reversePayment(db: Db, actor: DbUser, id: number, reason: string, now: Date, amount?: number): Payment {
   need(actor, ["manager", "accountant"]);
   const p = db.payments.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "التسديد غير موجود", "Payment not found");
   if (p.reversal_of) fail(409, "BAD_STATE", "هذه عملية عكسية أصلاً", "This is already a reverse entry");
-  if (p.reversed) fail(409, "ALREADY_REVERSED", "تم عكس هذا التسديد من قبل", "This payment was already reversed");
+  const left = p.amount - (p.reversed_amount ?? 0);
+  if (p.reversed || left <= 0) fail(409, "ALREADY_REVERSED", "تم عكس هذا التسديد كله من قبل", "All of this payment was already reversed");
   if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب العكس", "Write the reason", { reason: msg("السبب مطلوب", "Reason is required") });
-  for (const a of p.allocations) {
+  const amt = amount ?? left;
+  if (!(amt > 0) || !Number.isInteger(amt)) fail(422, "VALIDATION", "المبلغ غير صحيح", "Amount is not valid", { amount: msg("اكتب مبلغاً صحيحاً بالدينار", "Enter a whole amount in dinars") });
+  if (amt > left) fail(422, "VALIDATION", "المبلغ أكبر مما بقي من التسديد", "More than what is left of the payment", { amount: msg(`أقصى ما يُعكس ${left.toLocaleString("en")} د.ع`, `${left.toLocaleString("en")} IQD at most`) });
+
+  // Taken back from the newest invoice it paid first (the oldest stay paid); what earlier reverses took is off already.
+  const before = new Map<number, number>();
+  for (const r of db.payments.filter((x) => x.reversal_of === p.id)) for (const a of r.allocations) before.set(a.invoice_id, (before.get(a.invoice_id) ?? 0) - a.amount);
+  let rest = amt;
+  const allocations: Payment["allocations"] = [];
+  for (const a of [...p.allocations].reverse()) {
+    const take = Math.min(rest, a.amount - (before.get(a.invoice_id) ?? 0));
+    if (take <= 0) continue;
     const inv = db.invoices.find((i) => i.id === a.invoice_id);
-    if (inv) inv.paid -= a.amount;
+    if (inv) inv.paid -= take;
+    allocations.push({ ...a, amount: -take });
+    rest -= take;
+    if (!rest) break;
   }
   const rid = nextId(db, "payment");
+  const n = db.payments.filter((x) => x.reversal_of === p.id).length + 1;
   const r: Payment = {
     id: rid,
     number: `PAY-${pad(rid)}`,
-    client_ref: `reverse-${p.id}`,
+    client_ref: n === 1 ? `reverse-${p.id}` : `reverse-${p.id}-${n}`,
     customer_id: p.customer_id,
-    amount: -p.amount,
+    amount: -amt,
     method: p.method,
     received_by: { ...person(actor), role: actor.role },
     date: now.toISOString(),
-    allocations: p.allocations.map((a) => ({ ...a, amount: -a.amount })),
+    allocations,
     reversed: false,
     reversal_of: p.id,
     reason: reason.trim(),
   };
-  p.reversed = true;
+  p.reversed_amount = (p.reversed_amount ?? 0) + amt;
+  p.reversed = p.reversed_amount >= p.amount;
   p.reversed_by_id = rid;
   db.payments.push(r);
-  audit(db, actor, "reverse", "payment", p.id, `عكس التسديد ${p.number} (${p.amount.toLocaleString("en")} د.ع): ${r.reason}`, `Reversed ${p.number} (${p.amount.toLocaleString("en")} IQD): ${r.reason}`, now);
+  const part = amt < p.amount ? ` (${amt.toLocaleString("en")} من ${p.amount.toLocaleString("en")} د.ع)` : ` (${p.amount.toLocaleString("en")} د.ع)`;
+  audit(db, actor, "reverse", "payment", p.id, `عكس التسديد ${p.number}${part}: ${r.reason}`, `Reversed ${amt.toLocaleString("en")} of ${p.number} (${p.amount.toLocaleString("en")} IQD): ${r.reason}`, now);
   return r;
 }
 
@@ -2471,6 +2493,9 @@ export function startOnline(db: Db, actor: DbUser, input: StartOnlinePayment, no
     fail(422, "VALIDATION", "زين كاش يقبل من 1,000 د.ع", "ZainCash takes 1,000 IQD or more", { amount: msg("زين كاش يقبل من 1,000 د.ع فأكثر", "ZainCash takes 1,000 IQD or more") });
   }
   const zc = input.provider === "zaincash";
+  // Paying the request the delivery rep sent at the door: only that shop's own delivered order.
+  const forOrder = input.order_id ? db.orders.find((x) => x.id === input.order_id && x.customer_id === customer.id && x.delivery?.status === "delivered") : undefined;
+  if (input.order_id && !forOrder) fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   const o: DbOnline = {
     payment_id: `${zc ? "zc" : "qi"}_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`,
     ...(zc ? { provider: "zaincash" as const } : {}),
@@ -2481,6 +2506,7 @@ export function startOnline(db: Db, actor: DbUser, input: StartOnlinePayment, no
     by: { ...person(actor), role: actor.role },
     key: input.key,
     return_url: back,
+    ...(forOrder ? { order_id: forOrder.id } : {}),
   };
   db.online_payments.push(o);
   return onlineView(o);
@@ -2510,6 +2536,34 @@ export function settleOnline(db: Db, now: Date) {
       { provider: "qi", payment_id: o.payment_id, card: "**** 0000" },
     );
     o.recorded_payment_id = p.id;
+    markDoorPaid(db, o, p, now);
+  }
+}
+
+/** The shop owner paid the delivery rep's door request from his app: the shipment shows it paid, and the rep is told. */
+function markDoorPaid(db: Db, op: DbOnline, p: Payment, now: Date) {
+  const order = op.order_id ? db.orders.find((x) => x.id === op.order_id) : undefined;
+  const dp = order?.delivery?.payment;
+  if (!order || !dp || dp.status !== "requested") return;
+  Object.assign(dp, { status: "paid", payment_id: p.id, paid_amount: p.amount, paid_at: now.toISOString() });
+  const rep = order.delivery!.delivered_by;
+  const shop = db.customers.find((c) => c.id === order.customer_id)?.name ?? "";
+  const gw = op.provider === "zaincash" ? ["زين كاش", "ZainCash"] : ["Qi", "Qi"];
+  if (rep) {
+    notify(
+      db,
+      {
+        type: "door_payment",
+        roles: ["rep"],
+        user_id: rep.id,
+        title: `دفع ${shop} ${p.amount.toLocaleString("en")} د.ع بـ${gw[0]}`,
+        title_en: `${shop} paid ${p.amount.toLocaleString("en")} IQD by ${gw[1]}`,
+        body: `عن الطلب ${order.number}. المبلغ وصل للشركة مباشرة، ولا يدخل في عهدتك.`,
+        body_en: `For ${order.number}. It went straight to the company; it isn't in your custody.`,
+        link: `/orders/${order.id}`,
+      },
+      now,
+    );
   }
 }
 
@@ -2536,6 +2590,7 @@ export function settleZainCash(db: Db, paymentId: string, status: OnlineStatus, 
     { provider: "zaincash", payment_id: o.gateway_id ?? o.payment_id, card: hidden },
   );
   o.recorded_payment_id = p.id;
+  markDoorPaid(db, o, p, now);
 }
 
 // ---------- Delivery proof (no fake deliveries) ----------
@@ -2627,6 +2682,12 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
     fail(422, "VALIDATION", "صوّر الشحنة عند المحل أولاً", "Take a photo of the packages first", { photo: msg("الصورة مطلوبة", "A photo is required") });
   }
   if (input.photo.length > 600_000) fail(422, "VALIDATION", "الصورة كبيرة جداً", "The photo is too big", { photo: msg("التقط الصورة مرة أخرى", "Take the photo again") });
+  const pay = input.payment;
+  if (pay) {
+    if (!["cash", "qi", "zaincash"].includes(pay.method)) fail(422, "VALIDATION", "اختر طريقة الدفع", "Choose how the shop pays", { payment: msg("نقداً أو Qi أو زين كاش", "Cash, Qi or ZainCash") });
+    if (!(pay.amount > 0) || !Number.isInteger(pay.amount)) fail(422, "VALIDATION", "المبلغ غير صحيح", "Amount is not valid", { payment: msg("اكتب مبلغاً صحيحاً بالدينار", "Enter a whole amount in dinars") });
+    if (pay.method === "zaincash" && pay.amount < 1000) fail(422, "VALIDATION", "زين كاش يقبل من 1,000 د.ع", "ZainCash takes 1,000 IQD or more", { payment: msg("زين كاش يقبل من 1,000 د.ع فأكثر", "ZainCash takes 1,000 IQD or more") });
+  }
 
   if (input.pin.trim() !== d.pin) {
     d.pin_attempts += 1;
@@ -2724,8 +2785,49 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
   syncShipments(db, o);
   audit(db, actor, "update", "order", o.id, `تسليم ${o.number} إلى ${customer?.name ?? ""} برمز الاستلام وصورة`, `${o.number} delivered with PIN and photo`, now);
   const shopUser = shopOwnerOf(db, o.customer_id);
+
+  // Paid at the door (optional; any part of the debt, which now includes this invoice).
+  if (pay) {
+    const owed = customerBalance(db, o.customer_id);
+    if (pay.amount > owed) {
+      fail(422, "VALIDATION", "المبلغ أكبر من الدين", "Amount is more than the debt", {
+        payment: msg(`دين المحل مع هذه الفاتورة ${owed.toLocaleString("en")} د.ع`, `The shop's debt with this invoice is ${owed.toLocaleString("en")} IQD`),
+      });
+    }
+    if (pay.method === "cash") {
+      // Taken by the delivery rep: recorded in his name, so it is in his custody until he hands it to the accountant.
+      const p = addPayment(db, actor, { client_ref: `door:${o.id}`, customer_id: o.customer_id, amount: pay.amount, method: "cash", note: `نقداً عند تسليم ${o.number}` }, now);
+      d.payment = { method: "cash", amount: pay.amount, status: "paid", at: now.toISOString(), payment_id: p.id, paid_amount: p.amount, paid_at: now.toISOString() };
+    } else {
+      d.payment = { method: pay.method, amount: pay.amount, status: "requested", at: now.toISOString() };
+    }
+  }
+
   if (shopUser) {
-    notify(db, { type: "delivered", roles: ["shop"], user_id: shopUser.id, title: `تم تسليم طلبك ${o.number}`, title_en: `Order ${o.number} delivered`, body: `سلّمه ${actor.name}`, body_en: `Delivered by ${actor.name}`, link: `/orders/${o.id}` }, now);
+    const dp = d.payment;
+    const gw = dp?.method === "zaincash" ? ["زين كاش", "ZainCash"] : ["Qi", "Qi"];
+    notify(
+      db,
+      {
+        type: "delivered",
+        roles: ["shop"],
+        user_id: shopUser.id,
+        title: `تم تسليم طلبك ${o.number}`,
+        title_en: `Order ${o.number} delivered`,
+        body: !dp
+          ? `سلّمه ${actor.name}`
+          : dp.method === "cash"
+            ? `سلّمه ${actor.name}، واستلم منك ${dp.amount.toLocaleString("en")} د.ع نقداً`
+            : `سلّمه ${actor.name}. ادفع ${dp.amount.toLocaleString("en")} د.ع بـ${gw[0]} من صفحة الطلب`,
+        body_en: !dp
+          ? `Delivered by ${actor.name}`
+          : dp.method === "cash"
+            ? `Delivered by ${actor.name}, who took ${dp.amount.toLocaleString("en")} IQD cash from you`
+            : `Delivered by ${actor.name}. Pay ${dp.amount.toLocaleString("en")} IQD by ${gw[1]} from the order page`,
+        link: dp?.status === "requested" ? `/orders/${o.id}?pay=1` : `/orders/${o.id}`,
+      },
+      now,
+    );
   }
   return { ok: true, order: o };
 }

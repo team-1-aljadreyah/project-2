@@ -81,7 +81,13 @@ export function deliveryReceipt(o: Order, customer: Customer | undefined, ctx: C
       ...(d?.delivered_by ? ([[tr("سلّمه", "Delivered by"), d.delivered_by.name]] as [string, string][]) : []),
     ],
     lines: lineRows(o.lines, ctx),
-    totals: [[tr("المجموع", "Total"), money(o.total), true]],
+    totals: [
+      [tr("المجموع", "Total"), money(o.total), true],
+      // Paid at the door: the cash taken, or the Qi / ZainCash payment once the shop owner made it.
+      ...(d?.payment?.status === "paid"
+        ? ([[d.payment.method === "cash" ? tr("دُفع نقداً", "Paid cash") : d.payment.method === "qi" ? tr("دُفع بـQi", "Paid by Qi") : tr("دُفع بزين كاش", "Paid by ZainCash"), money(d.payment.paid_amount ?? d.payment.amount)]] as [string, string][])
+        : []),
+    ],
     qr: o.invoice_id ? `/invoices/${o.invoice_id}` : `/orders/${o.id}`,
     footer: tr("استلمت البضاعة كاملة · التوقيع: ............", "Goods received in full · Signature: ............"),
   };

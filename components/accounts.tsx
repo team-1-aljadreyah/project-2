@@ -8,7 +8,7 @@ import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import { ArrowUpLeft, ArrowUpRight, Banknote, Check, ChevronDown, CreditCard, Landmark, Search, Undo2 } from "lucide-react";
 import { methodLabel } from "@/components/pay-method";
-import type { Customer, Invoice, Payment } from "@/lib/api/types";
+import { netPaid, type Customer, type Invoice, type Payment } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn, matches, today } from "@/lib/utils";
 
@@ -159,7 +159,7 @@ export function monthRows(invoices: Invoice[], payments: Payment[], lang: "ar" |
       key,
       label: f.format(d),
       bought: invoices.filter((x) => x.date.startsWith(key)).reduce((s, x) => s + x.total - x.returned, 0),
-      paid: payments.filter((p) => !p.reversed && !p.reversal_of && p.date.startsWith(key)).reduce((s, p) => s + p.amount, 0),
+      paid: payments.filter((p) => p.date.startsWith(key)).reduce((s, p) => s + netPaid(p), 0),
     };
   });
 }

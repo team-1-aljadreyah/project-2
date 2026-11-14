@@ -10,8 +10,8 @@ import { RotateCcw } from "lucide-react";
 import { MethodChip } from "@/components/pay-method";
 import { useApp } from "@/components/shell";
 import { roleName } from "@/components/status";
-import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, GoIcon, KV, LoadingRows, Money, Notice, PageHeader, RefLink, Textarea, useToast } from "@/components/ui";
-import { api } from "@/lib/api";
+import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, GoIcon, KV, LoadingRows, Money, Notice, NumberInput, PageHeader, RefLink, Textarea, useToast } from "@/components/ui";
+import { api, ApiError } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useIdParam } from "@/lib/utils";
@@ -28,11 +28,15 @@ export default function PaymentView() {
   const customer = useLoad(() => (p ? api.getCustomer(p.customer_id) : Promise.resolve(undefined)), [p?.customer_id]);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  // How much to reverse: all that is left of it, or any part.
+  const [amount, setAmount] = useState<number | "">("");
+  const [amountErr, setAmountErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (pay.state.status === "loading") return <LoadingRows />;
   if (pay.state.status === "error" || !p) return <ErrorBox error={pay.state.status === "error" ? pay.state.error : null} onRetry={pay.reload} />;
   const canReverse = (user.role === "manager" || user.role === "accountant") && !p.reversed && !p.reversal_of;
+  const left = p.amount - (p.reversed_amount ?? 0);
 
   return (
     <>
@@ -42,6 +46,7 @@ export default function PaymentView() {
           <span className="flex flex-wrap items-center gap-2">
             {p.reversal_of ? tr("عملية عكسية", "Reverse entry") : tr("تسديد", "Payment")} <span className="num">{p.number}</span>
             {p.reversed && <Badge>{tr("معكوس", "Reversed")}</Badge>}
+            {!p.reversed && !!p.reversed_amount && <Badge tone="warning">{tr("معكوس جزئياً", "Partly reversed")}</Badge>}
           </span>
         }
         actions={
@@ -65,7 +70,7 @@ export default function PaymentView() {
               />
             )}
             {canReverse && (
-              <Button variant="danger" onClick={() => setOpen(true)}>
+              <Button variant="danger" onClick={() => (setAmount(left), setOpen(true))}>
                 <RotateCcw className="size-4" /> {tr("عكس التسديد", "Reverse payment")}
               </Button>
             )}
@@ -127,6 +132,13 @@ export default function PaymentView() {
               </Notice>
             </div>
           )}
+          {!p.reversed && !!p.reversed_amount && p.reversed_by_id && (
+            <div className="mt-3">
+              <Notice tone="warning" href={`/payments/${p.reversed_by_id}`}>
+                {tr("عُكس منه", "Reversed so far")} <Money value={p.reversed_amount} />، {tr("ويبقى منه", "what is left")} <Money value={left} />. {tr("آخر عملية عكسية", "Latest reverse entry")} <b className="num">#{p.reversed_by_id}</b>.
+              </Notice>
+            </div>
+          )}
           {p.reversed && p.reversed_by_id && (
             <div className="mt-3">
               <Notice tone="warning" href={`/payments/${p.reversed_by_id}`}>
@@ -164,16 +176,25 @@ export default function PaymentView() {
             <Button
               variant="danger"
               loading={busy}
-              disabled={!reason.trim()}
+              disabled={!reason.trim() || !amount}
               onClick={async () => {
+                if (!amount) return;
                 setBusy(true);
+                setAmountErr(null);
                 try {
-                  await api.reversePayment(p.id, reason);
-                  toast("success", tr("تم العكس، وعاد الدين على الزبون", "Reversed. The debt is back on the customer"));
+                  await api.reversePayment(p.id, reason, amount);
+                  toast(
+                    "success",
+                    amount < left
+                      ? tr(`عُكس ${money(amount)} من التسديد، وعاد على الزبون دينه`, `${money(amount)} reversed; that much is owed again`)
+                      : tr("تم العكس، وعاد الدين على الزبون", "Reversed. The debt is back on the customer"),
+                  );
                   setOpen(false);
+                  setReason("");
                   pay.reload();
                 } catch (e) {
-                  toast("danger", errorText(e, tr));
+                  if (e instanceof ApiError && e.errors?.amount) setAmountErr(e.errors.amount);
+                  else toast("danger", errorText(e, tr));
                 } finally {
                   setBusy(false);
                 }
@@ -187,10 +208,23 @@ export default function PaymentView() {
         <div className="space-y-3">
           <Notice tone="primary">
             {tr(
-              "التسديد لا يُحذف، بل ستُسجَّل عملية عكسية بالمبلغ نفسه باسمك، وتظهر في كشف الحساب.",
-              "Payments are never deleted. A reverse entry with the same amount is saved under your name and shows in the statement.",
+              "التسديد لا يُحذف، بل ستُسجَّل عملية عكسية بالمبلغ الذي تختاره باسمك، وتظهر في كشف الحساب. يمكن عكس جزء منه الآن، والباقي لاحقاً.",
+              "Payments are never deleted. A reverse entry for the amount you choose is saved under your name and shows in the statement. You can reverse part now and more later.",
             )}
           </Notice>
+          <Field label={tr("المبلغ المعكوس", "Amount to reverse")} error={amountErr ?? undefined}>
+            <NumberInput value={amount} onChange={(v) => (setAmount(v), setAmountErr(null))} suffix={tr("د.ع", "IQD")} invalid={!!amountErr} />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {[
+                { l: tr("كل ما بقي", "All that is left"), v: left },
+                { l: tr("النصف", "Half"), v: Math.round(left / 2 / 250) * 250 },
+              ].map((x) => (
+                <button key={x.l} type="button" onClick={() => setAmount(x.v)} className={"rounded-full border px-3 py-1 text-xs font-semibold " + (amount === x.v ? "border-action bg-action/10 text-action" : "border-line-strong text-muted")}>
+                  {x.l} · <Money value={x.v} />
+                </button>
+              ))}
+            </div>
+          </Field>
           <Field label={tr("السبب", "Reason")}>
             <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("مثلاً: سُجّل مرتين خطأً", "e.g. entered twice by mistake")} />
           </Field>

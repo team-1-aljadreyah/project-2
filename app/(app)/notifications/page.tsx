@@ -59,6 +59,8 @@ const icon = (t: NotificationType) => {
       return <Truck className="size-5 text-action" />;
     case "expense":
       return <Banknote className="size-5 text-warning" />;
+    case "door_payment":
+      return <Banknote className="size-5 text-success" />;
     case "rule":
       return <Zap className="size-5 text-action" />;
     case "refund":
