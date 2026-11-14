@@ -209,21 +209,34 @@ export function SiteScene({ warehouses, myWarehouseId, onEnter }: { warehouses: 
   const [hover, setHover] = useState<number | null>(null);
   const Forward = lang === "ar" ? ArrowLeft : ArrowRight;
 
+  // The drawing has two buildings (slots 1 and 2: the big one, then the other). They take the warehouses in
+  // order, lowest id first, whatever their ids are (the real server's ids aren't 1 and 2, and the buildings
+  // matched nothing: no click and no badge on the live site).
+  const slots = Object.keys(SCENE.badge).map(Number).sort((a, b) => a - b);
+  const ordered = [...warehouses].sort((a, b) => a.wh.id - b.wh.id);
+  const atSlot = new Map<number, MapWarehouse>();
+  slots.forEach((slot, i) => ordered[i] && atSlot.set(slot, ordered[i]));
+  const slotOf = new Map([...atSlot].map(([slot, w]) => [w.wh.id, slot]));
+  const badgeOf = (id: number) => {
+    const slot = slotOf.get(id);
+    return slot === undefined ? undefined : SCENE.badge[slot];
+  };
+
   const enter = (id: number) => {
-    const at = SCENE.badge[id];
+    const at = badgeOf(id);
     if (!at) return onEnter(id, { x: 0.5, y: 0.5 });
     const b = pct(at);
     onEnter(id, { x: b.x / 100, y: (b.y + 12) / 100 });
   };
   // The drawing has the first two warehouses. Any warehouse added later shows as a card under it.
-  const drawn = warehouses.filter((w) => SCENE.badge[w.wh.id]);
-  const extra = warehouses.filter((w) => !SCENE.badge[w.wh.id]);
+  const drawn = warehouses.filter((w) => slotOf.has(w.wh.id));
+  const extra = warehouses.filter((w) => !slotOf.has(w.wh.id));
 
   return (
     <div className="relative mx-auto w-full max-w-5xl select-none">
       <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="h-auto w-full" role="img" aria-label={tr("خريطة مخازن النهرين", "Map of Al-Nahrain's warehouses")}>
         {SCENE.objs.map((o, i) => {
-          const w = o.wh ? warehouses.find((x) => x.wh.id === o.wh) : undefined;
+          const w = o.wh ? atSlot.get(o.wh) : undefined;
           if (!w) {
             return (
               <motion.g key={o.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: Math.min(0.9, i * 0.012) }}>
@@ -241,8 +254,8 @@ export function SiteScene({ warehouses, myWarehouseId, onEnter }: { warehouses: 
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.2 + (o.wh === 2 ? 0.25 : 0) + i * 0.01, ease: [0.22, 1, 0.36, 1] }}
               className="cursor-pointer outline-none"
-              style={{ filter: hover === o.wh ? "drop-shadow(0 0 14px rgb(225 105 43 / 0.7))" : undefined, transition: "filter .25s" }}
-              onMouseEnter={() => setHover(o.wh ?? null)}
+              style={{ filter: hover === w.wh.id ? "drop-shadow(0 0 14px rgb(225 105 43 / 0.7))" : undefined, transition: "filter .25s" }}
+              onMouseEnter={() => setHover(w.wh.id)}
               onMouseLeave={() => setHover(null)}
               onClick={() => enter(w.wh.id)}
               {...(o.main
@@ -266,7 +279,7 @@ export function SiteScene({ warehouses, myWarehouseId, onEnter }: { warehouses: 
 
       {/* How full each warehouse is, floating above it */}
       {drawn.map((w) => {
-        const b = pct(SCENE.badge[w.wh.id]);
+        const b = pct(badgeOf(w.wh.id)!);
         const full = w.fill >= 0.85;
         return (
           <motion.button
@@ -277,7 +290,7 @@ export function SiteScene({ warehouses, myWarehouseId, onEnter }: { warehouses: 
             onMouseLeave={() => setHover(null)}
             initial={{ opacity: 0, scale: 0.6 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.9 + w.wh.id * 0.15, type: "spring", stiffness: 260, damping: 18 }}
+            transition={{ delay: 0.9 + (slotOf.get(w.wh.id) ?? 1) * 0.15, type: "spring", stiffness: 260, damping: 18 }}
             className="float absolute z-10 flex -translate-x-1/2 -translate-y-full flex-col items-center gap-1"
             style={{ left: `${b.x}%`, top: `${b.y}%` }}
             tabIndex={-1}
@@ -310,7 +323,7 @@ export function SiteScene({ warehouses, myWarehouseId, onEnter }: { warehouses: 
           (() => {
             const w = drawn.find((x) => x.wh.id === hover);
             if (!w) return null;
-            const b = pct(SCENE.badge[w.wh.id]);
+            const b = pct(badgeOf(w.wh.id)!);
             return (
               <motion.div
                 key={hover}
