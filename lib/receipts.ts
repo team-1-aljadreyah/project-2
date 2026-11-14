@@ -4,6 +4,11 @@ import type { ReceiptData } from "@/components/thermal-receipt";
 import type { Customer, Invoice, Item, Order, Payment } from "@/lib/api/types";
 import type { Fmt } from "@/lib/i18n";
 
+/** The manager's line under every invoice (advanced settings → numbers and names), from the public settings. */
+let footerLine = "";
+export const setInvoiceLine = (t: string) => (footerLine = t);
+const invoiceLine = () => footerLine;
+
 type Ctx = { fmt: Fmt; itemById: Map<number, Item> };
 
 const lineRows = (lines: { item_id: number; unit: "carton" | "piece"; qty: number; unit_price: number; total: number }[], { fmt, itemById }: Ctx) =>
@@ -43,7 +48,7 @@ export function invoiceReceipt(inv: Invoice, customer: Customer | undefined, ctx
           ] as [string, string, boolean?][])),
     ],
     qr: `/invoices/${inv.id}`,
-    footer: tr("شكراً لتعاملكم معنا", "Thank you"),
+    footer: [invoiceLine(), tr("شكراً لتعاملكم معنا", "Thank you")].filter(Boolean).join(" · "),
   };
 }
 

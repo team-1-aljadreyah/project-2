@@ -9,14 +9,16 @@ import { api } from "@/lib/api";
 import type { Batch, BatchTrace, Role } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
+import { useMay } from "@/lib/use-rules";
 
-export function BatchActions({ batch, role, piecesPerCarton, onChanged }: { batch: Batch; role: Role; piecesPerCarton: number; onChanged: () => void }) {
+export function BatchActions({ batch, piecesPerCarton, onChanged }: { batch: Batch; role?: Role; piecesPerCarton: number; onChanged: () => void }) {
   const { tr } = useFmt();
   const toast = useToast();
   const [stop, setStop] = useState(false);
   const [trace, setTrace] = useState(false);
   const [busy, setBusy] = useState(false);
-  const canHold = role === "manager" || role === "warehouse";
+  const may = useMay();
+  const canHold = may("hold_batch");
   return (
     <div className="flex flex-wrap items-center justify-end gap-1">
       <Button size="sm" variant="ghost" onClick={() => setTrace(true)} title={tr("من استلم منها", "Who got it")}>
@@ -27,7 +29,7 @@ export function BatchActions({ batch, role, piecesPerCarton, onChanged }: { batc
           <Ban className="size-4" /> {tr("أوقف البيع", "Stop selling")}
         </Button>
       )}
-      {batch.held && role === "manager" && (
+      {batch.held && may("hold_batch") && (
         <Button
           size="sm"
           loading={busy}

@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import type { Delivery, Order, ProblemReason, Role } from "@/lib/api/types";
 import { useFmt, type Tr } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { useMay } from "@/lib/use-rules";
 
 export function problemText(r: ProblemReason, tr: Tr) {
   return {
@@ -92,13 +93,14 @@ export function ReportProblem({ orders, onClose, onDone }: { orders: Order[]; on
 }
 
 /** The red note on a shipment with a problem; the manager / its warehouse keeper can take it back. */
-export function ProblemNote({ order, role, onChanged, className }: { order: Order; role: Role; onChanged?: () => void; className?: string }) {
+export function ProblemNote({ order, onChanged, className }: { order: Order; role?: Role; onChanged?: () => void; className?: string }) {
   const { tr, ago } = useFmt();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const may = useMay();
   const d: Delivery = order.delivery!;
   if (!d.problem) return null;
-  const canTakeBack = role === "manager" || role === "warehouse";
+  const canTakeBack = may("take_back_shipment");
   return (
     <div className={cn("rounded-xl bg-danger-soft p-3 text-sm text-danger", className)}>
       <p className="flex items-center gap-1.5 font-semibold">

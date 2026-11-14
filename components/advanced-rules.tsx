@@ -10,13 +10,15 @@ import { useApp } from "@/components/shell";
 import { roleName } from "@/components/status";
 import { Badge, Button, Card, CardHeader, Dialog, Empty, errorText, Input, LoadingRows, Notice, NumberInput, Segmented, Select, Switch, Textarea, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import { DEFAULT_NOTIFY, DEFAULT_RULES, ROLES_ALL, changedRules, checkRules, rulesOf, suggestedClearance, type AdvancedRules, type FeatureKey } from "@/lib/api/advanced";
+import { DEFAULT_NOTIFY, DEFAULT_PREFIXES, DEFAULT_RULES, ROLES_ALL, changedRules, checkRules, expectedDelivery, rulesOf, suggestedClearance, type AdvancedRules, type FeatureKey, type NumberKind, type WarehouseRule } from "@/lib/api/advanced";
+import { ACTION, ACTIONS, STAFF_ROLES, rolesFor, type ActionDef, type ActionGroup, type ActionKey, type PersonRule } from "@/lib/api/permissions";
+import { canOpen } from "@/components/nav";
 import { EXPENSE_APPROVAL_ABOVE, type DoorPayMethod, type NotificationType, type Role, type Settings, type SettingsChange } from "@/lib/api/types";
 import { useFmt, type Tr } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 
-export type RulesPart = "orders" | "signup" | "delivery" | "money" | "stock" | "security" | "features" | "notify" | "announce" | "history";
+export type RulesPart = "orders" | "signup" | "delivery" | "money" | "stock" | "security" | "permissions" | "people" | "work" | "warehouses" | "names" | "features" | "notify" | "announce" | "history";
 
 /** The older settings (top level) edited beside the rules. */
 type Top = Omit<Settings, "advanced" | "auto_confirm_rep_orders">;
@@ -34,6 +36,11 @@ export const RULE_WORDS: Record<RulesPart, string> = {
   notify: "إشعارات من يصله ملخص اليوم ساعة",
   announce: "إعلان صيانة رسالة",
   history: "سجل تصدير استيراد ملف افتراضي إرجاع",
+  permissions: "صلاحيات من يحق له عكس اعتماد إلغاء خصم تعديل أسعار جرد استلام موافقة محل مستخدمين كلفة ربح ديون",
+  people: "حد خصم صرفيات عهدة مندوب شخص استثناء",
+  work: "دوام ساعات عطلة أيام توصيل موعد منطقة آخر وقت",
+  warehouses: "مخزن حجز بيع مباشر طلبات المحلات",
+  names: "بادئة أرقام عملة فاتورة سطر",
 };
 
 // ---------- the editor ----------
@@ -99,6 +106,11 @@ function Editor({ saved, part }: { saved: Draft; part: RulesPart }) {
     part === "security" ? <SecurityPart {...ctx} /> :
     part === "features" ? <FeaturesPart {...ctx} /> :
     part === "notify" ? <NotifyPart {...ctx} /> :
+    part === "permissions" ? <PermissionsPart {...ctx} /> :
+    part === "people" ? <PeoplePart {...ctx} /> :
+    part === "work" ? <WorkPart {...ctx} /> :
+    part === "warehouses" ? <WarehousesPart {...ctx} /> :
+    part === "names" ? <NamesPart {...ctx} /> :
     <AnnouncePart {...ctx} />;
 
   return (
@@ -366,15 +378,18 @@ function MoneyPart(c: Ctx) {
         <Num c={c} k="custody_cap" label={tr("حد النقد بيد المندوب", "Cash limit per rep")} hint={tr("0 = بلا حد. مندوب يأخذ نقداً وبيده أكثر منه: يصلك أنت والمحاسب إشعار لطلب التسليم (مرة في اليوم لكل مندوب)", "0 = none. A rep taking cash while holding more: you and the accountant are told to ask for a handover (once a day per rep)")} suffix={tr("د.ع", "IQD")} />
       </Part>
       <Part title={tr("عكس التسديدات", "Reversing payments")}>
-        <Row label={tr("من يعكس تسديداً", "Who reverses a payment")} hint={tr("المدير دائماً", "Always the manager")} changed={!same(r.reverse_roles, DEFAULT_RULES.reverse_roles)} onDefault={() => c.set({ reverse_roles: DEFAULT_RULES.reverse_roles })} defText={tr("المدير والمحاسب", "Manager and accountant")} error={c.errors.reverse_roles}>
+        <Row
+          label={tr("من يعكس تسديداً", "Who reverses a payment")}
+          hint={tr("المدير دائماً. الوظيفة التي لا تفتح صفحة التسديدات لا تُختار. ولشخص بعينه: «حدود الوظائف والأشخاص»", "Always the manager. A job that doesn't open the payments page can't be picked. For one person: «Limits per job and person»")}
+          changed={!!r.permissions.reverse_payment}
+          onDefault={() => setActionRoles(c, "reverse_payment", ACTION.reverse_payment.def)}
+          defText={tr("المدير والمحاسب", "Manager and accountant")}
+        >
           <Chips<Role>
-            value={r.reverse_roles}
-            locked={["manager"]}
-            options={[
-              { v: "manager", l: roleName("manager", tr) },
-              { v: "accountant", l: roleName("accountant", tr) },
-            ]}
-            onChange={(v) => c.set({ reverse_roles: (["manager", "accountant"] as Role[]).filter((x) => x === "manager" || v.includes(x)) })}
+            value={rolesFor(r.permissions, "reverse_payment")}
+            locked={STAFF_ROLES.filter((x) => x === "manager" || !reaches(x, ACTION.reverse_payment))}
+            options={STAFF_ROLES.map((x) => ({ v: x, l: roleName(x, tr) }))}
+            onChange={(v) => setActionRoles(c, "reverse_payment", v)}
           />
         </Row>
         <Num c={c} k="reverse_days" label={tr("التسديد الأقدم من هذه الأيام يعكسه المدير فقط", "Older than these days: only the manager reverses")} hint={tr("0 = أي عمر", "0 = any age")} suffix={tr("يوم", "days")} />
@@ -598,7 +613,7 @@ function AnnouncePart(c: Ctx) {
     <>
       <Part title={tr("إعلان أعلى الصفحات", "A banner on top of the pages")} icon={<Megaphone className="size-4 text-action" />} sub={tr("يظهر لمن تختار حتى تحذفه أو ينتهي وقته", "Shown to whom you choose until removed or it ends")}>
         <Row label={tr("الإعلان", "The banner")} changed={!!a} onDefault={() => c.set({ announcement: null })} defText={tr("بلا إعلان", "None")}>
-          <Switch checked={!!a} onChange={(v) => c.set({ announcement: v ? { text: "", roles: [], tone: "info" } : null })} label={a ? tr("ظاهر", "Shown") : tr("بلا إعلان", "None")} />
+          <Switch checked={!!a} onChange={(v) => c.set({ announcement: v ? { text: READY_BANNER, text_en: READY_BANNER_EN, roles: [], tone: "info" } : null })} label={a ? tr("ظاهر", "Shown") : tr("بلا إعلان", "None")} />
         </Row>
         {a && (
           <>
@@ -626,7 +641,7 @@ function AnnouncePart(c: Ctx) {
       </Part>
       <Part title={tr("صيانة تطبيق أصحاب المحلات", "Shop owners' app maintenance")} icon={<Wrench className="size-4 text-warning" />} sub={tr("الموظفون يعملون كالعادة؛ أصحاب المحلات يرون الرسالة ولا يرسلون طلبات", "Staff work as usual; shop owners see the message and can't order")}>
         <Row label={tr("وضع الصيانة", "Maintenance mode")} changed={mt.on} onDefault={() => c.set({ maintenance: { ...mt, on: false } })} defText={tr("متوقف", "Off")}>
-          <Switch checked={mt.on} onChange={(v) => c.set({ maintenance: { ...mt, on: v } })} label={mt.on ? tr("مفعّل الآن", "On now") : tr("متوقف", "Off")} />
+          <Switch checked={mt.on} onChange={(v) => c.set({ maintenance: { ...mt, on: v, ...(v && !mt.message.trim() ? { message: READY_MAINTENANCE, message_en: mt.message_en || READY_MAINTENANCE_EN } : {}) } })} label={mt.on ? tr("مفعّل الآن", "On now") : tr("متوقف", "Off")} />
         </Row>
         <Row label={tr("الرسالة لأصحاب المحلات", "The message to shop owners")} error={c.errors["maintenance.message"]}>
           <Textarea value={mt.message} onChange={(e) => c.set({ maintenance: { ...mt, message: e.target.value } })} placeholder={tr("مثلاً: نحدّث النظام، ونعود خلال ساعة", "e.g. Updating; back within an hour")} />
@@ -638,6 +653,12 @@ function AnnouncePart(c: Ctx) {
     </>
   );
 }
+
+// Ready texts: switching the banner or maintenance on writes one you can change (nothing turns red).
+const READY_BANNER = "إعلان من إدارة الشركة: اكتب هنا ما تريد أن يراه الجميع.";
+const READY_BANNER_EN = "A notice from the company.";
+const READY_MAINTENANCE = "نحدّث التطبيق الآن، ونعود خلال وقت قصير. شكراً لصبركم.";
+const READY_MAINTENANCE_EN = "We are updating the app and will be back shortly. Thank you for your patience.";
 
 const toLocalInput = (iso: string) => {
   const d = new Date(iso);
@@ -702,12 +723,23 @@ const KEY_NAMES: Record<string, [string, string]> = {
   "advanced.notify_matrix": ["من يصله كل إشعار", "Notification matrix"],
   "advanced.announcement": ["الإعلان", "Banner"],
   "advanced.maintenance": ["الصيانة", "Maintenance"],
+  "advanced.permissions": ["من يحق له", "Who may"],
+  "advanced.people": ["استثناء شخص", "Person's exception"],
+  "advanced.discount_by_role": ["خصم الوظيفة", "Job's discount"],
+  "advanced.expense_by_role": ["حد صرفيات الوظيفة", "Job's expense limit"],
+  "advanced.work": ["الدوام", "Working time"],
+  "advanced.delivery_plan": ["موعد التوصيل", "Delivery dates"],
+  "advanced.warehouses": ["قواعد المخزن", "Warehouse rules"],
+  "advanced.names": ["الأرقام والأسماء", "Numbers and names"],
 };
 
 const PART_NAMES: Record<string, Record<string, [string, string]>> = {
   otp: { code_minutes: ["صلاحية الرمز", "Code valid"], resend_seconds: ["انتظار إعادة الإرسال", "Resend wait"], per_hour: ["رموز في الساعة", "Codes an hour"], tries: ["محاولات الرمز", "Code tries"] },
   clearance: { near_days: ["أيام الأقرب", "Nearest days"], near_percent: ["نسبة الأقرب", "Nearest %"], mid_days: ["أيام الأوسط", "Middle days"], mid_percent: ["نسبة الأوسط", "Middle %"], far_percent: ["نسبة الأبعد", "Farther %"] },
   maintenance: { on: ["وضع الصيانة", "Maintenance mode"], message: ["رسالة الصيانة", "Maintenance message"], message_en: ["رسالة الصيانة بالإنجليزية", "English message"] },
+  work: { on: ["قواعد الدوام", "Working-time rules"], days: ["أيام العمل", "Working days"], from: ["بداية الدوام", "Opens"], to: ["نهاية الدوام", "Closes"], holidays: ["العطل", "Holidays"] },
+  delivery_plan: { on: ["حساب موعد التوصيل", "Delivery dates"], cutoff: ["آخر وقت لتوصيل نفس اليوم", "Same-day cut-off"], days_by_area: ["أيام التوصيل للمناطق", "Delivery days per area"] },
+  names: { prefixes: ["بادئات الأرقام", "Number prefixes"], currency_ar: ["العملة بالعربية", "Currency (Arabic)"], currency_en: ["العملة بالإنجليزية", "Currency (English)"], invoice_footer: ["سطر الفاتورة", "Invoice line"] },
 };
 
 /** A history line's name: the setting, or the part of one («رمز التحقق · صلاحية الرمز», «الميزات · محادثة الدعم»). */
@@ -717,6 +749,14 @@ function keyName(key: string, tr: Tr): string {
   if (group === "features") {
     const f = FEATURES.find((x) => x.k === part);
     return f ? tr(f.ar, f.en) : part;
+  }
+  if (group === "permissions") {
+    const a = ACTION[part as ActionKey];
+    return a ? tr(`من يحق له: ${a.ar}`, `Who may: ${a.en}`) : part;
+  }
+  if ((group === "discount_by_role" || group === "expense_by_role") && ROLES_ALL.includes(part as Role)) {
+    const g0 = KEY_NAMES[`advanced.${group}`];
+    return `${tr(g0[0], g0[1])} · ${roleName(part as Role, tr)}`;
   }
   if (group === "notify_matrix") {
     const n = NOTIFY_NAMES.find((x) => x[0] === part);
@@ -737,13 +777,28 @@ function showValue(key: string, v: unknown, tr: Tr): string {
     return v;
   }
   if (Array.isArray(v)) {
+    if (key.endsWith(".work.days")) return v.map((d) => WEEK.find((w) => w[0] === d)?.[lang(tr)] ?? d).join("، ") || "—";
+    if (key.endsWith(".work.holidays")) return v.map((h: { name: string; date: string }) => `${h.name} ${h.date}`).join("، ") || "—";
     if (!v.length) return tr("لا أحد", "Nobody");
     const pay: Record<string, [string, string]> = { cash: ["نقداً", "Cash"], qi: ["Qi", "Qi"], zaincash: ["زين كاش", "ZainCash"] };
     return v.map((x) => (pay[x] ? tr(pay[x][0], pay[x][1]) : ROLES_ALL.includes(x) ? roleName(x, tr) : String(x))).join("، ");
   }
-  const s = JSON.stringify(v);
-  return s.length > 80 ? `${s.slice(0, 80)}…` : s;
+  // A part made of several values (a person's exception, a warehouse, prefixes, areas): «key: value» in words.
+  const WORDS: Record<string, [string, string]> = {
+    discount_max: ["الخصم", "discount"], custody_cap: ["العهدة", "cash"], expense_limit: ["الصرفيات", "expenses"], allow: ["يُعطى", "given"], deny: ["يُؤخذ", "taken"],
+    reservation_hours: ["الحجز", "hold"], shop_orders: ["طلبات المحلات", "shop orders"], counter_sale: ["البيع المباشر", "counter sale"],
+  };
+  const parts = Object.entries(v as Record<string, unknown>).map(([k, x]) => {
+    const w = WORDS[k];
+    const val = Array.isArray(x) ? x.map((y) => (ACTION[y as ActionKey] ? tr(ACTION[y as ActionKey].ar, ACTION[y as ActionKey].en) : WEEK.find((d) => d[0] === y)?.[lang(tr)] ?? y)).join("، ") || "—" : typeof x === "boolean" ? (x ? tr("نعم", "yes") : tr("لا", "no")) : String(x);
+    return `${w ? tr(w[0], w[1]) : k}: ${val}`;
+  });
+  const s = parts.join(" · ");
+  return s.length > 140 ? `${s.slice(0, 140)}…` : s || "—";
 }
+
+/** 1 for Arabic, 2 for English: which name of a weekday to show. */
+const lang = (tr: Tr): 1 | 2 => (tr("ع", "e") === "ع" ? 1 : 2);
 
 function HistorySection() {
   const { tr, dateTime } = useFmt();
@@ -889,6 +944,411 @@ function HistorySection() {
           <Notice tone="warning">{tr("كل قواعد العمل والإعدادات تعود كما كانت أول مرة (ومعها مدة الحجز وحد الصرفيات). نزّل ملف الإعدادات أولاً إن أردت الرجوع إليها.", "Every rule and setting returns to the defaults. Download the settings file first to keep them.")}</Notice>
         </Dialog>
       )}
+    </>
+  );
+}
+
+// ---------- who may do what ----------
+
+const WEEK: [number, string, string][] = [
+  [6, "السبت", "Sat"],
+  [0, "الأحد", "Sun"],
+  [1, "الاثنين", "Mon"],
+  [2, "الثلاثاء", "Tue"],
+  [3, "الأربعاء", "Wed"],
+  [4, "الخميس", "Thu"],
+  [5, "الجمعة", "Fri"],
+];
+
+const GROUP_NAMES: Record<ActionGroup, [string, string]> = {
+  money: ["الأموال", "Money"],
+  orders: ["الطلبات والتوصيل", "Orders and delivery"],
+  stock: ["المخزون", "Stock"],
+  people: ["الزبائن والمستخدمون", "Customers and people"],
+};
+
+/** Can this job reach the page the action is done from? (the users page comes with its right) */
+const reaches = (role: Role, a: ActionDef) => role === "manager" || a.page === null || a.key === "manage_users" || canOpen(role, a.page, role === "rep" ? ["sales", "delivery"] : undefined);
+
+/** One action's jobs (the table row): ticking changes it, the manager always stays. */
+function setActionRoles(c: Ctx, key: ActionKey, roles: Role[]) {
+  const def = ACTION[key].def;
+  const next = STAFF_ROLES.filter((r) => r === "manager" || roles.includes(r));
+  const p = { ...c.d.rules.permissions };
+  if (same([...next].sort(), [...(def.includes("manager") ? def : ["manager", ...def])].sort())) delete p[key];
+  else p[key] = next;
+  c.set({ permissions: p });
+}
+
+function PermissionsPart(c: Ctx) {
+  const { tr } = c;
+  const changed = Object.keys(c.d.rules.permissions).length;
+  return (
+    <>
+      <div className="mb-4">
+      <Notice tone="primary">
+        {tr(
+          "علّم الوظائف التي تقوم بكل عمل. المدير يقوم بها كلها دائماً. الخانة الرمادية: الوظيفة لا تفتح الصفحة التي يتم منها هذا العمل. ولشخص بعينه: «حدود الوظائف والأشخاص».",
+          "Tick the jobs that do each thing. The manager always does them all. A grey box: that job doesn't open the page it's done from. For one person: «Limits per job and person».",
+        )}
+      </Notice>
+      </div>
+      {changed > 0 && (
+        <div className="mb-3 flex items-center justify-between rounded-xl bg-action/[0.06] px-4 py-2 text-xs">
+          <span>{tr(`${changed} عمل معدَّل`, `${changed} changed`)}</span>
+          <button type="button" onClick={() => c.set({ permissions: {} })} className="flex items-center gap-1 font-semibold text-action hover:underline">
+            <RotateCcw className="size-3" /> {tr("الكل كما كان", "All back to default")}
+          </button>
+        </div>
+      )}
+      {(Object.keys(GROUP_NAMES) as ActionGroup[]).map((g) => (
+        <Part key={g} title={tr(GROUP_NAMES[g][0], GROUP_NAMES[g][1])}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[620px] text-sm">
+              <thead>
+                <tr className="border-b border-line text-xs text-muted">
+                  <th className="px-4 py-2 text-start font-semibold">{tr("العمل", "Action")}</th>
+                  {STAFF_ROLES.map((r) => (
+                    <th key={r} className="px-2 py-2 text-center font-semibold">
+                      {roleName(r, tr)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ACTIONS.filter((a) => a.group === g).map((a) => {
+                  const on = rolesFor(c.d.rules.permissions, a.key);
+                  const mod = !!c.d.rules.permissions[a.key];
+                  return (
+                    <tr key={a.key} className={cn("border-b border-line last:border-0", mod && "bg-action/[0.04]")}>
+                      <td className="px-4 py-2">
+                        <span className="font-medium">{tr(a.ar, a.en)}</span>
+                        {mod && (
+                          <button type="button" onClick={() => setActionRoles(c, a.key, a.def)} className="ms-2 inline-flex items-center gap-1 text-xs font-semibold text-action hover:underline">
+                            <RotateCcw className="size-3" /> {tr("الافتراضي", "Default")}
+                          </button>
+                        )}
+                      </td>
+                      {STAFF_ROLES.map((r) => {
+                        const ok = reaches(r, a);
+                        const label = `${tr(a.ar, a.en)} · ${roleName(r, tr)}`;
+                        return (
+                          <td key={r} className="px-2 py-2 text-center" title={!ok ? tr("هذه الوظيفة لا تفتح صفحة هذا العمل", "This job doesn't open this action's page") : undefined}>
+                            <input
+                              type="checkbox"
+                              aria-label={label}
+                              checked={on.includes(r)}
+                              disabled={r === "manager" || !ok}
+                              onChange={() => setActionRoles(c, a.key, on.includes(r) ? on.filter((x) => x !== r) : [...on, r])}
+                              className={cn("size-4 accent-[var(--action)]", r === "manager" || !ok ? "cursor-not-allowed opacity-40" : "cursor-pointer")}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Part>
+      ))}
+    </>
+  );
+}
+
+// ---------- limits per job and per person ----------
+
+/** A number that may be left empty (empty = follows the general one). */
+function Opt({ value, onChange, placeholder, suffix, label, error }: { value: number | undefined; onChange: (v: number | undefined) => void; placeholder: string; suffix?: string; label: string; error?: string }) {
+  return (
+    <>
+      <NumberInput value={value === undefined || Number.isNaN(value) ? "" : value} onChange={(v) => onChange(v === "" ? undefined : v)} placeholder={placeholder} suffix={suffix} aria-label={label} invalid={!!error} />
+      {error && <p className="mt-1 text-xs font-medium text-danger">{error}</p>}
+    </>
+  );
+}
+
+const putKey = <T,>(rec: Partial<Record<string, T>>, k: string, v: T | undefined) => {
+  const next = { ...rec };
+  if (v === undefined) delete next[k];
+  else next[k] = v;
+  return next;
+};
+
+function PeoplePart(c: Ctx) {
+  const { tr, num } = useFmtNum();
+  const { lookups } = useApp();
+  const r = c.d.rules;
+  const users = useLoad(() => api.listUsers().catch(() => []), []);
+  const [adding, setAdding] = useState("");
+  const jobs: Role[] = ["accountant", "warehouse", "staff", "rep"];
+  const iqd = tr("د.ع", "IQD");
+  const people = Object.entries(r.people);
+  const nameOf = (id: string) => users.data?.find((u) => String(u.id) === id)?.name ?? `#${id}`;
+  const roleOf = (id: string) => users.data?.find((u) => String(u.id) === id)?.role;
+  const setPerson = (id: string, p: PersonRule | undefined) => c.set({ people: putKey(r.people, id, p) as Record<string, PersonRule> });
+  return (
+    <>
+      <Part title={tr("الخصم بلا موافقة لكل وظيفة", "Discount alone, per job")} sub={tr(`فارغ = مثل الجميع (${num(r.staff_discount_max)}%)`, `Empty = like everyone (${num(r.staff_discount_max)}%)`)}>
+        {jobs.map((j) => (
+          <Row key={j} label={roleName(j, tr)} changed={r.discount_by_role[j] !== undefined} onDefault={() => c.set({ discount_by_role: putKey(r.discount_by_role, j, undefined) })} defText={`${r.staff_discount_max}%`}>
+            <Opt value={r.discount_by_role[j]} onChange={(v) => c.set({ discount_by_role: putKey(r.discount_by_role, j, v) })} placeholder={tr(`كالجميع: ${r.staff_discount_max}`, `As everyone: ${r.staff_discount_max}`)} suffix="%" label={tr(`خصم ${roleName(j, tr)}`, `${roleName(j, tr)} discount`)} error={c.errors[`discount_by_role.${j}`]} />
+          </Row>
+        ))}
+      </Part>
+      <Part title={tr("حد الصرفيات بلا موافقة لكل وظيفة", "Expense limit, per job")} sub={tr(`فارغ = الحد العام (${num(c.d.top.expense_approval_above ?? EXPENSE_APPROVAL_ABOVE)} د.ع)`, `Empty = the general limit`)}>
+        {jobs.map((j) => (
+          <Row key={j} label={roleName(j, tr)} changed={r.expense_by_role[j] !== undefined} onDefault={() => c.set({ expense_by_role: putKey(r.expense_by_role, j, undefined) })}>
+            <Opt value={r.expense_by_role[j]} onChange={(v) => c.set({ expense_by_role: putKey(r.expense_by_role, j, v) })} placeholder={tr(`كالعام: ${num(c.d.top.expense_approval_above ?? EXPENSE_APPROVAL_ABOVE)}`, `General: ${num(c.d.top.expense_approval_above ?? EXPENSE_APPROVAL_ABOVE)}`)} suffix={iqd} label={tr(`صرفيات ${roleName(j, tr)}`, `${roleName(j, tr)} expenses`)} error={c.errors[`expense_by_role.${j}`]} />
+          </Row>
+        ))}
+      </Part>
+      <Part title={tr("حد العهدة لكل مندوب", "Cash limit, per rep")} sub={tr(`فارغ = الحد العام (${r.custody_cap ? `${num(r.custody_cap)} د.ع` : "بلا حد"})`, "Empty = the general limit")}>
+        {lookups.reps.map((rep) => {
+          const id = String(rep.id);
+          const v = r.people[id]?.custody_cap;
+          return (
+            <Row key={id} label={rep.name} changed={v !== undefined} onDefault={() => setPerson(id, clean({ ...r.people[id], custody_cap: undefined }))}>
+              <Opt value={v} onChange={(x) => setPerson(id, clean({ ...r.people[id], custody_cap: x }))} placeholder={r.custody_cap ? tr(`كالعام: ${num(r.custody_cap)}`, `General: ${num(r.custody_cap)}`) : tr("كالعام: بلا حد", "General: none")} suffix={iqd} label={tr(`عهدة ${rep.name}`, `${rep.name} cash limit`)} error={c.errors[`people.${id}.custody_cap`]} />
+            </Row>
+          );
+        })}
+      </Part>
+      <Part title={tr("استثناءات لأشخاص", "Exceptions for people")} sub={tr("لشخص بعينه: خصمه، حد صرفياته، وأعمال تُعطى له أو تُؤخذ منه فوق وظيفته", "For one person: his discount, expense limit, and actions given or taken beyond his job")}>
+        <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+          <Select value={adding} onChange={(e) => setAdding(e.target.value)} aria-label={tr("اختر شخصاً", "Pick a person")} className="max-w-xs">
+            <option value="">{tr("اختر شخصاً…", "Pick a person…")}</option>
+            {(users.data ?? [])
+              .filter((u) => u.role !== "manager" && u.role !== "shop" && u.active && !r.people[String(u.id)]?.allow && !r.people[String(u.id)]?.deny && r.people[String(u.id)]?.discount_max === undefined && r.people[String(u.id)]?.expense_limit === undefined)
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} · {roleName(u.role, tr)}
+                </option>
+              ))}
+          </Select>
+          <Button size="sm" disabled={!adding} onClick={() => (setPerson(adding, { ...r.people[adding], allow: [], deny: [] }), setAdding(""))}>
+            {tr("إضافة استثناء", "Add an exception")}
+          </Button>
+        </div>
+        {!people.filter(([, p]) => p.allow || p.deny || p.discount_max !== undefined || p.expense_limit !== undefined).length && <p className="px-4 py-4 text-sm text-muted">{tr("لا استثناءات بعد.", "No exceptions yet.")}</p>}
+        {people
+          .filter(([, p]) => p.allow || p.deny || p.discount_max !== undefined || p.expense_limit !== undefined)
+          .map(([id, p]) => {
+            const role = roleOf(id);
+            const offered = ACTIONS.filter((a) => (role ? reaches(role, a) : true));
+            return (
+              <div key={id} className="border-b border-line px-4 py-3 last:border-0">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="font-semibold">
+                    {nameOf(id)} {role && <span className="text-xs font-normal text-muted">· {roleName(role, tr)}</span>}
+                  </p>
+                  <button type="button" onClick={() => setPerson(id, clean({ custody_cap: p.custody_cap }))} className="text-xs font-semibold text-danger hover:underline">
+                    {tr("حذف الاستثناء", "Remove")}
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="text-xs text-muted">
+                    {tr("خصمه بلا موافقة", "His discount alone")}
+                    <Opt value={p.discount_max} onChange={(v) => setPerson(id, { ...p, discount_max: v })} placeholder={tr("كوظيفته", "As his job")} suffix="%" label={tr(`خصم ${nameOf(id)}`, `${nameOf(id)} discount`)} error={c.errors[`people.${id}.discount_max`]} />
+                  </label>
+                  <label className="text-xs text-muted">
+                    {tr("حد صرفياته بلا موافقة", "His expense limit")}
+                    <Opt value={p.expense_limit} onChange={(v) => setPerson(id, { ...p, expense_limit: v })} placeholder={tr("كوظيفته", "As his job")} suffix={iqd} label={tr(`صرفيات ${nameOf(id)}`, `${nameOf(id)} expenses`)} error={c.errors[`people.${id}.expense_limit`]} />
+                  </label>
+                </div>
+                <p className="mt-3 mb-1 text-xs font-semibold text-success">{tr("يُعطى له (فوق وظيفته)", "Given to him (beyond his job)")}</p>
+                <Chips<ActionKey> value={p.allow ?? []} options={offered.filter((a) => !role || !rolesFor(r.permissions, a.key).includes(role)).map((a) => ({ v: a.key, l: tr(a.ar, a.en) }))} onChange={(v) => setPerson(id, { ...p, allow: v, deny: (p.deny ?? []).filter((x) => !v.includes(x)) })} />
+                <p className="mt-3 mb-1 text-xs font-semibold text-danger">{tr("يُؤخذ منه (رغم وظيفته)", "Taken from him (despite his job)")}</p>
+                <Chips<ActionKey> value={p.deny ?? []} options={ACTIONS.filter((a) => role && rolesFor(r.permissions, a.key).includes(role)).map((a) => ({ v: a.key, l: tr(a.ar, a.en) }))} onChange={(v) => setPerson(id, { ...p, deny: v, allow: (p.allow ?? []).filter((x) => !v.includes(x)) })} />
+              </div>
+            );
+          })}
+      </Part>
+    </>
+  );
+}
+
+/** A person's rules without the empty parts (nothing left = no entry). */
+function clean(p: PersonRule): PersonRule | undefined {
+  const out: PersonRule = {};
+  if (p.discount_max !== undefined) out.discount_max = p.discount_max;
+  if (p.custody_cap !== undefined) out.custody_cap = p.custody_cap;
+  if (p.expense_limit !== undefined) out.expense_limit = p.expense_limit;
+  if (p.allow) out.allow = p.allow;
+  if (p.deny) out.deny = p.deny;
+  return Object.keys(out).length ? out : undefined;
+}
+
+function useFmtNum() {
+  const f = useFmt();
+  return { tr: f.tr, num: f.num };
+}
+
+// ---------- working time and delivery dates ----------
+
+function WorkPart(c: Ctx) {
+  const { tr, date } = useFmt();
+  const r = c.d.rules;
+  const w = r.work;
+  const dp = r.delivery_plan;
+  const customers = useLoad(() => api.listCustomers().catch(() => []), []);
+  const areas = [...new Set((customers.data ?? []).filter((x) => !x.walk_in).map((x) => x.area).filter(Boolean))].sort();
+  const setW = (p: Partial<AdvancedRules["work"]>) => c.set({ work: { ...w, ...p } });
+  const setP = (p: Partial<AdvancedRules["delivery_plan"]>) => c.set({ delivery_plan: { ...dp, ...p } });
+  const [hd, setHd] = useState({ date: "", name: "" });
+  const [now] = useState(() => new Date());
+  const days = WEEK.map(([v, ar, en]) => ({ v: String(v), l: tr(ar, en) }));
+  const sample = areas[0] ?? "";
+  const next = expectedDelivery({ ...r, delivery_plan: { ...dp, on: true } }, sample, now);
+  return (
+    <>
+      <Part title={tr("أيام الدوام وساعاته والعطل", "Working days, hours and holidays")} sub={tr("الطلب خارج الدوام يُحجز ويُراجع عند بدء الدوام، ولا تخرج شحنات في العطلة", "An order outside working time is held and looked at when work starts; no shipments go out on a day off")}>
+        <Row label={tr("قواعد الدوام", "Working-time rules")} changed={w.on} onDefault={() => setW({ on: false })} defText={tr("متوقفة", "Off")}>
+          <Switch checked={w.on} onChange={(v) => setW({ on: v })} label={w.on ? tr("مفعّلة", "On") : tr("متوقفة", "Off")} />
+        </Row>
+        <Row label={tr("أيام العمل", "Working days")} error={c.errors["work.days"]}>
+          <Chips value={w.days.map(String)} options={days} onChange={(v) => setW({ days: v.map(Number) })} />
+        </Row>
+        <Row label={tr("من – إلى", "From – to")} error={c.errors["work.hours"]}>
+          <div className="grid grid-cols-2 gap-2">
+            <Input type="time" dir="ltr" value={w.from} onChange={(e) => setW({ from: e.target.value })} aria-label={tr("بداية الدوام", "Opens")} />
+            <Input type="time" dir="ltr" value={w.to} onChange={(e) => setW({ to: e.target.value })} aria-label={tr("نهاية الدوام", "Closes")} />
+          </div>
+        </Row>
+        <Row label={tr("العطل الرسمية", "Holidays")} hint={tr("أيام لا دوام فيها ولا توصيل", "Days with no work and no deliveries")} error={c.errors["work.holidays"]}>
+          <div className="space-y-2">
+            {w.holidays.map((h, i) => (
+              <div key={`${h.date}-${i}`} className="flex items-center justify-between gap-2 rounded-lg bg-card-2 px-3 py-1.5 text-sm">
+                <span>
+                  {h.name} <span className="num text-xs text-muted">{date(h.date)}</span>
+                </span>
+                <button type="button" onClick={() => setW({ holidays: w.holidays.filter((_, k) => k !== i) })} className="text-xs font-semibold text-danger">
+                  {tr("حذف", "Remove")}
+                </button>
+              </div>
+            ))}
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="date" dir="ltr" value={hd.date} onChange={(e) => setHd({ ...hd, date: e.target.value })} aria-label={tr("تاريخ العطلة", "Holiday date")} />
+              <Input value={hd.name} onChange={(e) => setHd({ ...hd, name: e.target.value })} placeholder={tr("مثلاً: عيد الفطر", "e.g. Eid")} aria-label={tr("اسم العطلة", "Holiday name")} />
+              <Button size="sm" className="col-span-2" disabled={!hd.date || !hd.name.trim()} onClick={() => (setW({ holidays: [...w.holidays, { date: hd.date, name: hd.name.trim() }].sort((a, b) => a.date.localeCompare(b.date)) }), setHd({ date: "", name: "" }))}>
+                {tr("إضافة العطلة", "Add the holiday")}
+              </Button>
+            </div>
+          </div>
+        </Row>
+      </Part>
+      <Part title={tr("موعد التوصيل", "Delivery dates")} sub={tr("يظهر لكل طلب «يصل يوم …» عند صاحب المحل والمكتب", "Each order shows «arrives on …» to the shop and the office")}>
+        <Row label={tr("حساب موعد التوصيل", "Work out delivery dates")} changed={dp.on} onDefault={() => setP({ on: false })} defText={tr("متوقف", "Off")}>
+          <Switch checked={dp.on} onChange={(v) => setP({ on: v })} label={dp.on ? tr("مفعّل", "On") : tr("متوقف", "Off")} />
+        </Row>
+        <Row label={tr("آخر وقت لتوصيل نفس اليوم", "Same-day cut-off")} hint={tr("الطلب قبله يصل اليوم، وبعده يوم التوصيل التالي", "Before it: today; after: the next delivery day")} error={c.errors["delivery_plan.cutoff"]}>
+          <Input type="time" dir="ltr" value={dp.cutoff} onChange={(e) => setP({ cutoff: e.target.value })} aria-label={tr("آخر وقت", "Cut-off")} />
+        </Row>
+        <div className="px-4 py-3">
+          <p className="mb-2 text-sm font-semibold">{tr("أيام التوصيل لكل منطقة", "Delivery days per area")}</p>
+          <p className="mb-3 text-xs text-muted">{tr("بلا اختيار = كل أيام العمل", "None ticked = every working day")}</p>
+          <div className="space-y-2">
+            {areas.map((a) => (
+              <div key={a} className="grid gap-1 sm:grid-cols-[140px_minmax(0,1fr)] sm:items-center">
+                <span className="text-sm font-medium">{a}</span>
+                <Chips value={(dp.days_by_area[a] ?? []).map(String)} options={days} onChange={(v) => setP({ days_by_area: putKey(dp.days_by_area, a, v.length ? v.map(Number) : undefined) as Record<string, number[]> })} />
+              </div>
+            ))}
+          </div>
+          {sample && next && (
+            <p className="mt-3 rounded-lg bg-card-2 px-3 py-2 text-xs">
+              {tr(`مثال: طلب يُرسل الآن لمنطقة «${sample}» يصل ${date(next)}`, `Example: an order sent now for «${sample}» arrives ${date(next)}`)}
+            </p>
+          )}
+        </div>
+      </Part>
+    </>
+  );
+}
+
+// ---------- each warehouse ----------
+
+function WarehousesPart(c: Ctx) {
+  const { tr } = c;
+  const { lookups } = useApp();
+  const r = c.d.rules;
+  const setWh = (id: string, p: WarehouseRule) => {
+    const merged = { ...r.warehouses[id], ...p };
+    const x: WarehouseRule = {};
+    if (merged.reservation_hours !== undefined) x.reservation_hours = merged.reservation_hours;
+    if (merged.shop_orders === false) x.shop_orders = false;
+    if (merged.counter_sale === false) x.counter_sale = false;
+    c.set({ warehouses: putKey(r.warehouses, id, Object.keys(x).length ? x : undefined) as Record<string, WarehouseRule> });
+  };
+  return (
+    <>
+      {lookups.warehouses.map((w) => {
+        const id = String(w.id);
+        const x = r.warehouses[id] ?? {};
+        return (
+          <Part key={id} title={tr(w.name, w.name_en ?? w.name)}>
+            <Row label={tr("مدة حجز الطلب غير المعتمد", "Hold hours for an unapproved order")} hint={tr(`فارغ = العامة (${c.d.top.reservation_hours} ساعة)`, `Empty = the company's (${c.d.top.reservation_hours} h)`)} changed={x.reservation_hours !== undefined} onDefault={() => setWh(id, { reservation_hours: undefined })}>
+              <Opt value={x.reservation_hours} onChange={(v) => setWh(id, { reservation_hours: v })} placeholder={tr(`كالعام: ${c.d.top.reservation_hours}`, `General: ${c.d.top.reservation_hours}`)} suffix={tr("ساعة", "h")} label={tr(`حجز ${w.name}`, `${w.name} hold`)} error={c.errors[`warehouses.${id}.reservation_hours`]} />
+            </Row>
+            <Row label={tr("يستقبل طلبات أصحاب المحلات", "Takes shop owners' orders")} hint={tr("متوقف: طلبات التطبيق تذهب لمخزن آخر", "Off: the app's orders go to another warehouse")} changed={x.shop_orders === false} onDefault={() => setWh(id, { shop_orders: true })} defText={tr("نعم", "Yes")}>
+              <Switch checked={x.shop_orders !== false} onChange={(v) => setWh(id, { shop_orders: v })} label={x.shop_orders !== false ? tr("نعم", "Yes") : tr("لا", "No")} />
+            </Row>
+            <Row label={tr("البيع المباشر للزبون الحاضر", "Counter sales")} changed={x.counter_sale === false} onDefault={() => setWh(id, { counter_sale: true })} defText={tr("نعم", "Yes")}>
+              <Switch checked={x.counter_sale !== false} onChange={(v) => setWh(id, { counter_sale: v })} label={x.counter_sale !== false ? tr("نعم", "Yes") : tr("لا", "No")} />
+            </Row>
+          </Part>
+        );
+      })}
+    </>
+  );
+}
+
+// ---------- numbers and names ----------
+
+const KIND_NAMES: Record<NumberKind, [string, string]> = {
+  order: ["الطلب", "Order"],
+  invoice: ["الفاتورة", "Invoice"],
+  payment: ["التسديد", "Payment"],
+  return: ["المرتجع", "Return"],
+  receipt: ["استلام البضاعة", "Receipt"],
+  transfer: ["التحويل", "Transfer"],
+  supply: ["طلب التوريد", "Supply order"],
+  expense: ["الصرفية", "Expense"],
+  credit_note: ["الإشعار الدائن", "Credit note"],
+  refund: ["ردّ المبلغ", "Refund"],
+  stocktake: ["الجرد", "Stock count"],
+  handover: ["تسليم العهدة", "Cash handover"],
+};
+
+function NamesPart(c: Ctx) {
+  const { tr } = c;
+  const n = c.d.rules.names;
+  const setN = (p: Partial<AdvancedRules["names"]>) => c.set({ names: { ...n, ...p } });
+  return (
+    <>
+      <Part title={tr("بادئات الأرقام", "Number prefixes")} sub={tr("للسجلات الجديدة فقط؛ القديمة تبقى بأرقامها", "New records only; old ones keep their numbers")}>
+        {c.errors["names.prefixes"] && <p className="px-4 pt-3 text-xs font-medium text-danger">{c.errors["names.prefixes"]}</p>}
+        {(Object.keys(KIND_NAMES) as NumberKind[]).map((k) => {
+          const v = n.prefixes[k] ?? "";
+          return (
+            <Row key={k} label={tr(KIND_NAMES[k][0], KIND_NAMES[k][1])} hint={`${v || DEFAULT_PREFIXES[k]}-000123`} changed={!!v} onDefault={() => setN({ prefixes: putKey(n.prefixes, k, undefined) })} defText={DEFAULT_PREFIXES[k]} error={c.errors[`names.prefixes.${k}`]}>
+              <Input dir="ltr" value={v} placeholder={DEFAULT_PREFIXES[k]} maxLength={6} onChange={(e) => setN({ prefixes: putKey(n.prefixes, k, e.target.value.toUpperCase().replace(/[^A-Z]/g, "") || undefined) })} aria-label={tr(`بادئة ${KIND_NAMES[k][0]}`, `${KIND_NAMES[k][1]} prefix`)} />
+            </Row>
+          );
+        })}
+      </Part>
+      <Part title={tr("العملة والفاتورة", "Currency and invoice")}>
+        <Row label={tr("اسم العملة", "Currency name")} hint={tr("يظهر بجانب كل مبلغ في الموقع", "Shown next to every amount")} changed={n.currency_ar !== "د.ع" || n.currency_en !== "IQD"} onDefault={() => setN({ currency_ar: "د.ع", currency_en: "IQD" })} defText="د.ع / IQD" error={c.errors["names.currency"]}>
+          <div className="grid grid-cols-2 gap-2">
+            <Input value={n.currency_ar} maxLength={10} onChange={(e) => setN({ currency_ar: e.target.value })} aria-label={tr("العملة بالعربية", "Arabic currency")} />
+            <Input dir="ltr" value={n.currency_en} maxLength={10} onChange={(e) => setN({ currency_en: e.target.value })} aria-label={tr("العملة بالإنجليزية", "English currency")} />
+          </div>
+        </Row>
+        <Row label={tr("سطر أسفل كل فاتورة", "A line under every invoice")} hint={tr("يُطبع في الفاتورة والإيصال الحراري، مثلاً: البضاعة المباعة لا تُرد بعد 7 أيام", "Printed on invoices and thermal receipts")} changed={!!n.invoice_footer} onDefault={() => setN({ invoice_footer: "" })} defText={tr("بلا سطر", "None")} error={c.errors["names.invoice_footer"]}>
+          <Textarea value={n.invoice_footer} maxLength={200} onChange={(e) => setN({ invoice_footer: e.target.value })} placeholder={tr("مثلاً: البضاعة المباعة لا تُرد بعد 7 أيام", "e.g. No returns after 7 days")} />
+        </Row>
+      </Part>
     </>
   );
 }

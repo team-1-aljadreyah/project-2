@@ -32,6 +32,16 @@ export function subscribeTexts(fn: () => void) {
 }
 export const textsVersion = () => version;
 
+/** The currency's name the manager chose (advanced settings → numbers and names): every amount uses it. */
+let currency = { ar: "د.ع", en: "IQD" };
+export const currencyName = (lang: "ar" | "en") => currency[lang];
+export function setCurrencyNames(ar?: string, en?: string) {
+  const next = { ar: ar?.trim() || "د.ع", en: en?.trim() || "IQD" };
+  if (next.ar === currency.ar && next.en === currency.en) return;
+  currency = next;
+  bump();
+}
+
 export function setTexts(next: TextMap) {
   if (JSON.stringify(next) === JSON.stringify(texts)) return;
   texts = next;

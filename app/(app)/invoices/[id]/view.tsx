@@ -19,6 +19,8 @@ import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useIdParam } from "@/lib/utils";
+import { useMay, usePublicRules } from "@/lib/use-rules";
+import { cn } from "@/lib/utils";
 
 export default function InvoiceView() {
   const id = useIdParam();
@@ -26,6 +28,8 @@ export default function InvoiceView() {
   const { tr, dateTime, money, name, qty, num, unit: un } = fmt;
   const brand = useBrand();
   const { user, lookups, itemById } = useApp();
+  const may = useMay();
+  const live = usePublicRules();
   const inv = useLoad(() => api.getInvoice(id), [id]);
   const i = inv.data;
   const customer = useLoad(() => (i ? api.getCustomer(i.customer_id) : Promise.resolve(undefined)), [i?.customer_id]);
@@ -55,9 +59,9 @@ export default function InvoiceView() {
   const myReturns = (returns.data ?? []).filter((r) => r.invoice_id === i.id);
   const myPays = (payments.data ?? []).filter((p) => p.allocations.some((a) => a.invoice_id === i.id));
   const seesMoney = user.role !== "warehouse";
-  const canPay = seesMoney && user.role !== "shop" && i.remaining > 0 && !i.counter;
+  const canPay = seesMoney && user.role !== "shop" && i.remaining > 0 && !i.counter && may("record_payment");
   const canReturn = ["manager", "accountant", "rep"].includes(user.role) && i.lines.some((l) => l.pieces > l.returned_pieces);
-  const showCost = user.role === "manager" || user.role === "accountant";
+  const showCost = may("see_costs");
 
   const share = () => {
     const lines = i.lines.map((l) => `- ${itemById.get(l.item_id)?.name}: ${l.qty} ${un(itemById.get(l.item_id), l.unit)} = ${money(l.total)}`).join("\n");
@@ -94,7 +98,7 @@ export default function InvoiceView() {
               <Printer className="size-4" /> {tr("طباعة", "Print")}
             </Button>
             {user.role !== "shop" && <ThermalReceiptButton company={brand.company} build={() => invoiceReceipt(i, customer.data, { fmt, itemById })} />}
-            {(user.role === "accountant" || user.role === "manager") && <CreditNoteButton invoice={i} onDone={inv.reload} />}
+            {may("credit_note") && <CreditNoteButton invoice={i} onDone={inv.reload} />}
             {canPay && (
               <Button variant="action" href={`/payments/new?customer=${i.customer_id}`}>
                 <Wallet className="size-4" /> {tr("استلام تسديد", "Take payment")}
@@ -257,7 +261,8 @@ export default function InvoiceView() {
             </div>
           )}
         </div>
-        <p className="mt-8 text-center text-xs text-faint">
+        {live.names.invoice_footer && <p className="mt-6 whitespace-pre-line text-center text-xs text-muted">{live.names.invoice_footer}</p>}
+        <p className={cn("text-center text-xs text-faint", live.names.invoice_footer ? "mt-2" : "mt-8")}>
           {tr("شكراً لتعاملكم مع", "Thank you for dealing with")} {brand.company}
         </p>
       </Card>

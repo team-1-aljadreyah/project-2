@@ -7,7 +7,8 @@ import type { Db, DbUser } from "./db";
 import { R, fail, need, notify, sellableQty } from "./rules";
 
 /** The shops order from the first warehouse (as the shop owner's app does). */
-const shopWarehouse = (db: Db) => db.warehouses[0]?.id;
+// The warehouse shop owners order from: the first that takes shop orders (advanced settings → warehouses).
+const shopWarehouse = (db: Db) => (db.warehouses.find((w) => R().warehouses[String(w.id)]?.shop_orders !== false) ?? db.warehouses[0])?.id;
 
 /** The items this shop owner asked about (for the shop he works on now). */
 export function myStockAlerts(db: Db, a: DbUser): number[] {

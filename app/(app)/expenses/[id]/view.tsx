@@ -12,11 +12,13 @@ import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useIdParam } from "@/lib/utils";
+import { useMay } from "@/lib/use-rules";
 
 export default function ExpenseView() {
   const id = useIdParam();
   const { tr, date, dateTime, name } = useFmt();
   const { user, lookups } = useApp();
+  const may = useMay();
   const brand = useBrand();
   const toast = useToast();
   const x = useLoad(() => api.getExpense(id), [id]);
@@ -26,7 +28,7 @@ export default function ExpenseView() {
   if (x.state.status === "error" || !x.data) return <ErrorBox error={x.state.status === "error" ? x.state.error : null} />;
   const e = x.data;
   const vehicle = lookups.vehicles.find((v) => v.id === e.vehicle_id);
-  const canDecide = user.role === "manager" && e.status === "pending";
+  const canDecide = may("approve_expense") && e.status === "pending";
   // A voucher the manager approved: only he cancels it.
   const canCancel = (e.status === "approved" || e.status === "pending") && (user.role === "manager" || !e.decided_by);
 

@@ -5,7 +5,7 @@
 import type { Clearance } from "../types";
 import { nextId, type Db, type DbClearance, type DbUser } from "./db";
 import { clearanceFor, dayBefore } from "./clearance-price";
-import { R, audit, dayOf, fail, msg, need, notify, person } from "./rules";
+import { R, audit, can, dayOf, fail, msg, need, notify, person } from "./rules";
 
 function view(db: Db, c: DbClearance): Clearance {
   const it = db.items.find((x) => x.id === c.item_id);
@@ -39,7 +39,7 @@ export function listClearances(db: Db, a: DbUser): Clearance[] {
 /** The manager starts one on a batch: 5–70% off, the batch not expired, not held, with pieces left; one at a time
  *  per item and warehouse. Every shop owner is told. */
 export function startClearance(db: Db, a: DbUser, input: { batch_id: number; percent: number }, now: Date): Clearance {
-  need(a, ["manager"]);
+  can(a, "start_clearance");
   if (!R().features.clearance) fail(403, "FEATURE_OFF", "التصفية متوقفة من الإعدادات المتقدمة", "Clearance is turned off in advanced settings");
   const b = db.batches.find((x) => x.id === input.batch_id) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
   const today = dayOf(now);

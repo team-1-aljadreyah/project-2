@@ -4,7 +4,7 @@
 // These are the backend's rules (docs/backend.md → «العهدة»).
 import { netPaid, type CashHandover, type CustodyEntry, type CustodyLog, type CustodyRow } from "../types";
 import { nextId, type Db, type DbUser } from "./db";
-import { audit, dayOf, fail, msg, need, notify, person } from "./rules";
+import { audit, dayOf, fail, msg, need, notify, person, pre } from "./rules";
 
 const pad = (n: number) => String(n).padStart(6, "0");
 const fmt = (n: number) => n.toLocaleString("en");
@@ -88,7 +88,7 @@ export function createHandover(db: Db, a: DbUser, input: { rep_id?: number; amou
   const id = nextId(db, "handover");
   const h: CashHandover = {
     id,
-    number: `HND-${pad(id)}`,
+    number: `${pre("handover")}-${pad(id)}`,
     rep: person(rep),
     declared: amount,
     status: "pending",

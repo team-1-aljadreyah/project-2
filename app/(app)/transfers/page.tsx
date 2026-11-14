@@ -30,10 +30,12 @@ import { useFmt } from "@/lib/i18n";
 import { unitName } from "@/lib/units";
 import { newClientRef } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
+import { useMay } from "@/lib/use-rules";
 
 export default function TransfersPage() {
   const { tr, dateTime, name, qty } = useFmt();
   const { user, lookups, itemById } = useApp();
+  const may = useMay();
   const toast = useToast();
   const list = useLoad(() => api.listTransfers(), []);
   const [receiving, setReceiving] = useState<Transfer | null>(null);
@@ -72,7 +74,7 @@ export default function TransfersPage() {
           <Button size="sm" variant="action" onClick={() => setReceiving(t)}>
             {tr("استلام", "Receive")}
           </Button>
-        ) : t.status === "partial" && !t.reviewed_by && user.role === "manager" ? (
+        ) : t.status === "partial" && !t.reviewed_by && may("review_transfer") ? (
           <Button
             size="sm"
             onClick={async () => {

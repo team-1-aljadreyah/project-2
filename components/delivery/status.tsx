@@ -12,6 +12,7 @@ import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 import { ProblemNote } from "./problem";
 import { PrintButton, ShipmentLabel } from "./qr";
+import { useMay } from "@/lib/use-rules";
 
 export function deliveryLabel(d: Delivery, tr: Tr) {
   if (d.locked) return tr("مقفلة: رموز خاطئة", "Locked: wrong PINs");
@@ -48,6 +49,7 @@ export function PinCard({ pin, compact }: { pin: string; compact?: boolean }) {
 
 /** The delivery block on the order page: the steps, the PIN (shop owner), the label (warehouse), the proof photo. */
 export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; role: Role; shop: string; rep: string; area?: string }) {
+  const may = useMay();
   const { tr, dateTime } = useFmt();
   const toast = useToast();
   const d = order.delivery!;
@@ -143,7 +145,7 @@ export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; 
           <p className="flex items-center gap-1.5 font-semibold">
             <Lock className="size-4" /> {tr("الشحنة مقفلة بعد 5 رموز استلام خاطئة", "Locked after 5 wrong PINs")}
           </p>
-          {role === "manager" && (
+          {may("unlock_delivery") && (
             <Button
               size="sm"
               variant="danger"

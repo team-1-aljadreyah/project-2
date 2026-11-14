@@ -11,6 +11,7 @@ import type { CommissionLine, CommissionRow } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { downloadCsv, today } from "@/lib/utils";
+import { useMay } from "@/lib/use-rules";
 
 function lastMonths(n: number) {
   const out: string[] = [];
@@ -26,6 +27,7 @@ function lastMonths(n: number) {
 export default function CommissionsPage() {
   const { tr, monthName, money } = useFmt();
   const { user } = useApp();
+  const may = useMay();
   const toast = useToast();
   const months = lastMonths(6);
   const [month, setMonth] = useRemembered("commissions:month", months[0]);
@@ -72,7 +74,7 @@ export default function CommissionsPage() {
                 <Download className="size-4" /> Excel
               </Button>
             )}
-            {user.role === "manager" && !closed && !current && (
+            {may("close_month") && !closed && !current && (
               <Button
                 variant="action"
                 loading={busy}

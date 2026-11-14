@@ -16,7 +16,7 @@ import { useLoad } from "@/lib/use-load";
 import { cn, matches, piecesOf, priceOf as tierPrice, today } from "@/lib/utils";
 import { isPhoneApp } from "./nav";
 import { useApp } from "./shell";
-import { DiscountPicker, canDiscount } from "./discount";
+import { DiscountPicker, useCanDiscount } from "./discount";
 import { Badge, Button, Card, Dialog, Empty, LimitBar, Money, Notice, SearchBox, Segmented, Select, Stepper, Textarea, errorText, useToast, Pager, usePages } from "./ui";
 import { useRules } from "@/lib/use-rules";
 
@@ -53,6 +53,7 @@ function readDraft(userId: number, fallbackWarehouse: number, customerId: number
 export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCustomerId?: number; preselectCustomerId?: number }) {
   const { tr, money, qty: fmtQty, name, unit: unitOf } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
+  const canDiscount = useCanDiscount();
   const router = useAppRouter();
   const toast = useToast();
   // Saved on the phone when there is no internet: only if the manager allows working offline.
@@ -118,7 +119,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
     const it = itemById.get(l.item_id);
     return it ? s + lineUnit(it, l) * l.qty : s;
   }, 0);
-  const pct = canDiscount(user.role) ? (draft.discount ?? 0) : 0;
+  const pct = canDiscount ? (draft.discount ?? 0) : 0;
   const total = subtotal - Math.round((subtotal * pct) / 100);
   const balance = customer?.balance ?? 0;
   const limit = customer?.debt_limit;
@@ -253,7 +254,7 @@ export function OrderBuilder({ fixedCustomerId, preselectCustomerId }: { fixedCu
           {tr("يُحفظ الطلب على الجوال ويُرسَل عند عودة الإنترنت.", "The order is saved on the phone and sent when the internet is back.")}
         </Notice>
       )}
-      {canDiscount(user.role) && draft.lines.length > 0 && (
+      {canDiscount && draft.lines.length > 0 && (
         <div>
           <p className="mb-1.5 text-sm font-semibold">{tr("خصم", "Discount")}</p>
           <DiscountPicker value={pct} onChange={(v) => update({ discount: v })} subtotal={subtotal} role={user.role} />

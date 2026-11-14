@@ -306,6 +306,34 @@ The pages read them, but the server must **apply** them:
      password_min}` (no login needed: the login, sign-up and shop pages read it).
    - **History:** every save writes who changed which setting from → to (a setting of several parts, by part;
      `how`: `import` / `reset` sent with the save). `GET /settings/history` (manager), newest first.
+7. **Who may do what, limits, working time, warehouses, names** (also `Settings.advanced`; defaults = before).
+   - **`permissions {action: Role[]}`** — the actions and their default jobs are in **`lib/api/permissions.ts`**
+     (`ACTIONS`): record / reverse a payment, refund, credit note, approve an expense, set the dollar rate, close a
+     month, approve / cancel an order, give a discount, OK over the limit, unlock a shipment, take one back, edit
+     items, start a clearance, hold a batch, close a count, review a short transfer, receive goods, approve a shop,
+     edit customers, manage users, see costs, see debts. Check each with `userMay` (the manager always may) in
+     place of the fixed job lists → 403 «ليس من صلاحياتك: …». Your own job-specific checks stay (a keeper only in
+     his warehouse; cancel by the writer while open). `see_costs` / `see_debts` decide what the views send.
+     «who reverses» (`reverse_roles`) became the row `permissions.reverse_payment`.
+   - **`people {userId: {discount_max?, custody_cap?, expense_limit?, allow?: Action[], deny?: Action[]}}`**: a
+     person's own; `deny` beats `allow` beats the job. A person given `manage_users` opens the users page; nobody
+     but the manager makes, changes or deletes a manager account (403).
+   - **`discount_by_role`, `expense_by_role`**: the discount alone / the expense limit per job. The order of
+     use: the person's → the job's → everyone's (`staff_discount_max`, `expense_approval_above`); custody: the
+     rep's `custody_cap` → everyone's.
+   - **`work {on, days (0 = Sunday), from, to, holidays [{date, name}]}`** (off by default): an order outside
+     working time holds its goods from the next start (`reserved_until` = start + hours) and carries
+     `after_hours` = that start; on a day off or a holiday `POST /deliveries/dispatch` → 409 `CLOSED_DAY`.
+   - **`delivery_plan {on, cutoff "HH:MM", days_by_area {area: days}}`**: each new order gets `expected_on`
+     (yyyy-mm-dd): today before the cut-off, else the next day that is a working day and one of its area's days
+     (none listed = every working day).
+   - **`warehouses {id: {reservation_hours?, shop_orders?, counter_sale?}}`**: its own hold hours; `shop_orders`
+     false → a shop owner's order there 409 (the app picks the first warehouse that takes them); `counter_sale`
+     false → counter sale 403 `FEATURE_OFF`.
+   - **`names {prefixes {order, invoice, payment, return, receipt, transfer, supply, expense, credit_note, refund,
+     stocktake, handover}, currency_ar, currency_en, invoice_footer}`**: new records' numbers use the prefix
+     (1–6 capital letters, all different; old ones keep theirs); `/site` `live.names` carries the currency name
+     and the invoice line (printed under every invoice and receipt); `live.users_page` who opens the users page.
 
 ---
 

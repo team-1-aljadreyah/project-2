@@ -10,18 +10,18 @@ import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn, today } from "@/lib/utils";
-import { useApp } from "./shell";
+import { useMay } from "@/lib/use-rules";
 
 export function UsdRateCard({ className }: { className?: string }) {
   const { tr, num, date, ago } = useFmt();
-  const { user } = useApp();
+  const may = useMay();
   const toast = useToast();
   const rates = useLoad(() => api.usdRates(), []);
   const last = rates.data?.[0];
   const setToday = last?.date === today();
   const [value, setValue] = useState<number | "">("");
   const [busy, setBusy] = useState(false);
-  const canSet = user.role === "accountant" || user.role === "manager";
+  const canSet = may("set_usd_rate");
 
   async function save() {
     if (value === "") return;

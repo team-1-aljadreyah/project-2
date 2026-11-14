@@ -17,6 +17,7 @@ import { ordered, saveSite, useCustomizing, useSite } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { canOpen, pageTitle } from "./nav";
 import { SortArea, SortItem, toggleIn } from "./sortable";
+import { grantsOf } from "@/lib/api/advanced";
 
 // ---------- Button ----------
 
@@ -257,7 +258,8 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
 export function useMayOpen() {
   const user = useSession()?.user;
   const denied = deniedOf(useSite(), user);
-  return (href: string | null | undefined): href is string => !!href && (!href.startsWith("/") || (!!user && canOpen(user.role, splitAppPath(href).path, user.rep_kinds, denied)));
+  const grants = grantsOf(useSite().live, user);
+  return (href: string | null | undefined): href is string => !!href && (!href.startsWith("/") || (!!user && canOpen(user.role, splitAppPath(href).path, user.rep_kinds, denied, grants)));
 }
 
 /** The small arrow that says "this opens something". It points the way the language reads. */

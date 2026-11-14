@@ -17,11 +17,13 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useIdParam } from "@/lib/utils";
 import Link from "next/link";
+import { useMay } from "@/lib/use-rules";
 
 export default function CustomerView() {
   const id = useIdParam();
   const { tr, name, money, ago } = useFmt();
   const { user, lookups } = useApp();
+  const may = useMay();
   const c = useLoad(() => api.getCustomer(id), [id]);
   const orders = useLoad(() => api.listOrders(), [id]);
   const [edit, setEdit] = useState(false);
@@ -51,7 +53,7 @@ export default function CustomerView() {
         subtitle={`${x.owner_name} · ${x.area}`}
         actions={
           <>
-            {user.role === "manager" && (
+            {may("edit_customers") && (
               <Button onClick={() => setEdit(true)}>
                 <Pencil className="size-4" /> {tr("تعديل", "Edit")}
               </Button>
@@ -64,7 +66,7 @@ export default function CustomerView() {
                 <ShoppingCart className="size-4" /> {tr("طلب جديد", "New order")}
               </Button>
             )}
-            {bal > 0 && (
+            {bal > 0 && may("record_payment") && (
               <Button variant="action" href={`/payments/new?customer=${x.id}`}>
                 <Wallet className="size-4" /> {tr("استلام تسديد", "Take payment")}
               </Button>
@@ -78,7 +80,7 @@ export default function CustomerView() {
             tone="warning"
             title={tr("سجّل من الموقع وينتظر الموافقة", "Signed up online, waiting for approval")}
             action={
-              user.role === "manager" && (
+              may("approve_shop") && (
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Button size="sm" variant="danger" onClick={() => setReject(true)}>
                     {tr("رفض", "Refuse")}
@@ -90,7 +92,7 @@ export default function CustomerView() {
               )
             }
           >
-            {user.role === "manager"
+            {may("approve_shop")
               ? tr("حدد نوع السعر والمندوب وسقف الدين، ثم وافق ليتمكن من الطلب.", "Set the price tier, rep and debt limit, then approve so the shop can order.")
               : tr("يراجع المدير هذا المحل، ولا يستطيع الطلب قبل الموافقة.", "The manager is reviewing this shop. It can't order before approval.")}
           </Notice>
@@ -122,7 +124,7 @@ export default function CustomerView() {
           )}
           {bal < 0 && (
             <div className="mt-3">
-              <Notice tone="success" action={(user.role === "accountant" || user.role === "manager") && <RefundButton customerId={x.id} credit={-bal} onDone={c.reload} />}>
+              <Notice tone="success" action={may("refund") && <RefundButton customerId={x.id} credit={-bal} onDone={c.reload} />}>
                 {tr(
                   `للزبون رصيد ${money(-bal)} عندنا (مرتجع على فاتورة مسددة، أو تعويض عن خطأ، أو دفع أكثر من المطلوب)`,
                   `The shop has ${money(-bal)} credit with us (a return on a paid invoice, a credit note, or paying too much)`,

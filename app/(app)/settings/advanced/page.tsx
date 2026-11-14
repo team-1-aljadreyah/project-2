@@ -5,7 +5,7 @@
 // ?s=home | profiles | profiles:<id> | apps | objects | rules | health | the company's rules (components/advanced-rules.tsx)
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppWindow, Banknote, Bell, Boxes, ChevronDown, HeartPulse, Zap, History, Home, KeyRound, Megaphone, Package, Palette, Search, ShieldCheck, ShoppingCart, Store, ToggleRight, Truck, Users } from "lucide-react";
+import { AppWindow, Banknote, Bell, Boxes, CalendarClock, ChevronDown, Hash, HeartPulse, Zap, History, Home, KeyRound, Megaphone, Package, Palette, Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Store, ToggleRight, Truck, UserCheck, Users, Warehouse } from "lucide-react";
 import Link from "next/link";
 import { AppsSection, ObjectsSection, ProfilesSection, SetupHome } from "@/components/advanced";
 import { HealthSection } from "@/components/health";
@@ -35,7 +35,7 @@ interface Leaf {
   words?: string;
 }
 
-const RULE_PARTS: RulesPart[] = ["orders", "signup", "delivery", "money", "stock", "security", "features", "notify", "announce", "history"];
+const RULE_PARTS: RulesPart[] = ["orders", "signup", "delivery", "money", "stock", "security", "permissions", "people", "work", "warehouses", "names", "features", "notify", "announce", "history"];
 
 function Setup() {
   const { tr } = useFmt();
@@ -72,6 +72,17 @@ function Setup() {
         { key: "money", ar: "الأموال والعهدة", en: "Money and custody", icon: Banknote, words: RULE_WORDS.money },
         { key: "stock", ar: "المخزون والتصفية", en: "Stock and clearance", icon: Package, words: RULE_WORDS.stock },
         { key: "security", ar: "الدخول ورمز التحقق", en: "Logins and OTP", icon: KeyRound, words: RULE_WORDS.security },
+        { key: "work", ar: "الدوام وموعد التوصيل", en: "Working time and delivery dates", icon: CalendarClock, words: RULE_WORDS.work },
+        { key: "warehouses", ar: "قواعد كل مخزن", en: "Each warehouse's rules", icon: Warehouse, words: RULE_WORDS.warehouses },
+        { key: "names", ar: "الأرقام والعملة والفاتورة", en: "Numbers, currency, invoice", icon: Hash, words: RULE_WORDS.names },
+      ],
+    },
+    {
+      ar: "الصلاحيات والحدود",
+      en: "Rights and limits",
+      leaves: [
+        { key: "permissions", ar: "من يحق له ماذا", en: "Who may do what", icon: UserCheck, words: RULE_WORDS.permissions },
+        { key: "people", ar: "حدود الوظائف والأشخاص", en: "Limits per job and person", icon: SlidersHorizontal, words: RULE_WORDS.people },
       ],
     },
     {

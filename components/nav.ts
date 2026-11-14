@@ -165,7 +165,9 @@ const EXTRA: { prefix: string; roles: Role[] }[] = [
 ];
 
 /** Is this menu item for this user? (role, and for reps: marketing / delivery) */
-export function navFor(n: Pick<NavItem, "roles" | "kind">, user: { role: Role; rep_kinds?: RepKind[] }) {
+export function navFor(n: Pick<NavItem, "roles" | "kind"> & { href?: string }, user: { role: Role; rep_kinds?: RepKind[]; grants?: string[] }) {
+  // A page the person was given by a right (advanced settings → who may do what), beyond his job.
+  if (n.href && user.grants?.includes(n.href)) return true;
   if (!n.roles.includes(user.role)) return false;
   return !(n.kind && user.role === "rep") || repDoes(user, n.kind);
 }
@@ -174,11 +176,11 @@ export function navFor(n: Pick<NavItem, "roles" | "kind">, user: { role: Role; r
  * Can this user open this path? The most specific rule wins. `denied`: the pages their permission profile
  * takes away (advanced settings); a page's own screens go with it (/orders → /orders/12).
  */
-export function canOpen(role: Role, path: string, kinds?: RepKind[], denied: string[] = []) {
-  const rules = [...EXTRA.map((e) => ({ prefix: e.prefix, roles: e.roles, kind: undefined })), ...NAV.map((n) => ({ prefix: n.href, roles: n.roles, kind: n.kind }))]
+export function canOpen(role: Role, path: string, kinds?: RepKind[], denied: string[] = [], grants: string[] = []) {
+  const rules = [...EXTRA.map((e) => ({ prefix: e.prefix, roles: e.roles, kind: undefined, href: e.prefix })), ...NAV.map((n) => ({ prefix: n.href, roles: n.roles, kind: n.kind, href: n.href }))]
     .filter((r) => path === r.prefix || path.startsWith(r.prefix.endsWith("/") ? r.prefix : r.prefix + "/"))
     .sort((a, b) => b.prefix.length - a.prefix.length);
   if (!rules.length) return true;
   if (denied.includes(rules[0].prefix.replace(/\/$/, ""))) return false;
-  return navFor(rules[0], { role, rep_kinds: kinds });
+  return navFor(rules[0], { role, rep_kinds: kinds, grants });
 }
