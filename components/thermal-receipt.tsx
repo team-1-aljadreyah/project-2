@@ -96,8 +96,8 @@ ${r.footer ? `<div class="c" style="margin-top:2mm">${esc(r.footer)}</div>` : ""
 </body></html>`;
 }
 
-/** Print a page in a hidden frame (only the receipt goes to the printer). */
-function printHtml(html: string) {
+/** Print a page in a hidden frame (only that page goes to the printer, not the screen around it). */
+export function printHtml(html: string) {
   const f = document.createElement("iframe");
   f.setAttribute("aria-hidden", "true");
   f.style.cssText = "position:fixed;inset-inline-end:0;bottom:0;width:0;height:0;border:0;visibility:hidden";

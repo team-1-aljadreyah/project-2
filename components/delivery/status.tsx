@@ -132,7 +132,7 @@ export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; 
       {(role === "warehouse" || role === "manager") && d.status === "ready" && (
         <div className="mt-3 space-y-2">
           <ShipmentLabel order={order} shop={shop} rep={rep} area={area} />
-          <PrintButton />
+          <PrintButton order={order} shop={shop} rep={rep} area={area} />
         </div>
       )}
 

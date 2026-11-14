@@ -3,11 +3,13 @@
 import { BarcodeScanner, ScanButton } from "@/components/barcode-scanner";
 
 import { useState } from "react";
-import { CheckCircle2, Save } from "lucide-react";
+import { flushSync } from "react-dom";
+import { CheckCircle2, ClipboardList, Printer, Save } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { Badge, Button, Card, ErrorBox, Input, LoadingRows, Notice, PageHeader, SearchBox, Segmented, errorText, useToast, Pager, usePages } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
-import type { StocktakeLine } from "@/lib/api/types";
+import type { Item, Stocktake, StocktakeLine } from "@/lib/api/types";
+import { useBrand } from "@/lib/site";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn, matches, useIdParam } from "@/lib/utils";
@@ -24,6 +26,9 @@ export default function StocktakeView() {
   const [f, setF] = useState<"all" | "todo" | "diff">("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<Record<string, string>>({});
+  // What goes on paper: the count as it is (with the system's quantities and the differences), or a sheet to
+  // count by hand (no system quantities, empty boxes to write in).
+  const [paper, setPaper] = useState<"report" | "blank">("report");
 
   // The pages of the list (before the "loading" screen: React needs the same hooks on every render).
   const pg = usePages(
@@ -45,6 +50,11 @@ export default function StocktakeView() {
   const set = (itemId: number, p: Partial<StocktakeLine>) => setEdits((ls) => (ls ?? s.lines).map((l) => (l.item_id === itemId ? { ...l, ...p } : l)));
   const diff = (l: StocktakeLine) => (l.counted_qty === null ? 0 : l.counted_qty - l.system_qty);
   const done = lines.filter((l) => l.counted_qty !== null).length;
+  // The sheet is drawn for the chosen kind first, then the browser's print window opens.
+  const print = (kind: "report" | "blank") => {
+    flushSync(() => setPaper(kind));
+    window.print();
+  };
 
   async function save(close: boolean) {
     setBusy(close ? "close" : "save");
@@ -68,6 +78,8 @@ export default function StocktakeView() {
 
   return (
     <>
+      {/* On paper the sheet has its own header. */}
+      <div className="print:hidden">
       <PageHeader
         back="/stocktakes"
         title={
@@ -77,20 +89,31 @@ export default function StocktakeView() {
         }
         subtitle={`${name(lookups.warehouses.find((w) => w.id === s.warehouse_id))} · ${dateTime(s.created_at)}${s.closed_by ? ` · ${tr("أغلقه", "closed by")} ${s.closed_by.name}` : ""}`}
         actions={
-          open && (
-            <>
-              <Button loading={busy === "save"} onClick={() => save(false)}>
-                <Save className="size-4" /> {tr("حفظ العد", "Save count")}
-              </Button>
-              {user.role === "manager" && (
-                <Button variant="action" loading={busy === "close"} onClick={() => save(true)}>
-                  <CheckCircle2 className="size-4" /> {tr("إغلاق الجرد وتعديل المخزون", "Close and update stock")}
+          <>
+            <Button onClick={() => print("report")}>
+              <Printer className="size-4" /> {tr("طباعة", "Print")}
+            </Button>
+            {open && (
+              <>
+                <Button onClick={() => print("blank")}>
+                  <ClipboardList className="size-4" /> {tr("ورقة عدّ فارغة", "Blank count sheet")}
                 </Button>
-              )}
-            </>
-          )
+                <Button loading={busy === "save"} onClick={() => save(false)}>
+                  <Save className="size-4" /> {tr("حفظ العد", "Save count")}
+                </Button>
+                {user.role === "manager" && (
+                  <Button variant="action" loading={busy === "close"} onClick={() => save(true)}>
+                    <CheckCircle2 className="size-4" /> {tr("إغلاق الجرد وتعديل المخزون", "Close and update stock")}
+                  </Button>
+                )}
+              </>
+            )}
+          </>
         }
       />
+      </div>
+      <CountSheet s={s} lines={lines} kind={paper} />
+      <div className="print:hidden">
       {open && user.role !== "manager" && (
         <div className="mb-4">
           <Notice tone="primary">{tr("بعد انتهاء العد، يغلق المدير الجرد لتُعدَّل الكميات.", "When you finish counting, the manager closes the count to update the stock.")}</Notice>
@@ -191,6 +214,98 @@ export default function StocktakeView() {
         </ul>
         <Pager {...pg} className="border-t border-line" />
       </Card>
+      </div>
     </>
+  );
+}
+
+/** The count on paper (shown only when printing): every item on one table, not page by page. */
+function CountSheet({ s, lines, kind }: { s: Stocktake; lines: StocktakeLine[]; kind: "report" | "blank" }) {
+  const { tr, name, qty, dateTime, num, unit } = useFmt();
+  const { lookups, itemById } = useApp();
+  const brand = useBrand();
+  const blank = kind === "blank";
+  const rows = lines.map((l) => ({ l, it: itemById.get(l.item_id) })).sort((a, b) => (a.it?.category ?? "").localeCompare(b.it?.category ?? "") || name(a.it).localeCompare(name(b.it)));
+  const counted = lines.filter((l) => l.counted_qty !== null).length;
+  const diffs = lines.filter((l) => l.counted_qty !== null && l.counted_qty !== l.system_qty).length;
+  const pcs = (n: number, it?: Item) => (it && it.pieces_per_carton > 1 ? `${num(n)} (${qty(n, it.pieces_per_carton, it)})` : num(n));
+  const cell = "border border-black/40 px-2 py-1.5 align-top";
+  return (
+    <div className="hidden text-[12px] text-black print:block">
+      <div className="mb-3 flex items-start justify-between gap-4 border-b-2 border-black pb-2">
+        <div>
+          <p className="text-base font-bold">{brand.company}</p>
+          <p className="text-lg font-bold">
+            {blank ? tr("ورقة عدّ", "Count sheet") : tr("تقرير جرد", "Stock count report")} <span className="num">{s.number}</span>
+          </p>
+        </div>
+        <div className="text-end">
+          <p>
+            {tr("المخزن", "Warehouse")}: <b>{name(lookups.warehouses.find((w) => w.id === s.warehouse_id))}</b>
+            {s.category && <> · {tr("الصنف", "Category")}: <b>{s.category}</b></>}
+          </p>
+          <p>
+            {tr("فُتح", "Opened")}: <span className="num">{dateTime(s.created_at)}</span> · {s.created_by.name}
+          </p>
+          {s.closed_at && (
+            <p>
+              {tr("أُغلق", "Closed")}: <span className="num">{dateTime(s.closed_at)}</span>
+              {s.closed_by && <> · {s.closed_by.name}</>}
+            </p>
+          )}
+          {!blank && (
+            <p>
+              {tr(`عُدّ ${num(counted)} من ${num(lines.length)} · فيها فرق ${num(diffs)}`, `${num(counted)} of ${num(lines.length)} counted · ${num(diffs)} with a difference`)}
+            </p>
+          )}
+        </div>
+      </div>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="bg-black/5 text-start">
+            <th className={`${cell} w-8`}>#</th>
+            <th className={cell}>{tr("المادة", "Item")}</th>
+            {!blank && <th className={cell}>{tr("في النظام (قطعة)", "System (pcs)")}</th>}
+            <th className={cell}>{tr("المعدود على الرف (قطعة)", "Counted on the shelf (pcs)")}</th>
+            {!blank && <th className={cell}>{tr("الفرق", "Difference")}</th>}
+            <th className={cell}>{blank ? tr("ملاحظة", "Note") : tr("السبب", "Reason")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ l, it }, i) => {
+            const d = l.counted_qty === null ? null : l.counted_qty - l.system_qty;
+            return (
+              <tr key={l.item_id} className="break-inside-avoid">
+                <td className={`${cell} num`}>{i + 1}</td>
+                <td className={cell}>
+                  <b>{name(it)}</b>
+                  <span className="block text-[10px]">
+                    {it?.category}
+                    {it && it.pieces_per_carton > 1 && <> · {`${unit(it, "carton")} = ${it.pieces_per_carton} ${unit(it, "piece")}`}</>}
+                    {it?.barcode && <> · <span className="num">{it.barcode}</span></>}
+                  </span>
+                </td>
+                {!blank && <td className={`${cell} num`}>{pcs(l.system_qty, it)}</td>}
+                <td className={`${cell} num ${blank ? "h-9 w-40" : ""}`}>{!blank && l.counted_qty !== null ? pcs(l.counted_qty, it) : ""}</td>
+                {!blank && (
+                  <td className={`${cell} num font-bold`}>
+                    {d === null ? "—" : d === 0 ? tr("مطابق", "Matches") : `${d < 0 ? tr("نقص", "Short") : tr("زيادة", "Extra")} ${num(Math.abs(d))}`}
+                  </td>
+                )}
+                <td className={`${cell} ${blank ? "w-48" : ""}`}>{!blank ? (l.reason ?? "") : ""}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="mt-8 grid grid-cols-3 gap-6 text-center break-inside-avoid">
+        {[tr("العادّ", "Counted by"), tr("أمين المخزن", "Warehouse keeper"), tr("المدير", "Manager")].map((t) => (
+          <div key={t}>
+            <p className="border-b border-black pb-8">{t}</p>
+            <p className="mt-1 text-[10px]">{tr("الاسم والتوقيع والتاريخ", "Name, signature, date")}</p>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
