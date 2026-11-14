@@ -19,11 +19,14 @@ import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 import { onlineStatusLabel } from "./pay-method";
 
-export function PayOnlineCard({ customer }: { customer: Customer }) {
+/** `order`: paying for one delivered order (the delivery rep's door request, or the shop owner's own choice):
+ *  the amount starts at what it asks, and the gateway brings him back to that order's page. */
+export function PayOnlineCard({ customer, order }: { customer: Customer; order?: { id: number; number: string; amount: number; provider?: Gateway } }) {
   const { tr, money } = useFmt();
   const { prefix } = useAppPath();
   const owed = Math.max(0, customer.balance ?? 0);
-  const [amount, setAmount] = useState<number | "">(owed || "");
+  const start = order ? Math.min(order.amount, owed) : owed;
+  const [amount, setAmount] = useState<number | "">(start || "");
   const [busy, setBusy] = useState<Gateway | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (owed <= 0) return null;
@@ -37,7 +40,8 @@ export function PayOnlineCard({ customer }: { customer: Customer }) {
       // A new key for every attempt: after a failed try, "pay" again must open a NEW payment
       // (the same key would bring back the old, finished one). A double press is blocked by "busy".
       // The way back is this app's statement page (in the shop app: /client/statement).
-      const p = await api.startOnlinePayment({ customer_id: customer.id, amount, provider, key: newClientRef(), return_url: inApp(prefix, "/statement") });
+      const back = order ? `/orders/${order.id}` : "/statement";
+      const p = await api.startOnlinePayment({ customer_id: customer.id, amount, provider, key: newClientRef(), return_url: inApp(prefix, back), ...(order ? { order_id: order.id } : {}) });
       // The card is typed on the gateway's page, never on our site.
       window.location.assign(p.form_url);
     } catch (e) {
@@ -54,8 +58,14 @@ export function PayOnlineCard({ customer }: { customer: Customer }) {
           <span className="flex size-9 items-center justify-center rounded-lg bg-[#f7c600] text-sm font-black text-black ring-2 ring-[#1a1a1a]">Qi</span>
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-bold">{tr("سدّد أونلاين: زين كاش أو بطاقة Qi", "Pay online: ZainCash or Qi Card")}</p>
-          <p className="text-xs opacity-75">{tr("يُسجَّل التسديد فوراً ويُخصم من أقدم فاتورة", "Recorded at once, applied to your oldest invoice")}</p>
+          <p className="font-bold">
+            {order?.provider
+              ? tr(`طلب المندوب الدفع بـ${order.provider === "zaincash" ? "زين كاش" : "Qi"}: ${money(order.amount)}`, `The rep asked you to pay ${money(order.amount)} by ${order.provider === "zaincash" ? "ZainCash" : "Qi"}`)
+              : order
+                ? tr(`ادفع الطلب ${order.number} أونلاين`, `Pay ${order.number} online`)
+                : tr("سدّد أونلاين: زين كاش أو بطاقة Qi", "Pay online: ZainCash or Qi Card")}
+          </p>
+          <p className="text-xs opacity-75">{tr("يُسجَّل التسديد فوراً ويُخصم من أقدم فاتورة. يجوز دفع جزء من المبلغ.", "Recorded at once, applied to your oldest invoice. Paying part of it is fine.")}</p>
         </div>
         <Lock className="size-4 opacity-70" />
       </div>
@@ -67,8 +77,9 @@ export function PayOnlineCard({ customer }: { customer: Customer }) {
           <NumberInput id="online-amount" value={amount} onChange={setAmount} suffix={tr("د.ع", "IQD")} invalid={!!error} />
           <div className="mt-2 flex flex-wrap gap-1.5">
             {[
+              ...(order && start < owed ? [{ l: tr("هذا الطلب", "This order"), v: start }] : []),
               { l: tr("كل الدين", "All of it"), v: owed },
-              { l: tr("النصف", "Half"), v: Math.round(owed / 2 / 250) * 250 },
+              { l: tr("النصف", "Half"), v: Math.round(start / 2 / 250) * 250 },
             ].map((x) => (
               <button key={x.l} type="button" onClick={() => setAmount(x.v)} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", amount === x.v ? "border-action bg-action/10 text-action" : "border-line-strong text-muted hover:text-text")}>
                 {x.l} · <span className="num">{money(x.v)}</span>
@@ -79,7 +90,7 @@ export function PayOnlineCard({ customer }: { customer: Customer }) {
         </div>
         <div className="flex flex-col gap-2 sm:w-56">
           {/* ZainCash: from the customer's wallet, on ZainCash's own page (sandbox in the demo). */}
-          <Button className="h-12 border-0 bg-[#6b2a8c] px-6 text-white hover:bg-[#5a2276]" disabled={!amount || !!busy || zcLow} onClick={() => pay("zaincash")}>
+          <Button className={cn("h-12 border-0 bg-[#6b2a8c] px-6 text-white hover:bg-[#5a2276]", order?.provider === "qi" && "order-last")} disabled={!amount || !!busy || zcLow} onClick={() => pay("zaincash")}>
             {busy === "zaincash" ? <Loader2 className="size-4 animate-spin" /> : <Wallet className="size-4" />} {tr("ادفع بزين كاش", "Pay with ZainCash")}
           </Button>
           <Button variant="action" className="h-12 px-6" disabled={!amount || !!busy} onClick={() => pay("qi")}>
@@ -93,13 +104,14 @@ export function PayOnlineCard({ customer }: { customer: Customer }) {
 }
 
 /** After the gateway: shows the result, asking again every second while it is still being checked. */
-export function OnlineReturn() {
+/** `back`: the page it was opened from (the statement, or an order's page). */
+export function OnlineReturn({ back = "/statement" }: { back?: string }) {
   const id = useSearchParams().get("payment");
   if (!id) return null;
-  return <ReturnBanner key={id} id={id} />;
+  return <ReturnBanner key={id} id={id} back={back} />;
 }
 
-function ReturnBanner({ id }: { id: string }) {
+function ReturnBanner({ id, back }: { id: string; back: string }) {
   const { tr, money } = useFmt();
   const router = useAppRouter();
   const p = useLoad(() => api.getOnlinePayment(id), [id]);
@@ -112,7 +124,7 @@ function ReturnBanner({ id }: { id: string }) {
     return () => clearInterval(t);
   }, [status, p.reload]);
 
-  const close = () => router.replace("/statement");
+  const close = () => router.replace(back);
   const ok = status === "success";
   const waiting = !status || status === "created";
   const zc = p.data?.provider === "zaincash";

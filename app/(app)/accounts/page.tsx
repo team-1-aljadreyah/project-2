@@ -15,6 +15,7 @@ import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { UsdRateCard } from "@/components/usd-rate";
 import { Button, Card, ErrorBox, LimitBar, RefLink, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
+import { netPaid } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn, today } from "@/lib/utils";
@@ -56,7 +57,7 @@ export default function AccountsPage() {
     const d = new Date(y, m - 2, 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   })();
-  const collected = (key: string) => (payments.data ?? []).filter((p) => !p.reversed && !p.reversal_of && p.date.startsWith(key)).reduce((s, p) => s + p.amount, 0);
+  const collected = (key: string) => (payments.data ?? []).filter((p) => p.date.startsWith(key)).reduce((s, p) => s + netPaid(p), 0);
   const now = collected(thisMonth);
   const before = collected(lastMonth);
   const change = before ? Math.round(((now - before) / before) * 100) : null;

@@ -3,10 +3,10 @@
 // Where a shipment is, the same on every page, and the delivery block of the order page.
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Check, Container, KeyRound, Lock, PackageCheck, ShieldCheck, Truck, Warehouse } from "lucide-react";
-import { Button, Card, errorText, useToast } from "@/components/ui";
+import { Banknote, Check, Clock, Container, KeyRound, Lock, PackageCheck, ShieldCheck, Truck, Warehouse } from "lucide-react";
+import { Button, Card, Money, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { Delivery, Order, Role } from "@/lib/api/types";
+import type { Delivery, DoorPayment, Order, Role } from "@/lib/api/types";
 import { useFmt, type Tr } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
@@ -108,6 +108,7 @@ export function DeliveryPanel({ order, role, shop, rep, area }: { order: Order; 
           ) : (
             <p className="text-xs text-muted">{tr("سُلِّمت قبل تفعيل نظام إثبات التسليم.", "Delivered before delivery proof was turned on.")}</p>
           )}
+          {d.payment && <DoorPaid payment={d.payment} rep={d.delivered_by?.name ?? rep} role={role} />}
           {photo.data && (
             <motion.a initial={{ opacity: 0 }} animate={{ opacity: 1 }} href={photo.data} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl border border-line">
               {/* eslint-disable-next-line @next/next/no-img-element -- a stored data URL */}
@@ -210,5 +211,32 @@ export function LoadButton({ order, role, className, onDone }: { order: Order; r
     >
       <Container className="size-4" /> {tr("حمّلتها في السيارة", "Loaded in the van")}
     </Button>
+  );
+}
+
+/** What the shop paid at the door: cash the delivery rep took (in his custody until he hands it over),
+ *  or a Qi / ZainCash request: waiting for the shop owner, or paid. */
+function DoorPaid({ payment: p, rep, role }: { payment: DoorPayment; rep: string; role: Role }) {
+  const { tr } = useFmt();
+  const gw = p.method === "zaincash" ? tr("زين كاش", "ZainCash") : p.method === "qi" ? "Qi" : tr("نقداً", "cash");
+  const waiting = p.status === "requested";
+  return (
+    <p className={cn("flex flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold", waiting ? "bg-warning-soft text-warning" : "bg-success-soft text-success")}>
+      {waiting ? <Clock className="size-4" /> : <Banknote className="size-4" />}
+      {p.method === "cash" ? (
+        <>
+          {tr("دُفع عند التسليم نقداً", "Paid in cash at the door")} <Money value={p.amount} />
+          {role !== "shop" && <span className="font-normal">· {tr(`في عهدة ${rep}`, `in ${rep}'s custody`)}</span>}
+        </>
+      ) : waiting ? (
+        <>
+          {tr(`طلب دفع بـ${gw}`, `${gw} payment request`)} <Money value={p.amount} /> · {role === "shop" ? tr("ادفعه من هنا", "pay it below") : tr("بانتظار صاحب المحل", "waiting for the shop owner")}
+        </>
+      ) : (
+        <>
+          {tr(`دُفع بـ${gw}`, `Paid by ${gw}`)} <Money value={p.paid_amount ?? p.amount} />
+        </>
+      )}
+    </p>
   );
 }

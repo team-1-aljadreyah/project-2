@@ -9,7 +9,7 @@ import { MethodChip, MethodIcon, OnlineStatusChip, methodLabel, methodTone } fro
 import { useApp } from "@/components/shell";
 import { Badge, Button, Card, DataTable, Empty, ErrorBox, LoadingRows, Money, PageHeader, RefLink, SearchBox, Segmented, type Column } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { OnlinePayment, Payment, PayMethod } from "@/lib/api/types";
+import { netPaid, type OnlinePayment, type Payment, type PayMethod } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn, dayOfIso, matches, today } from "@/lib/utils";
@@ -33,10 +33,9 @@ export default function PaymentsPage() {
   const all = payments.data ?? [];
   const inRange = all.filter((p) => !from || dayOfIso(p.date) >= from);
   const rows = inRange.filter((p) => (kind === "all" || (kind === "online" ? p.method === "online" : p.method !== "online")) && matches(q, p.number, cName(p.customer_id), p.received_by.name));
-  // Money that really came in: reversed payments and their reverse entries cancel each other, so both are left out.
-  const counted = inRange.filter((p) => !p.reversed && !p.reversal_of);
-  const sumOf = (m: PayMethod) => counted.filter((p) => p.method === m).reduce((s, p) => s + p.amount, 0);
-  const total = counted.reduce((s, p) => s + p.amount, 0);
+  // Money that really came in: each payment minus what was reversed from it (reverse entries count 0).
+  const sumOf = (m: PayMethod) => inRange.filter((p) => p.method === m).reduce((s, p) => s + netPaid(p), 0);
+  const total = inRange.reduce((s, p) => s + netPaid(p), 0);
   const attempts = (online.data ?? []).filter((o) => (!from || dayOfIso(o.created_at) >= from) && matches(q, o.payment_id, cName(o.customer_id)));
   const failedCount = attempts.filter((o) => o.status !== "success" && o.status !== "created").length;
 
@@ -47,7 +46,7 @@ export default function PaymentsPage() {
     { key: "by", head: tr("استلمه", "Taken by"), cell: (p) => (p.method === "online" ? <span className="text-muted">{p.gateway?.provider === "zaincash" ? tr("بوابة زين كاش", "ZainCash gateway") : tr("بوابة Qi", "Qi gateway")}</span> : p.received_by.name) },
     { key: "m", head: tr("الطريقة", "Method"), cell: (p) => <MethodChip m={p.method} tr={tr} gateway={p.gateway?.provider} /> },
     { key: "a", head: tr("المبلغ", "Amount"), cell: (p) => <Money value={p.amount} className={p.amount < 0 ? "text-danger font-semibold" : "font-semibold"} />, align: "end" },
-    { key: "s", head: "", cell: (p) => (p.reversal_of ? <Badge tone="danger">{tr("عملية عكسية", "Reverse entry")}</Badge> : p.reversed ? <Badge>{tr("معكوس", "Reversed")}</Badge> : null) },
+    { key: "s", head: "", cell: (p) => (p.reversal_of ? <Badge tone="danger">{tr("عملية عكسية", "Reverse entry")}</Badge> : p.reversed ? <Badge>{tr("معكوس", "Reversed")}</Badge> : p.reversed_amount ? <Badge tone="warning">{tr("معكوس جزئياً", "Partly reversed")}</Badge> : null) },
   ];
 
   const attemptColumns: Column<OnlinePayment>[] = [

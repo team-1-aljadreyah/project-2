@@ -4,6 +4,7 @@ import { ThermalReceiptButton } from "@/components/thermal-receipt";
 import { deliveryReceipt } from "@/lib/receipts";
 
 import { DeliveryRatingCard } from "@/components/rate-delivery";
+import { OnlineReturn, PayOnlineCard } from "@/components/online-pay";
 
 import { ShareWhatsApp, pageLink } from "@/components/share";
 import { useBrand } from "@/lib/site";
@@ -16,7 +17,7 @@ import { useApp } from "@/components/shell";
 import { OrderStatusBadge, SourceBadge } from "@/components/status";
 import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, RefLink, Textarea, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import { worksIn, type Batch, type OrderStatus } from "@/lib/api/types";
+import { worksIn, type Batch, type Gateway, type OrderStatus } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
@@ -43,6 +44,8 @@ export default function OrderView() {
   const customer = useLoad(() => (o ? api.getCustomer(o.customer_id) : Promise.resolve(undefined)), [o?.customer_id]);
   const seesBatches = ["manager", "warehouse", "accountant"].includes(user.role);
   const batches = useLoad(() => (o && seesBatches ? api.listBatches(o.warehouse_id) : Promise.resolve([] as Batch[])), [o?.warehouse_id, seesBatches]);
+  // The shop owner pays a delivered order from here: what its invoice still owes.
+  const invoice = useLoad(() => (o?.invoice_id && user.role === "shop" ? api.getInvoice(o.invoice_id) : Promise.resolve(undefined)), [o?.invoice_id, user.role]);
   const [busy, setBusy] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [cancel, setCancel] = useState(false);
@@ -199,6 +202,25 @@ export default function OrderView() {
             <VehicleBox order={o} canPlan={user.role === "manager" || ((user.role === "warehouse" || user.role === "staff") && worksIn(user, o.warehouse_id, lookups.warehouses))} onDone={order.reload} />
           )}
           {o.delivery?.status === "out" && c && <ShipmentTracker order={o} shop={c} warehouse={wh} live={locations[o.delivery.rep?.id ?? o.rep_id]} />}
+          {/* The shop owner pays it online (Qi / ZainCash), all or part: the delivery rep's door request, or any
+              delivered order whose invoice still owes. The gateway brings him back here. */}
+          {user.role === "shop" && o.delivery?.status === "delivered" && c && (
+            <>
+              <OnlineReturn back={`/orders/${o.id}`} />
+              {(() => {
+                const dp = o.delivery.payment;
+                const asked = dp?.status === "requested" ? dp.amount : (invoice.data?.remaining ?? 0);
+                if (!asked || (c.balance ?? 0) <= 0) return null;
+                return (
+                  <PayOnlineCard
+                    key={`${o.id}-${dp?.status ?? "none"}`}
+                    customer={c}
+                    order={{ id: o.id, number: o.number, amount: asked, provider: dp?.status === "requested" ? (dp.method as Gateway) : undefined }}
+                  />
+                );
+              })()}
+            </>
+          )}
           <DeliveryRatingCard order={o} user={user} onChanged={order.reload} />
           {o.status === "needs_approval" && (
             <Notice

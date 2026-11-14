@@ -163,7 +163,7 @@ The server must filter and hide, not only the pages:
   out from today's `visit_days`; the backend should keep each day's plan (a nightly copy) so changing the plan
   later doesn't rewrite the past. Keep visits at least 120 days.
 - **«العهدة» (the cash the reps hold).** A rep's custody = the cash payments he received (`method: cash`,
-  `received_by` him, not reversed) − what the accountant counted from his handovers. `GET /custody`: the manager
+  `received_by` him, each minus what was reversed of it) − what the accountant counted from his handovers. `GET /custody`: the manager
   and the accountant get every rep who ever held cash (`holding`, `today`, `pending`, `short_total`, `oldest_at` =
   the first payment the handovers don't cover yet, oldest first), the rep only his own row. `GET /custody/:repId`:
   his cash in and out (newest first) and his handovers. `POST /custody/handovers {amount, note?}` by the rep:
@@ -298,11 +298,25 @@ The pages read them, but the server must **apply** them:
   posted every few seconds and pushed live (section 5).
 - Delivered = the **invoice** is made (lines, cost, rep, warehouse). The rest of a partly delivered load stays
   a load of the same order.
+- **Paid at the door (optional).** `POST /orders/:id/deliver` may carry `payment: {method: "cash" | "qi" |
+  "zaincash", amount}` (a whole number > 0, ZainCash ≥ 1,000; checked before the PIN). After the invoice is made,
+  amount ≤ the shop's whole debt (this invoice included), else 422 `errors.payment` and nothing is saved.
+  `cash`: a normal payment (method `cash`, `client_ref: "door:<order id>"`) in the **delivery rep's** name — even
+  when the shop isn't his (it isn't the sales rep's check) — so it is in his custody. `qi` / `zaincash`: nothing is
+  paid yet; the shop owner gets a request (notification linking `/orders/:id?pay=1`) and pays from that page with
+  `POST /payments/online {…, order_id}`. Kept on the shipment: `delivery.payment {method, amount, status: "paid" |
+  "requested", at, payment_id?, paid_amount?, paid_at?}`. When the gateway reports success for an online payment
+  with `order_id` whose shipment is "requested": mark it paid and notify the delivery rep (type `door_payment`).
 
 **Money**
 - **Payments** are spread over the customer's open invoices oldest first (`previewAllocation` shows it before
   saving); method `cash` / `transfer` / `online` (Qi Card, section 7). A payment is never deleted: it is
-  **reversed** with a reason (once).
+  **reversed** with a reason — all of it or any part: `POST /payments/:id/reverse {reason, amount?}` (missing =
+  all that is left; a whole number, ≤ what is left, else 422 `errors.amount`). It can be reversed again until
+  nothing is left. Each reverse is its own entry (negative amount, `reversal_of`), taken back from the newest
+  invoice the payment paid first. On the payment: `reversed_amount` (the sum so far), `reversed_by_id` (the
+  latest), `reversed` = true only when all of it is reversed. Totals count each payment as amount −
+  reversed_amount.
 - **Returns** against an invoice (≤ what was sold minus already returned), condition sellable/damaged
   (sellable goes back to stock); a return on a paid invoice gives the shop credit (credit note), money can be
   given back (refund).
@@ -346,6 +360,8 @@ The backend may store them as files (S3 / Cloudflare R2) and return a URL in the
 `/statement?payment=<payment_id>` and the page asks `GET /payments/online/:id` until the status is final
 (`success` / `failed` / `authentication_failed` / `canceled`). A successful one becomes a normal payment
 (method `online`, `recorded_payment_id`, the card's last 4 digits only).
+With `order_id` (paying the delivery rep's door request, section 6) the shop owner comes back to
+`/orders/<order_id>?payment=<payment_id>` instead, and a success marks that shipment's `delivery.payment` paid.
 
 ## 8. Jobs that run by themselves
 
@@ -501,7 +517,7 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `listOrders` | GET | `/orders` |  | `Order[]` |  |
 | `getOrder` | GET | `/orders/:id` | `id: number` | `Order` |  |
 | `dispatchDelivery` | POST | `/deliveries/dispatch` | `code: string` | `Order` | Delivery proof. The backend keeps the PIN and only sends it to the order's shop owner. The delivery rep scanned the shipment's QR at the warehouse. |
-| `deliverOrder` | POST | `/orders/:id/deliver` | `id: number, input: DeliverInput` | `{ ok: true; order: Order } \| { ok: false; left: number; locked: boolean }` | At the shop: the photo and the PIN. A wrong PIN comes back as { ok: false, left, locked }. |
+| `deliverOrder` | POST | `/orders/:id/deliver` | `id: number, input: DeliverInput` | `{ ok: true; order: Order } \| { ok: false; left: number; locked: boolean }` | At the shop: the photo and the PIN. A wrong PIN comes back as { ok: false, left, locked }. Optional `payment {method, amount}`: paid at the door (section 6). |
 | `unlockDelivery` | POST | `/orders/:id/delivery/unlock` | `id: number` | `Order` |  |
 | `planShipments` | POST | `/orders/:id/shipments` | `id: number, loads: ShipmentLoad[]` | `Order` | Put a prepared order on vehicles: one load = that vehicle; more = one shipment per vehicle (same order). |
 | `loadShipment` | POST | `/orders/:id/delivery/load` | `id: number` | `Order` | The warehouse staff loaded the shipment into the delivery rep's van. |
@@ -533,10 +549,10 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `listPayments` | GET | `/payments` |  | `Payment[]` |  |
 | `getPayment` | GET | `/payments/:id` | `id: number` | `Payment` |  |
 | `createPayment` | POST | `/payments` | `input: NewPayment` | `Payment` |  |
-| `startOnlinePayment` | POST | `/payments/online` | `input: StartOnlinePayment` | `OnlinePayment` | Online payment (Qi Card): the backend creates the payment at Qi and returns Qi's page address (form_url). The result comes from Qi's notification to the backend, so the page asks again until it is final. |
+| `startOnlinePayment` | POST | `/payments/online` | `input: StartOnlinePayment` | `OnlinePayment` | Online payment (Qi Card): the backend creates the payment at Qi and returns Qi's page address (form_url). The result comes from Qi's notification to the backend, so the page asks again until it is final. Optional `order_id`: paying a delivery's door request. |
 | `getOnlinePayment` | GET | `/payments/online/:id` | `id: string` | `OnlinePayment` |  |
 | `listOnlinePayments` | GET | `/payments/online` |  | `OnlinePayment[]` |  |
-| `reversePayment` | POST | `/payments/:id/reverse` | `id: number, reason: string` | `Payment` |  |
+| `reversePayment` | POST | `/payments/:id/reverse` | `id: number, reason: string, amount?: number` | `Payment` | Reverse all of a payment, or a part (amount; missing = all that is left). |
 | `listReturns` | GET | `/returns` |  | `Return[]` |  |
 | `getReturn` | GET | `/returns/:id` | `id: number` | `Return` |  |
 | `createReturn` | POST | `/returns` | `input: NewReturn` | `Return` |  |

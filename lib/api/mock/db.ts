@@ -138,6 +138,8 @@ export type DbOnline = Omit<OnlinePayment, "form_url"> & {
   /** What the gateway page decided; it becomes the status a moment later, like the gateway's notification. */
   outcome?: OnlineStatus;
   settles_at?: number;
+  /** The delivery whose door request this pays (see markDoorPaid). */
+  order_id?: number;
 };
 
 export const DB_VERSION = 36;

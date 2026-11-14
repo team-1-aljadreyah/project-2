@@ -11,7 +11,7 @@ import { useRemembered } from "@/lib/remember";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, CheckCircle2, CheckSquare, KeyRound, Lock, MapPin, PackageCheck, QrCode, Route, Square, Truck, Warehouse } from "lucide-react";
+import { AlertTriangle, Banknote, CheckCircle2, CheckSquare, CreditCard, KeyRound, Lock, MapPin, PackageCheck, QrCode, Route, Square, Truck, Wallet, Warehouse } from "lucide-react";
 import { PhotoCapture } from "@/components/delivery/photo";
 import { ProblemNote, ReportProblem } from "@/components/delivery/problem";
 import { TripPanel, buildTrip, saveTrip, useTrip } from "@/components/delivery/trip";
@@ -19,9 +19,10 @@ import { QrScanner } from "@/components/delivery/scanner";
 import { DeliveryChip, LoadButton } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
-import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, PageHeader, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
-import { api } from "@/lib/api";
-import type { Order } from "@/lib/api/types";
+import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, NumberInput, PageHeader, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
+import { api, ApiError } from "@/lib/api";
+import type { DoorPayment, DoorPayMethod, Order } from "@/lib/api/types";
+import { ZAINCASH } from "@/lib/zaincash";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useRealtime } from "@/lib/realtime";
@@ -327,9 +328,17 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "danger" | "warning"; text: string } | null>(null);
   const [done, setDone] = useState(false);
+  // 4) Paid at the door (optional): nothing, cash (into my custody), or a Qi / ZainCash request to the shop owner's app.
+  const [method, setMethod] = useState<DoorPayMethod | null>(null);
+  const takenSub = order.lines.reduce((s, l) => s + (got[`${l.item_id}-${l.unit}`] ?? l.qty) * l.unit_price, 0);
+  const taken = takenSub - Math.round((takenSub * (order.discount?.percent ?? 0)) / 100);
+  const [amount, setAmount] = useState<number | "">("");
+  const payAmount = amount === "" ? 0 : amount;
+  const zcLow = method === "zaincash" && payAmount < ZAINCASH.min;
+  const [paid, setPaid] = useState<DoorPayment>();
 
   async function send() {
-    if (!photo || pin.length !== 4) return;
+    if (!photo || pin.length !== 4 || (method && (!payAmount || zcLow))) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -337,11 +346,13 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
         pin,
         photo,
         ...(partial ? { lines: order.lines.map((l) => ({ item_id: l.item_id, unit: l.unit, qty: got[`${l.item_id}-${l.unit}`] ?? l.qty })), rest } : {}),
+        ...(method ? { payment: { method, amount: payAmount } } : {}),
       });
       if (r.ok) {
+        setPaid(r.order.delivery?.payment);
         setDone(true);
         toast("success", tr(`تم تسليم ${order.number} إلى ${shop}`, `${order.number} delivered to ${shop}`));
-        setTimeout(onClose, 1400);
+        setTimeout(onClose, method ? 3200 : 1400);
       } else {
         setPin("");
         setMsg(
@@ -351,11 +362,18 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
         );
       }
     } catch (e) {
-      setMsg({ tone: "danger", text: errorText(e, tr) });
+      setMsg({ tone: "danger", text: e instanceof ApiError && e.errors?.payment ? e.errors.payment : errorText(e, tr) });
     } finally {
       setBusy(false);
     }
   }
+
+  const METHODS: [DoorPayMethod | null, string, React.ReactNode][] = [
+    [null, tr("لا يدفع الآن", "Not now"), null],
+    ["cash", tr("نقداً", "Cash"), <Banknote key="c" className="size-4" />],
+    ["qi", "Qi", <CreditCard key="q" className="size-4" />],
+    ["zaincash", tr("زين كاش", "ZainCash"), <Wallet key="z" className="size-4" />],
+  ];
 
   return (
     <Dialog
@@ -364,7 +382,7 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
       title={tr(`تسليم ${order.number} · ${shop}`, `Deliver ${order.number} · ${shop}`)}
       footer={
         !done && (
-          <Button variant="action" size="lg" className="w-full" disabled={!photo || pin.length !== 4 || busy} onClick={send}>
+          <Button variant="action" size="lg" className="w-full" disabled={!photo || pin.length !== 4 || busy || (!!method && (!payAmount || zcLow))} onClick={send}>
             <CheckCircle2 className="size-5" /> {tr("تأكيد التسليم", "Confirm delivery")}
           </Button>
         )
@@ -375,6 +393,16 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
           <CheckCircle2 className="size-14 text-success" />
           <p className="text-lg font-bold">{tr("تم التسليم", "Delivered")}</p>
           <p className="text-sm text-muted">{tr("سُجّل الرمز والصورة والوقت، وصدرت الفاتورة على ما استُلم.", "The PIN, the photo and the time are recorded; the invoice is made for what was taken.")}</p>
+          {paid?.method === "cash" && (
+            <p className="mt-2 rounded-xl bg-success-soft px-3 py-2 text-sm font-semibold text-success">
+              {tr("استلمت نقداً", "You took in cash")} <Money value={paid.amount} /> · {tr("سُجّل في عهدتك، سلّمه للمحاسب", "it is in your custody; hand it to the accountant")}
+            </p>
+          )}
+          {paid?.status === "requested" && (
+            <p className="mt-2 rounded-xl bg-card-2 px-3 py-2 text-sm font-semibold">
+              {tr(`أُرسل طلب دفع ${paid.method === "zaincash" ? "زين كاش" : "Qi"} إلى تطبيق صاحب المحل`, `A ${paid.method === "zaincash" ? "ZainCash" : "Qi"} request was sent to the shop owner's app`)} · <Money value={paid.amount} />
+            </p>
+          )}
         </motion.div>
       ) : (
         <div className="space-y-5">
@@ -457,6 +485,49 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+          </section>
+          <section>
+            <p className="mb-2 flex items-center gap-2 text-sm font-bold">
+              <span className="flex size-6 items-center justify-center rounded-full bg-action text-xs text-on-action">4</span>
+              {tr("الدفع عند التسليم", "Payment at the door")} <span className="text-xs font-normal text-muted">({tr("اختياري", "optional")})</span>
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {METHODS.map(([m, label, icon]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => {
+                    setMethod(m);
+                    if (m && method === null) setAmount(taken);
+                  }}
+                  aria-pressed={method === m}
+                  className={cn("flex h-11 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold", method === m ? "border-action bg-action/10 text-action" : "border-line-strong text-muted hover:text-text")}
+                >
+                  {icon} {label}
+                </button>
+              ))}
+            </div>
+            {method && (
+              <div className="mt-3">
+                <NumberInput value={payAmount} onChange={setAmount} suffix={tr("د.ع", "IQD")} aria-label={tr("المبلغ المدفوع", "Amount paid")} />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {[
+                    { l: tr("كامل الفاتورة", "The whole invoice"), v: taken },
+                    { l: tr("النصف", "Half"), v: Math.round(taken / 2 / 250) * 250 },
+                  ].map((x) => (
+                    <button key={x.l} type="button" onClick={() => setAmount(x.v)} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", payAmount === x.v ? "border-action bg-action/10 text-action" : "border-line-strong text-muted")}>
+                      {x.l} · <Money value={x.v} />
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-muted">
+                  {method === "cash"
+                    ? tr("يُسجَّل تسديداً باسمك ويدخل في عهدتك، وتسلّمه للمحاسب. يجوز جزء من المبلغ.", "Recorded as a payment in your name, in your custody until you hand it to the accountant. Part of it is fine.")
+                    : tr("يصل لصاحب المحل طلب دفع في تطبيقه فيدفع من هاتفه، والمبلغ يذهب للشركة مباشرة (لا يدخل عهدتك).", "The shop owner gets a payment request in his app and pays from his phone; it goes straight to the company (not your custody).")}
+                  {zcLow && <span className="block text-danger">{tr(`زين كاش من ${ZAINCASH.min.toLocaleString("en")} د.ع فأكثر`, `ZainCash from ${ZAINCASH.min.toLocaleString("en")} IQD`)}</span>}
+                </p>
               </div>
             )}
           </section>
