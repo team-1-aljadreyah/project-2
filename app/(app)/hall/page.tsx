@@ -326,10 +326,11 @@ function LabelDialog({ orderId, onClose }: { orderId: number; onClose: () => voi
   const order = useLoad(() => api.getOrder(orderId), [orderId]);
   const customer = useLoad(() => (order.data ? api.getCustomer(order.data.customer_id) : Promise.resolve(undefined)), [order.data?.customer_id]);
   const o = order.data;
+  const rep = o ? (o.delivery?.rep?.name ?? lookups.reps.find((r) => r.id === o.rep_id)?.name ?? "") : "";
   return (
-    <Dialog open onClose={onClose} title={tr("ملصق الشحنة: اطبعه والصقه على البضاعة", "Shipment label: print it and stick it on the goods")} footer={<PrintButton />}>
+    <Dialog open onClose={onClose} title={tr("ملصق الشحنة: اطبعه والصقه على البضاعة", "Shipment label: print it and stick it on the goods")} footer={<PrintButton order={o} shop={customer.data?.name ?? ""} area={customer.data?.area} rep={rep} />}>
       {o?.delivery ? (
-        <ShipmentLabel order={o} shop={customer.data?.name ?? ""} area={customer.data?.area} rep={o.delivery?.rep?.name ?? lookups.reps.find((r) => r.id === o.rep_id)?.name ?? ""} />
+        <ShipmentLabel order={o} shop={customer.data?.name ?? ""} area={customer.data?.area} rep={rep} />
       ) : (
         <Skeleton className="h-44" />
       )}
