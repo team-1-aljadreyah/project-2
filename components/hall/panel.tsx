@@ -167,14 +167,22 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
     try {
       // In the hall he picked everything from his own shelves: every line from his warehouse.
       // (To split an order with the other warehouse, he uses the order page.)
-      await api.prepareOrder(
-        m.order.id,
-        Object.fromEntries(m.order.lines.map((l) => [l.item_id, l.warehouse_id ?? m.order.warehouse_id])),
-        { ...(carrier.rep_id ? { rep_id: carrier.rep_id } : {}), ...(carrier.vehicle_id ? { vehicle_id: carrier.vehicle_id } : {}) },
-      );
+      const chosen = { ...(carrier.rep_id ? { rep_id: carrier.rep_id } : {}), ...(carrier.vehicle_id ? { vehicle_id: carrier.vehicle_id } : {}) };
+      const prepared = await api.prepareOrder(m.order.id, Object.fromEntries(m.order.lines.map((l) => [l.item_id, l.warehouse_id ?? m.order.warehouse_id])), chosen);
       clearPicked(m.order.id);
       onConfirmed?.(m.order.id);
       toast("success", tr(`تم تجهيز ${m.order.number}: الفاتورة تصدر عند التسليم`, `${m.order.number} prepared: the invoice comes at delivery`));
+      // The driver / vehicle chosen here: a server that didn't take them with the preparation gets them on their
+      // own; one that has no such step yet → the keeper is told (the choice is never dropped quietly).
+      const d = prepared?.delivery;
+      const missed = (chosen.rep_id && d?.rep?.id !== chosen.rep_id) || (chosen.vehicle_id && d?.vehicle?.id !== chosen.vehicle_id);
+      if (missed) {
+        try {
+          await api.setCarrier(m.order.id, { rep_id: chosen.rep_id ?? d?.rep?.id, vehicle_id: chosen.vehicle_id ?? null });
+        } catch {
+          toast("danger", tr("جُهّز الطلب، لكن السائق أو السيارة لم يُحفظا: الخادم لا يدعم اختيارهما بعد. اختره من صفحة الطلب لاحقاً.", "Prepared, but the driver / vehicle wasn't saved: the server doesn't support choosing them yet."));
+        }
+      }
     } catch (e) {
       toast("danger", errorText(e, tr));
       setBusy(false);
@@ -248,15 +256,19 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
                     className={cn("flex cursor-pointer items-center gap-2.5 rounded-xl border p-2 transition", ok ? "border-success/40 bg-success-soft" : "border-line hover:bg-card-2")}
                   >
                     <input type="checkbox" checked={ok} onChange={() => togglePicked(m.order.id, l.item.id)} className="size-4 shrink-0 accent-[var(--action)]" />
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-action text-[10px] font-bold text-on-action">
-                      {m.stops.findIndex((z) => z.code === l.zone.code) + 1}
+                    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold", l.zone ? "bg-action text-on-action" : "bg-card-2 text-muted")}>
+                      {l.zone ? m.stops.findIndex((z) => z.code === l.zone!.code) + 1 : "—"}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className={cn("block truncate text-sm font-semibold", ok && "line-through opacity-60")}>{l.item.name}</span>
                       <span className="block truncate text-[11px] text-muted">
-                        <span className="num" dir="ltr">
-                          {l.cell.code}
-                        </span>
+                        {l.cell ? (
+                          <span className="num" dir="ltr">
+                            {l.cell.code}
+                          </span>
+                        ) : (
+                          <span>{tr("بلا مكان على الخريطة", "No place on the map")}</span>
+                        )}
                         {l.batch && (
                           <>
                             {" · "}
@@ -270,6 +282,12 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
                   </label>
                 );
               })}
+              {/* Everything taken in one go (a big order picked from one place) */}
+              {m.lines.length > 1 && !all && (
+                <button type="button" onClick={() => m.lines.forEach((l) => !picked.has(l.item.id) && togglePicked(m.order.id, l.item.id))} className="w-full rounded-lg py-1 text-xs font-semibold text-action hover:bg-action/10">
+                  {tr("أخذتُ الكل", "I took everything")}
+                </button>
+              )}
               {m.urgency === "blocked" ? (
                 <p className="flex items-center gap-1.5 rounded-xl bg-card-2 p-2.5 text-xs text-muted">
                   <Lock className="size-3.5" /> {tr("يتجاوز سقف الدين: يُجهَّز بعد موافقة المدير", "Over the debt limit: prepare after the manager approves")}
@@ -277,16 +295,20 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
               ) : (
                 <>
                 {/* Who takes it out: the driver and the vehicle (optional; none = the usual one) */}
-                <div className="mt-1 rounded-xl border border-line p-2.5">
-                  <p className="mb-1.5 flex items-center gap-1 text-xs font-bold">
-                    <Truck className="size-3.5 text-action" /> {tr("التوصيل", "Delivery")}
-                  </p>
-                  <CarrierFields value={carrier} onChange={setCarrier} order={m.order} stack />
-                </div>
+                <details className="group mt-1 rounded-xl border border-line" open={!!carrier.rep_id || !!carrier.vehicle_id || undefined}>
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 p-2.5 text-xs font-bold">
+                    <Truck className="size-3.5 text-action" /> {tr("السائق والسيارة", "Driver and vehicle")}
+                    <span className="ms-auto font-normal text-muted">{carrier.rep_id || carrier.vehicle_id ? tr("مختار", "Chosen") : tr("تلقائي · اضغط للاختيار", "Automatic · tap to choose")}</span>
+                  </summary>
+                  <div className="border-t border-line p-2.5">
+                    <CarrierFields value={carrier} onChange={setCarrier} order={m.order} stack />
+                  </div>
+                </details>
                 <Button variant="action" className="mt-1 w-full" disabled={!all || busy} onClick={confirm}>
                   {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-                  {all ? tr("تثبيت وإصدار فاتورة", "Confirm and invoice") : tr(`أكمل التجهيز (${done}/${m.lines.length})`, `Finish picking (${done}/${m.lines.length})`)}
+                  {all ? tr("تثبيت التجهيز", "Confirm the preparation") : tr(`علّم كل مادة بعد أخذها (${done}/${m.lines.length})`, `Tick each item as you take it (${done}/${m.lines.length})`)}
                 </Button>
+                {!all && m.lines.length > 0 && <p className="text-center text-[11px] text-muted">{tr("يُفعَّل الزر حين تُعلَّم كل المواد", "The button turns on when every item is ticked")}</p>}
                 </>
               )}
               <Button variant="ghost" size="sm" className="w-full text-muted" href={`/orders/${m.order.id}`}>

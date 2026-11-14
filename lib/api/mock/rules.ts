@@ -1483,10 +1483,11 @@ export function counterSale(db: Db, actor: DbUser, input: CounterSaleInput, now:
 // ---------- payments ----------
 
 /** Which invoices a payment would cover: the oldest open invoice first. */
-export function allocate(db: Db, customerId: number, amount: number) {
+export function allocate(db: Db, customerId: number, amount: number, firstInvoiceId?: number) {
+  // The oldest first — except an invoice the money was paid for (at its delivery): that one first.
   const open = db.invoices
     .filter((i) => i.customer_id === customerId && invoiceRemaining(i) > 0)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+    .sort((a, b) => Number(b.id === firstInvoiceId) - Number(a.id === firstInvoiceId) || a.date.localeCompare(b.date) || a.id - b.id);
   const out: { invoice_id: number; number: string; amount: number }[] = [];
   let left = amount;
   for (const inv of open) {
@@ -1555,7 +1556,7 @@ export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, 
       amount: msg(`الدين الحالي ${balance.toLocaleString("en")} د.ع`, `Current debt is ${balance.toLocaleString("en")} IQD`),
     });
   }
-  const { allocations } = allocate(db, customer.id, input.amount);
+  const { allocations } = allocate(db, customer.id, input.amount, input.invoice_id);
   for (const a of allocations) {
     const inv = db.invoices.find((i) => i.id === a.invoice_id);
     if (inv) inv.paid += a.amount;
@@ -2653,7 +2654,7 @@ export function settleOnline(db: Db, now: Date) {
     const p = addPayment(
       db,
       user,
-      { client_ref: `gateway:${o.payment_id}`, customer_id: customer.id, amount, method: "online", note: "Qi Card" },
+      { client_ref: `gateway:${o.payment_id}`, customer_id: customer.id, amount, method: "online", note: "Qi Card", invoice_id: orderInvoice(db, o) },
       now,
       { provider: "qi", payment_id: o.payment_id, card: "**** 0000" },
     );
@@ -2661,6 +2662,9 @@ export function settleOnline(db: Db, now: Date) {
     markDoorPaid(db, o, p, now);
   }
 }
+
+/** The invoice of the order an online payment was made for (its door request), if any. */
+const orderInvoice = (db: Db, op: DbOnline) => (op.order_id ? db.orders.find((x) => x.id === op.order_id)?.invoice_id : undefined);
 
 /** The shop owner paid the delivery rep's door request from his app: the shipment shows it paid, and the rep is told. */
 function markDoorPaid(db: Db, op: DbOnline, p: Payment, now: Date) {
@@ -2707,7 +2711,7 @@ export function settleZainCash(db: Db, paymentId: string, status: OnlineStatus, 
   const p = addPayment(
     db,
     user,
-    { client_ref: `gateway:${o.payment_id}`, customer_id: customer.id, amount, method: "online", note: "ZainCash" },
+    { client_ref: `gateway:${o.payment_id}`, customer_id: customer.id, amount, method: "online", note: "ZainCash", invoice_id: orderInvoice(db, o) },
     now,
     { provider: "zaincash", payment_id: o.gateway_id ?? o.payment_id, card: hidden },
   );
@@ -2925,7 +2929,7 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
     }
     if (pay.method === "cash") {
       // Taken by the delivery rep: recorded in his name, so it is in his custody until he hands it to the accountant.
-      const p = addPayment(db, actor, { client_ref: `door:${o.id}`, customer_id: o.customer_id, amount: pay.amount, method: "cash", note: `نقداً عند تسليم ${o.number}` }, now);
+      const p = addPayment(db, actor, { client_ref: `door:${o.id}`, customer_id: o.customer_id, amount: pay.amount, method: "cash", note: `نقداً عند تسليم ${o.number}`, invoice_id: o.invoice_id }, now);
       d.payment = { method: "cash", amount: pay.amount, status: "paid", at: now.toISOString(), payment_id: p.id, paid_amount: p.amount, paid_at: now.toISOString() };
     } else {
       d.payment = { method: pay.method, amount: pay.amount, status: "requested", at: now.toISOString() };

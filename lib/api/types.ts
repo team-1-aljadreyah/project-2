@@ -1315,6 +1315,8 @@ export interface NewPayment {
   amount: number;
   method: PayMethod;
   note?: string;
+  /** Paid for this invoice: it is paid first, the rest goes to the oldest (paying at the door for its delivery). */
+  invoice_id?: number;
 }
 
 export interface NewReceipt {
