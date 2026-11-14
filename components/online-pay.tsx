@@ -18,10 +18,16 @@ import { newClientRef } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 import { onlineStatusLabel } from "./pay-method";
+import { useRules } from "@/lib/use-rules";
 
 /** `order`: paying for one delivered order (the delivery rep's door request, or the shop owner's own choice):
  *  the amount starts at what it asks, and the gateway brings him back to that order's page. */
-export function PayOnlineCard({ customer, order }: { customer: Customer; order?: { id: number; number: string; amount: number; provider?: Gateway } }) {
+export function PayOnlineCard(p: { customer: Customer; order?: { id: number; number: string; amount: number; provider?: Gateway } }) {
+  // Hidden while the manager has online payment turned off (advanced settings → features).
+  return useRules().features.online_pay ? <PayCard {...p} /> : null;
+}
+
+function PayCard({ customer, order }: { customer: Customer; order?: { id: number; number: string; amount: number; provider?: Gateway } }) {
   const { tr, money } = useFmt();
   const { prefix } = useAppPath();
   const owed = Math.max(0, customer.balance ?? 0);

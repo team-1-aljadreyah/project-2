@@ -13,6 +13,7 @@ import type { NewPayment, PayMethod } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { enqueue, isNetworkError, newClientRef, useOffline } from "@/lib/offline";
 import { useLoad } from "@/lib/use-load";
+import { useRules } from "@/lib/use-rules";
 
 // /payments/new?customer=3 opens with that shop chosen. The address is read with useSearchParams:
 // reading window.location while the page renders gives the OLD address when you arrive through a link inside the site.
@@ -34,6 +35,8 @@ function NewPaymentForm({ pre }: { pre?: number }) {
   const { tr, money, date } = useFmt();
   const router = useAppRouter();
   const toast = useToast();
+  // Saved on the phone when there is no internet: only if the manager allows working offline.
+  const offlineOk = useRules().features.offline;
   const offline = useOffline();
   const customers = useLoad(() => api.listCustomers().then((cs) => cs.filter((c) => !c.walk_in)), []);
   const [customerId, setCustomerId] = useState<number | "">(pre ?? "");
@@ -71,7 +74,7 @@ function NewPaymentForm({ pre }: { pre?: number }) {
       toast("success", tr(`تم حفظ التسديد ${money(amount)} من ${c.name}`, `Saved ${money(amount)} from ${c.name}`));
       router.push(`/payments/${p.id}`);
     } catch (e) {
-      if (isNetworkError(e)) {
+      if (isNetworkError(e) && offlineOk) {
         enqueue({ kind: "payment", client_ref: ref, body, label: `${c.name} · ${money(amount)}`, saved_at: new Date().toISOString() });
         toast("primary", tr("بدون إنترنت: حُفظ التسديد على الجوال وسيُرسَل تلقائياً", "Offline: the payment is saved on the phone and will send by itself"));
         router.push("/payments");

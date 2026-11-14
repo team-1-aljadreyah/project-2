@@ -1,5 +1,6 @@
 // The shapes of the data. The real backend will send the same shapes.
 // Money = whole Iraqi dinars. Quantity = pieces (cartons are converted with pieces_per_carton).
+import type { AdvancedRules, PublicRules } from "./advanced";
 
 /** staff = warehouse staff (موظف المخزن): works in one warehouse, sees it read-only, and answers the support chat. */
 export type Role = "manager" | "warehouse" | "staff" | "rep" | "accountant" | "shop";
@@ -525,8 +526,9 @@ export interface ProblemInput {
 
 export interface DeliverInput {
   pin: string;
-  /** The photo of the packages, as a small JPEG data URL (made smaller on the phone before sending). */
-  photo: string;
+  /** The photo of the packages, as a small JPEG data URL (made smaller on the phone before sending).
+   *  Needed unless the manager turned it off (advanced settings → delivery proof). */
+  photo?: string;
   /** Only some of it was delivered: what the shop took. Missing = everything. */
   lines?: { item_id: number; unit: Unit; qty: number }[];
   /** What happens to what wasn't delivered: stays as an open order, or is cancelled (the shop decides). */
@@ -934,6 +936,18 @@ export interface Settings {
   expense_approval_above?: number;
   /** «ملخص اليوم»: the hour (0–23) its notification reaches the manager and the accountant. None = 21. */
   summary_hour?: number;
+  /** «الإعدادات المتقدمة»: the company's rules the manager changed (lib/api/advanced.ts has every default). */
+  advanced?: Partial<AdvancedRules>;
+}
+
+/** One save of the settings: who changed what (each setting from → to). */
+export interface SettingsChange {
+  id: number;
+  at: string;
+  by: Person;
+  changes: { key: string; from: unknown; to: unknown }[];
+  /** «استيراد» from a file, «إرجاع الافتراضي», or a normal save. */
+  how?: "import" | "reset";
 }
 
 /** A name in the two languages (only the ones the manager changed). */
@@ -987,6 +1001,8 @@ export interface SiteCustom {
   fields: CustomField[];
   /** Advanced settings: automation rules ("when this happens, if …, do that"). */
   rules: AutoRule[];
+  /** Read only: the rules everyone needs before logging in (self sign-up, maintenance, the announcement). */
+  live?: PublicRules;
   /** The manager's own ads at the top of the shop owners' store (before the automatic ones). */
   banners: ShopBanner[];
 }
@@ -1565,7 +1581,7 @@ export const EXPENSE_APPROVAL_ABOVE = 1_000_000;
 
 // ---------- Health and security (advanced settings, the manager) ----------
 
-export type LoginFail = "wrong" | "stopped" | "hours";
+export type LoginFail = "wrong" | "stopped" | "hours" | "locked";
 
 /** One check of the security score: passed or not, how much it weighs, and where to fix it. */
 export interface HealthCheck {

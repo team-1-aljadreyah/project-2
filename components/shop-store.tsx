@@ -43,12 +43,16 @@ import { ReorderCard } from "@/components/reorder";
 import { ListChecks, SlidersHorizontal } from "lucide-react";
 import { enqueue, isNetworkError } from "@/lib/offline";
 import { cn, piecesOf, priceOf, today } from "@/lib/utils";
+import { useRules } from "@/lib/use-rules";
 
 export function ShopStore({ customer, orders }: { customer: Customer; orders: Order[] }) {
   const { tr, money, name, unit: unitOf } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useAppRouter();
   const toast = useToast();
+  const rules = useRules();
+  // Saved on the phone when there is no internet: only if the manager allows working offline.
+  const offlineOk = rules.features.offline;
 
   const raw = useSyncExternalStore(subscribeBag, () => readRaw(user.id, customer.id), () => EMPTY);
   const bag = useMemo(() => parseBag(raw), [raw]);
@@ -154,8 +158,12 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
   const over = limit > 0 && balance + total > limit;
   const rep = lookups.reps.find((r) => r.id === customer.rep_id);
 
+  // The smallest order the manager allows from the shop's app (a change of an order already sent isn't held to it).
+  const minOrder = user.role === "shop" && !bag.edit ? rules.min_shop_order : 0;
+  const short = minOrder > 0 && total < minOrder;
+
   async function send() {
-    if (!bag.lines.length) return;
+    if (!bag.lines.length || short) return;
     const body: NewOrder = { client_ref: bag.client_ref, customer_id: customer.id, warehouse_id: warehouseId, lines: bag.lines, note: bag.note || undefined };
     setBusy(true);
     const fresh = () => setBag({ lines: [], note: "", client_ref: "" });
@@ -186,7 +194,7 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
       );
       router.push(`/orders/${order.id}`);
     } catch (e) {
-      if (isNetworkError(e)) {
+      if (isNetworkError(e) && offlineOk) {
         enqueue({ kind: "order", client_ref: body.client_ref, body: { ...body, offline: true, recorded_at: body.recorded_at ?? new Date().toISOString() }, label: `${customer.name} · ${money(total)}`, saved_at: new Date().toISOString() });
         fresh();
         setBagOpen(false);
@@ -428,15 +436,22 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
         onClose={() => setBagOpen(false)}
         title={tr("سلتي", "My bag")}
         footer={
-          <button
-            type="button"
-            disabled={!bag.lines.length || busy}
-            onClick={send}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action transition hover:bg-action-hover disabled:opacity-50"
-          >
-            {busy ? <Loader2 className="size-5 animate-spin" /> : <Truck className="size-5" />}
-            {bag.edit ? tr("احفظ التعديل", "Save the change") : tr("أرسل الطلب", "Send the order")} · <span className="num">{money(total)}</span>
-          </button>
+          <div className="w-full space-y-2">
+            {short && bag.lines.length > 0 && (
+              <p className="rounded-xl bg-warning-soft px-3 py-2 text-center text-sm font-semibold text-warning">
+                {tr(`أقل طلب ${money(minOrder)}: أضف ${money(minOrder - total)}`, `The smallest order is ${money(minOrder)}: add ${money(minOrder - total)}`)}
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={!bag.lines.length || busy || short}
+              onClick={send}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-action text-base font-bold text-on-action transition hover:bg-action-hover disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="size-5 animate-spin" /> : <Truck className="size-5" />}
+              {bag.edit ? tr("احفظ التعديل", "Save the change") : tr("أرسل الطلب", "Send the order")} · <span className="num">{money(total)}</span>
+            </button>
+          </div>
         }
       >
         <div className="space-y-4">

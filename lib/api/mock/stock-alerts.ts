@@ -4,7 +4,7 @@
 // These are the backend's rules (docs/backend.md → «أعلمني عند التوفر»).
 import type { StockWait } from "../types";
 import type { Db, DbUser } from "./db";
-import { fail, need, notify, sellableQty } from "./rules";
+import { R, fail, need, notify, sellableQty } from "./rules";
 
 /** The shops order from the first warehouse (as the shop owner's app does). */
 const shopWarehouse = (db: Db) => db.warehouses[0]?.id;
@@ -18,6 +18,7 @@ export function myStockAlerts(db: Db, a: DbUser): number[] {
 /** Ask (on) or stop asking (off). Only for an item that is out now; at most 50 asks per shop. */
 export function setStockAlert(db: Db, a: DbUser, itemId: number, on: boolean, now: Date): number[] {
   need(a, ["shop"]);
+  if (on && !R().features.notify_me) fail(403, "FEATURE_OFF", "«أعلمني عند التوفر» متوقف الآن", "“Notify me” is turned off");
   db.stock_alerts ??= [];
   const mine = (x: { customer_id: number; user_id: number; item_id: number }) => x.customer_id === a.customer_id && x.user_id === a.id;
   if (!on) {
@@ -36,7 +37,7 @@ export function setStockAlert(db: Db, a: DbUser, itemId: number, on: boolean, no
 
 /** Runs before every request: an item back in stock tells everyone who asked (once), then the asks are done. */
 export function checkStockAlerts(db: Db, now: Date) {
-  if (!db.stock_alerts?.length) return;
+  if (!db.stock_alerts?.length || !R().features.notify_me) return;
   const wh = shopWarehouse(db);
   const back = new Map<number, boolean>();
   const isBack = (id: number) => {

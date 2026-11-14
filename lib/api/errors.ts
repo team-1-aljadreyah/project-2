@@ -11,6 +11,14 @@ export type ErrorCode =
   | "MONTH_CLOSED"
   | "BAD_STATE"
   | "RATE_LIMITED"
+  // The manager's advanced settings:
+  | "MAINTENANCE"
+  | "MIN_ORDER"
+  | "EDIT_CLOSED"
+  | "TOO_OLD"
+  | "SIGNUP_CLOSED"
+  | "FEATURE_OFF"
+  | "LOCKED"
   | "NETWORK";
 
 export class ApiError extends Error {

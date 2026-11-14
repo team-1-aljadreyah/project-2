@@ -29,6 +29,7 @@ import { useRealtime } from "@/lib/realtime";
 import { DeliveriesOverview, RepTripMap, useRepLocations, useShareLocation, type Stop as MapStop } from "@/components/delivery/live-map";
 import { OpenInMaps } from "@/components/open-in-maps";
 import { cn, dayOfIso, today } from "@/lib/utils";
+import { useRules } from "@/lib/use-rules";
 
 type Tab = "ready" | "out" | "delivered";
 
@@ -328,6 +329,9 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "danger" | "warning"; text: string } | null>(null);
   const [done, setDone] = useState(false);
+  // The manager's rules: is the photo needed, and what may be taken at the door.
+  const rules = useRules();
+  const needPhoto = rules.photo_required;
   // 4) Paid at the door (optional): nothing, cash (into my custody), or a Qi / ZainCash request to the shop owner's app.
   const [method, setMethod] = useState<DoorPayMethod | null>(null);
   const takenSub = order.lines.reduce((s, l) => s + (got[`${l.item_id}-${l.unit}`] ?? l.qty) * l.unit_price, 0);
@@ -338,13 +342,13 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
   const [paid, setPaid] = useState<DoorPayment>();
 
   async function send() {
-    if (!photo || pin.length !== 4 || (method && (!payAmount || zcLow))) return;
+    if ((needPhoto && !photo) || pin.length !== 4 || (method && (!payAmount || zcLow))) return;
     setBusy(true);
     setMsg(null);
     try {
       const r = await api.deliverOrder(order.id, {
         pin,
-        photo,
+        ...(photo ? { photo } : {}),
         ...(partial ? { lines: order.lines.map((l) => ({ item_id: l.item_id, unit: l.unit, qty: got[`${l.item_id}-${l.unit}`] ?? l.qty })), rest } : {}),
         ...(method ? { payment: { method, amount: payAmount } } : {}),
       });
@@ -374,6 +378,7 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
     ["qi", "Qi", <CreditCard key="q" className="size-4" />],
     ["zaincash", tr("زين كاش", "ZainCash"), <Wallet key="z" className="size-4" />],
   ];
+  const allowed = METHODS.filter(([m]) => m === null || (rules.door_methods.includes(m) && (m === "cash" || rules.features.online_pay)));
 
   return (
     <Dialog
@@ -382,7 +387,7 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
       title={tr(`تسليم ${order.number} · ${shop}`, `Deliver ${order.number} · ${shop}`)}
       footer={
         !done && (
-          <Button variant="action" size="lg" className="w-full" disabled={!photo || pin.length !== 4 || busy || (!!method && (!payAmount || zcLow))} onClick={send}>
+          <Button variant="action" size="lg" className="w-full" disabled={(needPhoto && !photo) || pin.length !== 4 || busy || (!!method && (!payAmount || zcLow))} onClick={send}>
             <CheckCircle2 className="size-5" /> {tr("تأكيد التسليم", "Confirm delivery")}
           </Button>
         )
@@ -410,6 +415,7 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
             <p className="mb-2 flex items-center gap-2 text-sm font-bold">
               <span className="flex size-6 items-center justify-center rounded-full bg-action text-xs text-on-action">1</span>
               {tr("صوّر الشحنة", "Photo of the packages")}
+              {!needPhoto && <span className="text-xs font-normal text-muted">({tr("اختياري", "optional")})</span>}
             </p>
             <PhotoCapture value={photo} onChange={setPhoto} />
           </section>
@@ -493,8 +499,8 @@ function HandOver({ order, shop, onClose }: { order: Order; shop: string; onClos
               <span className="flex size-6 items-center justify-center rounded-full bg-action text-xs text-on-action">4</span>
               {tr("الدفع عند التسليم", "Payment at the door")} <span className="text-xs font-normal text-muted">({tr("اختياري", "optional")})</span>
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {METHODS.map(([m, label, icon]) => (
+            <div className={cn("grid gap-2", allowed.length > 2 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2")}>
+              {allowed.map(([m, label, icon]) => (
                 <button
                   key={label}
                   type="button"

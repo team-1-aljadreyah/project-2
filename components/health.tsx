@@ -12,8 +12,8 @@ import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
 
-const FAIL_COLORS: Record<LoginFail, string> = { wrong: "#e11d74", stopped: "#8b5cf6", hours: "#f59e0b" };
-const failName = (r: LoginFail, tr: (a: string, b: string) => string) => ({ wrong: tr("كلمة مرور خاطئة", "Wrong password"), stopped: tr("حساب موقوف", "Stopped account"), hours: tr("خارج ساعات الدخول", "Outside login hours") })[r];
+const FAIL_COLORS: Record<LoginFail, string> = { wrong: "#e11d74", stopped: "#8b5cf6", hours: "#f59e0b", locked: "#dc2626" };
+const failName = (r: LoginFail, tr: (a: string, b: string) => string) => ({ wrong: tr("كلمة مرور خاطئة", "Wrong password"), stopped: tr("حساب موقوف", "Stopped account"), hours: tr("خارج ساعات الدخول", "Outside login hours"), locked: tr("مقفل بعد محاولات خاطئة", "Locked after wrong tries") })[r];
 
 export function useHealth() {
   return useLoad(() => api.health(), []);

@@ -1,14 +1,16 @@
 "use client";
 
-// Advanced settings (the manager): like Salesforce's Setup, simpler. A tree on the side with a quick find,
-// and the part chosen on the other side. ?s=home | profiles | profiles:<id> | apps
+// Advanced settings (the manager): like Salesforce's Setup, simpler. A tree on the side with a quick find
+// (it finds a setting by its name too), and the part chosen on the other side.
+// ?s=home | profiles | profiles:<id> | apps | objects | rules | health | the company's rules (components/advanced-rules.tsx)
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppWindow, Boxes, ChevronDown, HeartPulse, Zap, History, Home, Palette, Search, ShieldCheck, Users } from "lucide-react";
+import { AppWindow, Banknote, Bell, Boxes, ChevronDown, HeartPulse, Zap, History, Home, KeyRound, Megaphone, Package, Palette, Search, ShieldCheck, ShoppingCart, Store, ToggleRight, Truck, Users } from "lucide-react";
 import Link from "next/link";
 import { AppsSection, ObjectsSection, ProfilesSection, SetupHome } from "@/components/advanced";
 import { HealthSection } from "@/components/health";
 import { RulesSection } from "@/components/automation";
+import { RULE_WORDS, RulesSection as CompanyRules, type RulesPart } from "@/components/advanced-rules";
 import { Card, LoadingRows, PageHeader } from "@/components/ui";
 import { useAppRouter } from "@/lib/app-path";
 import { useFmt } from "@/lib/i18n";
@@ -29,7 +31,11 @@ interface Leaf {
   icon: typeof Home;
   /** Another page of the site (opens it), instead of a part of this one. */
   href?: string;
+  /** More words the quick find knows it by (its settings' names). */
+  words?: string;
 }
+
+const RULE_PARTS: RulesPart[] = ["orders", "signup", "delivery", "money", "stock", "security", "features", "notify", "announce", "history"];
 
 function Setup() {
   const { tr } = useFmt();
@@ -57,6 +63,28 @@ function Setup() {
       ],
     },
     {
+      ar: "قواعد العمل",
+      en: "Business rules",
+      leaves: [
+        { key: "orders", ar: "الطلبات والموافقات", en: "Orders and approvals", icon: ShoppingCart, words: RULE_WORDS.orders },
+        { key: "signup", ar: "المحلات الجديدة", en: "New shops", icon: Store, words: RULE_WORDS.signup },
+        { key: "delivery", ar: "التوصيل والزيارات", en: "Delivery and visits", icon: Truck, words: RULE_WORDS.delivery },
+        { key: "money", ar: "الأموال والعهدة", en: "Money and custody", icon: Banknote, words: RULE_WORDS.money },
+        { key: "stock", ar: "المخزون والتصفية", en: "Stock and clearance", icon: Package, words: RULE_WORDS.stock },
+        { key: "security", ar: "الدخول ورمز التحقق", en: "Logins and OTP", icon: KeyRound, words: RULE_WORDS.security },
+      ],
+    },
+    {
+      ar: "أدوات المدير",
+      en: "Manager's tools",
+      leaves: [
+        { key: "features", ar: "تشغيل الميزات وإيقافها", en: "Feature switches", icon: ToggleRight, words: RULE_WORDS.features },
+        { key: "notify", ar: "من يصله كل إشعار", en: "Who gets which notification", icon: Bell, words: RULE_WORDS.notify },
+        { key: "announce", ar: "الإعلان والصيانة", en: "Banner and maintenance", icon: Megaphone, words: RULE_WORDS.announce },
+        { key: "history", ar: "سجل الإعدادات والملف", en: "History, file, defaults", icon: History, words: RULE_WORDS.history },
+      ],
+    },
+    {
       ar: "أدوات المنصة",
       en: "Platform tools",
       leaves: [
@@ -74,11 +102,14 @@ function Setup() {
       ],
     },
   ];
-  const match = (l: Leaf) => !q.trim() || tr(l.ar, l.en).toLowerCase().includes(q.trim().toLowerCase()) || l.ar.includes(q.trim());
+  const match = (l: Leaf) => {
+    const w = q.trim().toLowerCase();
+    return !w || tr(l.ar, l.en).toLowerCase().includes(w) || l.ar.includes(w) || l.en.toLowerCase().includes(w) || !!l.words?.toLowerCase().includes(w);
+  };
 
   return (
     <>
-      <PageHeader back="/settings" title={tr("الإعدادات المتقدمة", "Advanced settings")} subtitle={tr("أضف ملفات صلاحيات وتطبيقات بنفسك، بلا مبرمج", "Add permission profiles and apps yourself, no developer needed")} />
+      <PageHeader back="/settings" title={tr("الإعدادات المتقدمة", "Advanced settings")} subtitle={tr("كل قواعد العمل والميزات والإشعارات وملفات الصلاحيات والتطبيقات، بيدك بلا مبرمج", "Every business rule, feature, notification, profile and app, in your hands, no developer needed")} />
       <div className="grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
         <Card className="h-fit p-3 lg:sticky lg:top-20">
           <label className="mb-3 flex h-10 items-center gap-2 rounded-xl border border-line bg-card px-3">
@@ -115,7 +146,7 @@ function Setup() {
           </nav>
         </Card>
         <div className="min-w-0">
-          {part === "profiles" ? <ProfilesSection openId={id} go={go} /> : part === "apps" ? <AppsSection /> : part === "objects" ? <ObjectsSection openObj={id} go={go} /> : part === "health" ? <HealthSection /> : part === "rules" ? <RulesSection /> : <SetupHome go={go} />}
+          {RULE_PARTS.includes(part as RulesPart) ? <CompanyRules part={part as RulesPart} /> : part === "profiles" ? <ProfilesSection openId={id} go={go} /> : part === "apps" ? <AppsSection /> : part === "objects" ? <ObjectsSection openObj={id} go={go} /> : part === "health" ? <HealthSection /> : part === "rules" ? <RulesSection /> : <SetupHome go={go} />}
         </div>
       </div>
     </>

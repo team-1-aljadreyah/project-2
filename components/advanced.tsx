@@ -15,6 +15,7 @@ import { NAV, type NavItem } from "@/components/nav";
 import { api } from "@/lib/api";
 import type { AppDef, CustomField, CustomObject, CustomType, CustomValue, Profile, ProfileAction, Role, User } from "@/lib/api/types";
 import { PROFILE_ACTIONS } from "@/lib/api/types";
+import { changedRules, rulesOf } from "@/lib/api/advanced";
 import { FieldInput } from "@/components/custom-fields";
 import { HealthCards, useHealth } from "@/components/health";
 import { homeOf } from "@/lib/auth";
@@ -69,6 +70,10 @@ function useSave() {
 // ---------- Home ----------
 
 export function SetupHome({ go }: { go: (s: string) => void }) {
+  const { lookups } = useApp();
+  const rules = rulesOf(lookups.settings);
+  const changedCount = Object.keys(changedRules(rules)).length;
+  const featuresOff = Object.values(rules.features).filter((v) => !v).length;
   const { tr } = useFmt();
   const { user } = useApp();
   const site = useSite();
@@ -121,6 +126,8 @@ export function SetupHome({ go }: { go: (s: string) => void }) {
         <HomeCard title={tr("ملفات الصلاحيات", "Permission profiles")} value={site.profiles.length} hint={tr(`${inProfiles} شخص داخل ملفات`, `${inProfiles} people in profiles`)} onClick={() => go("profiles")} />
         <HomeCard title={tr("التطبيقات", "Apps")} value={site.apps.filter((a) => a.active).length} hint={tr(`من ${site.apps.length} تطبيق`, `of ${site.apps.length} apps`)} onClick={() => go("apps")} />
         <HomeCard title={tr("المستخدمون", "Users")} value={list.filter((u) => u.active).length} hint={tr(`${list.length - inProfiles} بصلاحيات وظيفتهم المعتادة`, `${list.length - inProfiles} with the job's usual access`)} href="/users" />
+        <HomeCard title={tr("قواعد عمل معدّلة", "Changed business rules")} value={changedCount} hint={tr("عن الافتراضي · السجل والملف", "from the defaults · history and file")} onClick={() => go("history")} />
+        <HomeCard title={tr("ميزات متوقفة", "Features off")} value={featuresOff} hint={tr(`من ${Object.keys(rules.features).length} ميزات`, `of ${Object.keys(rules.features).length}`)} onClick={() => go("features")} />
       </div>
       <Card className="p-4">
         <p className="mb-3 font-bold">{tr("يحتاج نظرة", "Needs a look")}</p>

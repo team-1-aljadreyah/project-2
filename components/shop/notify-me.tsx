@@ -11,6 +11,7 @@ import type { Item } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { onDataChange } from "@/lib/live";
 import { cn } from "@/lib/utils";
+import { useRules } from "@/lib/use-rules";
 
 let ids: number[] | null = null;
 let loading = false;
@@ -74,7 +75,12 @@ export function useStockAlerts() {
 }
 
 /** The bell. `size`: "sm" on a product card, "lg" (a full button) in the product window. */
-export function NotifyMe({ item, size = "sm", className }: { item: Item; size?: "sm" | "lg"; className?: string }) {
+/** Hidden while the manager has «notify me» turned off (advanced settings → features). */
+export function NotifyMe(p: { item: Item; size?: "sm" | "lg"; className?: string }) {
+  return useRules().features.notify_me ? <NotifyMeButton {...p} /> : null;
+}
+
+function NotifyMeButton({ item, size = "sm", className }: { item: Item; size?: "sm" | "lg"; className?: string }) {
   const { tr, name } = useFmt();
   const toast = useToast();
   const alerts = useStockAlerts();

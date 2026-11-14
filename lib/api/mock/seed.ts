@@ -23,6 +23,7 @@ import {
   dayOf,
   sellableQty,
   sweep,
+  takeRules,
 } from "./rules";
 import { weekDayOf } from "./visits";
 import { schedulePrice } from "./price-schedule";
@@ -208,6 +209,8 @@ export function makeSeed(now = new Date()): Db {
     chat: [],
     chat_reads: {},
   };
+  // The rules in force while the history is made: the defaults (a reset never keeps an earlier request's rules).
+  takeRules(db);
 
   const manager = users[0];
   const keepers = [users[1], users[2]];

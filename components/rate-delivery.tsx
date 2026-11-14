@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import type { Order, User } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { useRules } from "@/lib/use-rules";
 
 const WEEK = 7 * 86_400_000;
 const canRate = (o: Order) => o.delivery?.status === "delivered" && !!o.delivery.delivered_at && Date.now() - new Date(o.delivery.delivered_at).getTime() < WEEK;
@@ -77,7 +78,12 @@ function RateForm({ order, start = 0, onDone }: { order: Order; start?: number; 
 }
 
 /** On the shop owner's home: his last delivery not rated yet (within 7 days). Hidden for this visit once closed. */
-export function RatePrompt({ orders, customerId }: { orders: Order[]; customerId: number }) {
+/** Hidden while the manager has ratings turned off (advanced settings → features). */
+export function RatePrompt(p: Parameters<typeof RatePromptInner>[0]) {
+  return useRules().features.ratings ? <RatePromptInner {...p} /> : null;
+}
+
+function RatePromptInner({ orders, customerId }: { orders: Order[]; customerId: number }) {
   const { tr } = useFmt();
   const [closed, setClosed] = useState(false);
   const [done, setDone] = useState<Order | null>(null);
@@ -117,7 +123,12 @@ export function RatePrompt({ orders, customerId }: { orders: Order[]; customerId
 }
 
 /** On the order page: the shop owner rates (or changes it within 7 days); the others see what he gave. */
-export function DeliveryRatingCard({ order, user, onChanged }: { order: Order; user: Pick<User, "role">; onChanged: () => void }) {
+/** Hidden while the manager has ratings turned off (advanced settings → features). */
+export function DeliveryRatingCard(p: { order: Order; user: Pick<User, "role">; onChanged: () => void }) {
+  return useRules().features.ratings ? <RatingCard {...p} /> : null;
+}
+
+function RatingCard({ order, user, onChanged }: { order: Order; user: Pick<User, "role">; onChanged: () => void }) {
   const { tr, ago } = useFmt();
   const [edit, setEdit] = useState(false);
   const r = order.rating;
