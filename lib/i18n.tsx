@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { LOCALE_KEY } from "./boot";
 import { currencyVersion, subscribeCurrency, usdDivisor } from "./currency";
-import { subscribeTexts, textsVersion, translate } from "./texts";
+import { subscribeTexts, textsVersion, translate, currencyName } from "./texts";
 import { qtyIn, unitName } from "./units";
 import type { Unit } from "./api/types";
 
@@ -82,7 +82,7 @@ export function makeFmt(lang: Lang, usd = 0): Fmt {
       const v = nf.format(Math.abs(n));
       const sign = n < 0 ? "-" : opts?.sign && n > 0 ? "+" : "";
       if (opts?.bare) return `${sign}${v}`;
-      return lang === "ar" ? `${sign}${v} د.ع` : `${sign}${v} IQD`;
+      return `${sign}${v} ${currencyName(lang)}`;
     },
     unit: (it, u, short) => unitName(it, u, lang, short),
     qty: (pieces, perCarton, it) => {

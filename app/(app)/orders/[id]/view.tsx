@@ -28,18 +28,20 @@ import { editOrderInBag } from "@/lib/shop-bag";
 import { PrepareOrder } from "@/components/prepare-order";
 import { ShipmentsCard, VehicleBox } from "@/components/vehicles";
 import { piecesOf, useIdParam } from "@/lib/utils";
-import { useRules } from "@/lib/use-rules";
+import { useMay, useRules } from "@/lib/use-rules";
 
 export default function OrderView() {
   const id = useIdParam();
   const fmt = useFmt();
-  const { tr, dateTime, money, qty, name, unit: un } = fmt;
+  const { tr, dateTime, date, money, qty, name, unit: un } = fmt;
+  const dayName = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(fmt.lang === "ar" ? "ar-IQ" : "en-GB", { weekday: "long" });
   const { user, lookups, itemById, reloadItems } = useApp();
   const router = useAppRouter();
   const toast = useToast();
   const order = useLoad(() => api.getOrder(id), [id]);
   const brand = useBrand();
   const rules = useRules();
+  const may = useMay();
   // When this page was opened (the edit window is checked against it; the server checks it again on save).
   const [openedAt] = useState(() => Date.now());
   const locations = useRepLocations();
@@ -65,15 +67,15 @@ export default function OrderView() {
   // Not delivered yet: it can still be cancelled (nothing was owed).
   const beforeDelivery = open || o.status === "approved";
   // The accountant or the manager approves; then the warehouse keeper prepares; the invoice comes at delivery.
-  const canAccept = ["manager", "accountant"].includes(user.role) && (o.status === "pending" || o.status === "expired");
+  const canAccept = may("approve_order") && (o.status === "pending" || o.status === "expired");
   // A keeper prepares only his own warehouse: the order of his warehouse (deciding where each line comes from),
   // or his part of an order split with the other warehouse. The manager can do any part.
   const myPartWaits = !!o.prep_parts?.some((p) => !p.prepared_by && (user.role === "manager" || worksIn(user, p.warehouse_id, lookups.warehouses)));
   const canPrepare =
     o.status === "approved" && !o.delivery && !o.shipments?.length && (o.prep_parts ? myPartWaits : user.role === "manager" || (user.role === "warehouse" && worksIn(user, o.warehouse_id, lookups.warehouses)));
-  const canApprove = user.role === "manager" && o.status === "needs_approval";
-  const canCancel = (beforeDelivery && (user.role === "manager" || user.role === "accountant")) || (open && o.created_by.id === user.id);
-  const canEditDiscount = open && (user.role === "manager" || (user.role === "rep" && o.rep_id === user.id) || user.role === "accountant");
+  const canApprove = may("approve_over_limit") && o.status === "needs_approval";
+  const canCancel = (beforeDelivery && may("cancel_order")) || (open && o.created_by.id === user.id);
+  const canEditDiscount = open && may("give_discount") && (user.role !== "rep" || o.rep_id === user.id);
   const waitsFor = o.approval_for ?? ["debt"];
   // The shop owner changes his own order until the warehouse confirms it.
   // The manager may give the shop owner only some minutes after sending (0 = until it is approved).
@@ -196,6 +198,13 @@ export default function OrderView() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
+          {(o.expected_on || o.after_hours) && o.status !== "confirmed" && o.status !== "cancelled" && (
+            <Notice tone="primary" title={o.expected_on ? tr(`يصل متوقعاً: ${dayName(o.expected_on)} ${date(o.expected_on)}`, `Expected: ${dayName(o.expected_on)} ${date(o.expected_on)}`) : undefined}>
+              {o.after_hours
+                ? tr(`أُرسل خارج الدوام، ويُراجع عند بدء الدوام: ${dateTime(o.after_hours)}. الكمية محجوزة له حتى ذلك الحين.`, `Sent outside working time; looked at when work starts: ${dateTime(o.after_hours)}. The goods are held until then.`)
+                : tr("بحسب آخر وقت للتوصيل وأيام التوصيل لمنطقته.", "By the cut-off and the area's delivery days.")}
+            </Notice>
+          )}
           {o.shipment_of && (
             <Notice tone="primary" href={`/orders/${o.shipment_of}`} title={tr(`الدفعة ${o.shipment_no} من طلب أكبر`, `Load ${o.shipment_no} of a bigger order`)}>
               {tr("الطلب حُمّل على أكثر من سيارة، وهذه حمولة سيارة واحدة منه، لها رمز استلامها وفاتورتها.", "The order went on more than one vehicle; this is one vehicle's load, with its own PIN and invoice.")}

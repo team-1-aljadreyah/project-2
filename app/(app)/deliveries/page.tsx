@@ -19,7 +19,8 @@ import { QrScanner } from "@/components/delivery/scanner";
 import { DeliveryChip, LoadButton } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
-import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, NumberInput, PageHeader, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
+import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, Notice, NumberInput, PageHeader, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
+import { isWorkDay } from "@/lib/api/advanced";
 import { api, ApiError } from "@/lib/api";
 import type { DoorPayment, DoorPayMethod, Order } from "@/lib/api/types";
 import { ZAINCASH } from "@/lib/zaincash";
@@ -36,6 +37,8 @@ type Tab = "ready" | "out" | "delivered";
 export default function DeliveriesPage() {
   const { tr, ago, num } = useFmt();
   const { user, lookups } = useApp();
+  const rules = useRules();
+  const [today0] = useState(() => new Date());
   const toast = useToast();
   const isRep = user.role === "rep";
   const orders = useLoad(() => api.listOrders(), []);
@@ -107,6 +110,12 @@ export default function DeliveriesPage() {
           )
         }
       />
+
+      {!isWorkDay(rules, today0) && (
+        <div className="mb-4">
+          <Notice tone="warning">{tr("اليوم عطلة في الشركة: لا تخرج شحنات من المخزن.", "Today is a day off: no shipments go out.")}</Notice>
+        </div>
+      )}
 
       {isRep && (
         <motion.button

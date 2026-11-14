@@ -44,9 +44,10 @@ import { ListChecks, SlidersHorizontal } from "lucide-react";
 import { enqueue, isNetworkError } from "@/lib/offline";
 import { cn, piecesOf, priceOf, today } from "@/lib/utils";
 import { useRules } from "@/lib/use-rules";
+import { expectedDelivery, inWorkTime, nextWorkStart } from "@/lib/api/advanced";
 
 export function ShopStore({ customer, orders }: { customer: Customer; orders: Order[] }) {
-  const { tr, money, name, unit: unitOf } = useFmt();
+  const { tr, money, name, unit: unitOf, dateTime, lang } = useFmt();
   const { user, lookups, items, itemById, reloadItems } = useApp();
   const router = useAppRouter();
   const toast = useToast();
@@ -74,7 +75,8 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
   const [busy, setBusy] = useState(false);
 
   // Orders come from the main warehouse (the shop doesn't choose; the company does).
-  const warehouseId = lookups.warehouses[0].id;
+  // The first warehouse that takes shop orders (the manager may close one to them: advanced settings → warehouses).
+  const warehouseId = (lookups.warehouses.find((w) => rules.warehouses[String(w.id)]?.shop_orders !== false) ?? lookups.warehouses[0]).id;
   const available = (it: Item) => it.stock.by_warehouse.find((w) => w.warehouse_id === warehouseId)?.qty ?? 0;
   // His price; with a clearance running («عرض تصريف»), after its discount.
   const basePrice = (it: Item, unit: Unit) => priceOf(it, customer.tier_id, unit);
@@ -160,6 +162,10 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
 
   // The smallest order the manager allows from the shop's app (a change of an order already sent isn't held to it).
   const minOrder = user.role === "shop" && !bag.edit ? rules.min_shop_order : 0;
+  // When the order would arrive, and whether the company is working now (the time the bag was opened).
+  const [sentAt] = useState(() => new Date());
+  const arrives = expectedDelivery(rules, customer.area, sentAt);
+  const working = inWorkTime(rules, sentAt);
   const short = minOrder > 0 && total < minOrder;
 
   async function send() {
@@ -455,6 +461,13 @@ export function ShopStore({ customer, orders }: { customer: Customer; orders: Or
         }
       >
         <div className="space-y-4">
+          {/* When it arrives / outside working time (advanced settings → working time and delivery dates) */}
+          {(arrives || !working) && (
+            <div className="rounded-2xl bg-primary-soft px-4 py-3 text-sm text-primary-ink">
+              {arrives && <p className="font-semibold">{tr(`يصلك متوقعاً: ${new Date(`${arrives}T12:00:00`).toLocaleDateString(lang === "ar" ? "ar-IQ" : "en-GB", { weekday: "long", day: "numeric", month: "long" })}`, `Expected: ${new Date(`${arrives}T12:00:00`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}`)}</p>}
+              {!working && <p className={cn(arrives && "mt-1 text-xs")}>{tr(`نحن خارج الدوام الآن: يُراجع طلبك ${dateTime(nextWorkStart(rules, sentAt).toISOString())}، والكمية محجوزة لك.`, `We're outside working time: your order is looked at ${dateTime(nextWorkStart(rules, sentAt).toISOString())}; the goods are held for you.`)}</p>}
+            </div>
+          )}
           {/* Delivery, like the design's address block */}
           <div className="rounded-2xl border border-line p-3">
             <p className="text-xs font-semibold text-muted">{tr("التوصيل إلى", "Deliver to")}</p>

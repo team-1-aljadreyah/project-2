@@ -10,7 +10,8 @@ import { DEFAULT_SITE, fullSite } from "./api/site-defaults";
 import type { Label, SiteCustom } from "./api/types";
 import { onDataChange } from "./live";
 import { useFmt } from "./i18n";
-import { setTexts } from "./texts";
+import { setCurrencyNames, setTexts } from "./texts";
+import { setInvoiceLine } from "./receipts";
 
 export { DEFAULT_SITE, ordered } from "./api/site-defaults";
 
@@ -37,6 +38,8 @@ function applyLook(s: SiteCustom) {
 function take(next: SiteCustom) {
   site = next;
   setTexts(next.texts);
+  setCurrencyNames(next.live?.names.currency_ar, next.live?.names.currency_en);
+  setInvoiceLine(next.live?.names.invoice_footer ?? "");
   applyLook(next);
 }
 

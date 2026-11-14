@@ -121,6 +121,7 @@ import {
   sweep,
   takeRules,
   R,
+  can,
   expensesOf,
   createExpense,
   decideExpense,
@@ -145,6 +146,7 @@ import { lateShops, myReorder, remindReorders } from "./mock/reorder";
 import { changeMyPhone, resetPassword, sendOtp, spendOtpToken, verifyOtp } from "./mock/otp";
 import { fullSite, ordered } from "./site-defaults";
 import { changedRules, checkRules, publicRules, rulesOf } from "./advanced";
+import { userMay } from "./permissions";
 import { guessWeight, linesWeight, vehicleLoad } from "./vehicles";
 import { layoutOf, zoneOfItem } from "./warehouse-layout";
 import { unitName } from "../units";
@@ -155,7 +157,6 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const db0 = () => loadDb(() => makeSeed());
 
 const COST_ROLES: Role[] = ["manager", "accountant", "warehouse"];
-const PROFIT_ROLES: Role[] = ["manager", "accountant"];
 const seesCost = (u: DbUser) => COST_ROLES.includes(u.role);
 // A permission profile (advanced settings) can hide money, take actions away, make a person see-only, and
 // set their login hours.
@@ -175,9 +176,11 @@ function checkHours(u: DbUser, now: Date) {
     fail(401, "UNAUTHENTICATED", `خارج ساعات الدخول المسموحة لك (${h.from} – ${h.to})`, `Outside your login hours (${h.from}–${h.to})`);
   }
 }
-const seesProfit = (u: DbUser) => PROFIT_ROLES.includes(u.role) && !limitsOf(u).no_profit;
-// The warehouse people never see debts (keeper and staff).
-const seesDebt = (u: DbUser) => u.role !== "warehouse" && u.role !== "staff" && !limitsOf(u).no_debt;
+// Who sees costs and debts: the manager's table «من يحق له ماذا» (by default: costs the manager and the
+// accountant; debts everyone but the warehouse people), and a profile can still take them away. A shop owner
+// sees his own debt (his statement), never costs.
+const seesProfit = (u: DbUser) => u.role !== "shop" && userMay(R(), u, "see_costs") && !limitsOf(u).no_profit;
+const seesDebt = (u: DbUser) => (u.role === "shop" || userMay(R(), u, "see_debts")) && !limitsOf(u).no_debt;
 
 function actorOf(db: Db): DbUser {
   const s = getSession();
@@ -885,8 +888,9 @@ export const mockApi: Api = {
   // Users
   setUserProfile: (id, profileId) =>
     write((db, a, now) => {
-      need(a, ["manager"]);
+      can(a, "manage_users");
       const u = db.users.find((x) => x.id === id && !x.deleted) ?? notFound();
+      if (a.role !== "manager" && u.role === "manager") fail(403, "FORBIDDEN", "حسابات المدير يغيّرها المدير فقط", "Only the manager changes manager accounts");
       if (profileId) {
         const p = fullSite(db.custom).profiles.find((x) => x.id === profileId) ?? notFound();
         if (p.role !== u.role) fail(422, "VALIDATION", "هذا الملف لوظيفة أخرى", "This profile is for another job");
@@ -902,7 +906,7 @@ export const mockApi: Api = {
   removeUserPhoto: (id) => write((db, a, now) => strip(removeUserPhoto(db, a, id, now))),
   listUsers: () =>
     read((db, a) => {
-      need(a, ["manager"]);
+      can(a, "manage_users");
       return db.users.filter((u) => !u.deleted).map((u) => {
         const { password: _p, ...rest } = u;
         void _p;
@@ -911,7 +915,11 @@ export const mockApi: Api = {
     }),
   saveUser: (id, input) =>
     write((db, a, now) => {
-      need(a, ["manager"]);
+      can(a, "manage_users");
+      // Someone given this right who isn't the manager never makes a manager or changes one (no climbing up).
+      if (a.role !== "manager" && (input.role === "manager" || (id && db.users.find((x) => x.id === id)?.role === "manager"))) {
+        fail(403, "FORBIDDEN", "حسابات المدير يغيّرها المدير فقط", "Only the manager changes manager accounts");
+      }
       const phone = input.phone.replace(/\s/g, "");
       const errors: Record<string, string> = {};
       if (!input.name.trim()) errors.name = msg("الاسم مطلوب", "Name is required");
@@ -1394,7 +1402,7 @@ export const mockApi: Api = {
     }),
   saveItem: (id, input) =>
     write((db, a, now) => {
-      need(a, ["manager"]);
+      can(a, "edit_items");
       const errors: Record<string, string> = {};
       if (!input.name.trim()) errors.name = msg("الاسم مطلوب", "Name is required");
       if (!(input.pieces_per_carton >= 1) || !Number.isInteger(input.pieces_per_carton)) errors.pieces_per_carton = msg("عدد صحيح من 1", "A whole number from 1");
@@ -1628,7 +1636,9 @@ export const mockApi: Api = {
     }),
   saveCustomer: (id, input) =>
     write((db, a, now) => {
-      need(a, ["manager"]);
+      can(a, "edit_customers");
+      // Turning a shop that signed up into an active one is approving it: that right too.
+      if (id && input.active && db.customers.find((x) => x.id === id)?.pending) can(a, "approve_shop");
       const phone = input.phone.replace(/\s/g, "");
       const errors: Record<string, string> = {};
       if (!input.name.trim()) errors.name = msg("اسم المحل مطلوب", "Shop name is required");

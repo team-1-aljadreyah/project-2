@@ -8,7 +8,8 @@ import { linesWeight } from "../vehicles";
 import { clearPrice, offerOff, soldUnits, unitName } from "../../units";
 import { clearanceFor } from "./clearance-price";
 import { fullSite } from "../site-defaults";
-import { DEFAULT_NOTIFY, roundBy } from "../advanced";
+import { DEFAULT_NOTIFY, custodyCapOf, discountAlone, expenseLimitOf, expectedDelivery, isWorkDay, nextWorkStart, prefixOf, roundBy, type NumberKind } from "../advanced";
+import { ACTION, userMay, type ActionKey } from "../permissions";
 import { R, takeRules } from "./current-rules";
 import { missingValue, supplyGaps } from "../supply";
 import type {
@@ -264,6 +265,24 @@ export function audit(
 // R(): the rules in force for this request (./current-rules: taken at its start).
 export { R, takeRules };
 
+/** A new record's number prefix (the manager's, else ORD / INV / PAY …). Old records keep their numbers. */
+export const pre = (k: NumberKind) => prefixOf(R(), k);
+
+/** How long an unapproved order of this warehouse holds its goods (its own hours, else the company's). */
+const holdHours = (db: Db, warehouseId: number) => R().warehouses[String(warehouseId)]?.reservation_hours ?? db.settings.reservation_hours;
+
+/** When an order sent now is looked at, and until when it holds its goods: outside working time the hold
+ *  starts when work starts (so it doesn't run out at night or on a day off). */
+function holdFrom(db: Db, warehouseId: number, now: Date): { until: string; after?: string } {
+  const start = R().work.on ? nextWorkStart(R(), now) : now;
+  return { until: new Date(start.getTime() + holdHours(db, warehouseId) * 3_600_000).toISOString(), ...(start.getTime() > now.getTime() ? { after: start.toISOString() } : {}) };
+}
+
+/** «من يحق له ماذا»: may this person do it (the manager's table, his own exceptions)? Else 403. */
+export function can(actor: DbUser, key: ActionKey) {
+  if (!userMay(R(), actor, key)) fail(403, "FORBIDDEN", `ليس من صلاحياتك: ${ACTION[key].ar}`, `Not allowed: ${ACTION[key].en}`);
+}
+
 /** A user who isn't a person: what the site does by itself (an auto-approved order). */
 const AUTO = { id: 0, name: "اعتماد تلقائي", phone: "", role: "accountant", active: true, password: "" } as DbUser;
 
@@ -365,7 +384,7 @@ export function sweep(db: Db, now: Date) {
 // ---------- receiving goods ----------
 
 export function createReceipt(db: Db, actor: DbUser, input: NewReceipt, now: Date): Receipt {
-  need(actor, ["manager", "warehouse"]);
+  can(actor, "receive_goods");
   if (actor.role === "warehouse" && !worksIn(actor, input.warehouse_id)) {
     fail(403, "FORBIDDEN", "تستطيع الاستلام في مخزنك فقط", "You can only receive into your own warehouse");
   }
@@ -401,7 +420,7 @@ export function createReceipt(db: Db, actor: DbUser, input: NewReceipt, now: Dat
   });
   const receipt: Receipt = {
     id,
-    number: `RCV-${pad(id, 5)}`,
+    number: `${pre("receipt")}-${pad(id, 5)}`,
     ...(input.supply_order_id ? { supply_order_id: input.supply_order_id } : {}),
     warehouse_id: input.warehouse_id,
     supplier: input.supplier.trim(),
@@ -504,6 +523,11 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   }
 
   const warehouseId = input.warehouse_id ?? db.warehouses[0].id;
+  if (actor.role === "shop" && R().warehouses[String(warehouseId)]?.shop_orders === false) {
+    fail(409, "BAD_STATE", "هذا المخزن لا يستقبل طلبات المحلات الآن", "This warehouse doesn't take shop orders now");
+  }
+  const hold = holdFrom(db, warehouseId, now);
+  const expected = expectedDelivery(R(), customer.area, now);
   // The price is fixed when the order is recorded (offline: the moment on the rep's phone, at most 3 days back).
   const recordedAt = input.recorded_at && input.recorded_at < now.toISOString() && input.recorded_at > new Date(now.getTime() - R().offline_max_days * 86_400_000).toISOString() ? input.recorded_at : undefined;
   let lines = orderLines(db, customer.tier_id, input.lines, customer.id, recordedAt, input.warehouse_id);
@@ -547,7 +571,7 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
   const id = nextId(db, "order");
   const order: Order = {
     id,
-    number: `ORD-${pad(id)}`,
+    number: `${pre("order")}-${pad(id)}`,
     client_ref: input.client_ref,
     customer_id: customer.id,
     rep_id: customer.rep_id,
@@ -559,7 +583,9 @@ export function createOrder(db: Db, actor: DbUser, input: NewOrder, now: Date, s
     ...(discount ? { subtotal, discount } : {}),
     ...(rounding ? { rounding } : {}),
     ...(approval_for.length ? { approval_for: [...approval_for] } : {}),
-    reserved_until: new Date(now.getTime() + db.settings.reservation_hours * 3_600_000).toISOString(),
+    reserved_until: hold.until,
+    ...(hold.after ? { after_hours: hold.after } : {}),
+    ...(expected ? { expected_on: expected } : {}),
     note: input.note?.trim() || undefined,
     created_at: now.toISOString(),
     created_by: person(actor),
@@ -636,7 +662,7 @@ function waitingOrder(db: Db, actor: DbUser, input: NewOrder, customer: DbCustom
   const subtotal = lines.reduce((s, l) => s + l.total, 0);
   const o: Order = {
     id,
-    number: `ORD-${pad(id)}`,
+    number: `${pre("order")}-${pad(id)}`,
     client_ref: input.client_ref,
     customer_id: customer.id,
     rep_id: customer.rep_id,
@@ -673,7 +699,7 @@ function waitingOrder(db: Db, actor: DbUser, input: NewOrder, customer: DbCustom
 }
 
 export function approveOrder(db: Db, actor: DbUser, id: number, now: Date): Order {
-  need(actor, ["manager"]);
+  can(actor, "approve_over_limit");
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status !== "needs_approval") fail(409, "BAD_STATE", "هذا الطلب لا يحتاج موافقة", "This order doesn't need approval");
   checkStock(db, o.warehouse_id, o.lines, now, o.id);
@@ -717,7 +743,7 @@ export function setSpecialPrice(db: Db, actor: DbUser, customerId: number, itemI
 
 /** Stop selling what is left of a batch, in every warehouse, at once. */
 export function holdBatch(db: Db, actor: DbUser, batchId: number, reason: string, now: Date) {
-  need(actor, ["manager", "warehouse"]);
+  can(actor, "hold_batch");
   const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
   if (actor.role === "warehouse" && !worksIn(actor, b.warehouse_id)) fail(403, "FORBIDDEN", "هذه الدفعة في مخزن آخر: يوقفها أمينه أو المدير", "This batch is in another warehouse");
   if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب الإيقاف", "Write the reason", { reason: msg("السبب مطلوب", "Required") });
@@ -731,7 +757,7 @@ export function holdBatch(db: Db, actor: DbUser, batchId: number, reason: string
 }
 
 export function releaseBatch(db: Db, actor: DbUser, batchId: number, now: Date) {
-  need(actor, ["manager"]);
+  can(actor, "hold_batch");
   const b = db.batches.find((x) => x.id === batchId) ?? fail(404, "NOT_FOUND", "الدفعة غير موجودة", "Batch not found");
   for (const x of db.batches.filter((x) => x.held && (x.id === b.id || (x.item_id === b.item_id && x.expiry_date === b.expiry_date && x.receipt_id === b.receipt_id)))) delete x.held;
   audit(db, actor, "update", "batch", b.id, `إعادة بيع الدفعة #${b.id}`, `Batch #${b.id} back on sale`, now);
@@ -778,8 +804,9 @@ function setTotal(o: Order, raw: number) {
 function makeDiscount(actor: DbUser, subtotal: number, percent: number, now: Date): Order["discount"] {
   const p = Math.round((Number(percent) || 0) * 10) / 10;
   if (p === 0) return undefined;
-  if (!["manager", "rep", "accountant"].includes(actor.role)) fail(403, "FORBIDDEN", "لا تستطيع إعطاء خصم", "You can't give a discount");
-  const { discount_max: max, staff_discount_max: alone } = R();
+  can(actor, "give_discount");
+  const max = R().discount_max;
+  const alone = discountAlone(R(), actor);
   if (p < 0 || p > max) fail(422, "VALIDATION", `الخصم بين 0 و ${max}%`, `The discount is between 0 and ${max}%`, { discount_percent: msg(`حتى ${max}%`, `Up to ${max}%`) });
   const needsOk = actor.role !== "manager" && p > alone;
   return {
@@ -799,8 +826,8 @@ function notifyDiscount(db: Db, o: Order, customerName: string, now: Date) {
       roles: ["manager"],
       title: `خصم ${o.discount!.percent}% يحتاج موافقتك: ${customerName}`,
       title_en: `${o.discount!.percent}% discount needs your OK: ${customerName}`,
-      body: `${o.discount!.by.name} أعطى خصماً أكثر من ${R().staff_discount_max}% على ${o.number}`,
-      body_en: `${o.discount!.by.name} gave more than ${R().staff_discount_max}% on ${o.number}`,
+      body: `${o.discount!.by.name} أعطى خصماً أكثر من حدّه (${discountAlone(R(), o.discount!.by as DbUser)}%) على ${o.number}`,
+      body_en: `${o.discount!.by.name} gave more than his limit (${discountAlone(R(), o.discount!.by as DbUser)}%) on ${o.number}`,
       link: `/orders/${o.id}`,
     },
     now,
@@ -848,7 +875,7 @@ export function updateOrder(db: Db, actor: DbUser, id: number, input: OrderEdit,
     o.status = "pending";
     delete o.approval_for;
   }
-  o.reserved_until = new Date(now.getTime() + db.settings.reservation_hours * 3_600_000).toISOString();
+  o.reserved_until = holdFrom(db, o.warehouse_id, now).until;
   o.edited_at = now.toISOString();
   audit(db, actor, "update", "order", o.id, `تعديل الطلب ${o.number} قبل التثبيت`, `Changed ${o.number} before confirming`, now);
   if (actor.role === "shop") {
@@ -903,7 +930,7 @@ export function cancelOrder(db: Db, actor: DbUser, id: number, reason: string, n
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   const own = o.created_by.id === actor.id;
   const notDelivered = o.status === "pending" || o.status === "needs_approval" || o.status === "approved" || o.status === "expired";
-  if (!(actor.role === "manager" || actor.role === "accountant" || (own && (o.status === "pending" || o.status === "needs_approval")))) {
+  if (!(userMay(R(), actor, "cancel_order") || (own && (o.status === "pending" || o.status === "needs_approval")))) {
     fail(403, "FORBIDDEN", "لا تستطيع إلغاء هذا الطلب", "You can't cancel this order");
   }
   if (!notDelivered) fail(409, "BAD_STATE", "سُلِّم هذا الطلب: ما يعود منه يُسجَّل مرتجعاً", "This order was delivered: what comes back is a return");
@@ -949,7 +976,7 @@ export function cancelOrder(db: Db, actor: DbUser, id: number, reason: string, n
 
 /** The accountant or the manager approves the order (the rep alone can't). It stays held until delivered. */
 export function acceptOrder(db: Db, actor: DbUser, id: number, now: Date): Order {
-  need(actor, ["accountant", "manager"]);
+  if (actor !== AUTO) can(actor, "approve_order");
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (o.status === "needs_approval") fail(409, "BAD_STATE", "الطلب يحتاج موافقة المدير أولاً", "The manager must OK this order first");
   if (o.status !== "pending" && o.status !== "expired") fail(409, "BAD_STATE", "الطلب ليس بانتظار الاعتماد", "This order isn't waiting for approval");
@@ -1245,7 +1272,7 @@ function invoiceDelivery(db: Db, actor: DbUser, o: Order, delivered: Order["line
   const invId = nextId(db, "invoice");
   const inv: DbInvoice = {
     id: invId,
-    number: `INV-${now.getFullYear()}-${pad(invId)}`,
+    number: `${pre("invoice")}-${now.getFullYear()}-${pad(invId)}`,
     order_id: o.id,
     customer_id: o.customer_id,
     rep_id: o.rep_id,
@@ -1289,7 +1316,7 @@ export function confirmOrder(db: Db, actor: DbUser, id: number, now: Date, auto 
   const invId = nextId(db, "invoice");
   const inv: DbInvoice = {
     id: invId,
-    number: `INV-${now.getFullYear()}-${pad(invId)}`,
+    number: `${pre("invoice")}-${now.getFullYear()}-${pad(invId)}`,
     order_id: o.id,
     customer_id: o.customer_id,
     rep_id: o.rep_id,
@@ -1387,6 +1414,7 @@ export function counterSale(db: Db, actor: DbUser, input: CounterSaleInput, now:
   if (same) return db.invoices.find((i) => i.id === same.invoice_id) ?? fail(409, "BAD_STATE", "هذه العملية مسجّلة من قبل", "This was already recorded");
   const errors: Record<string, string> = {};
   if (!db.warehouses.some((w) => w.id === input.warehouse_id) || !worksIn(actor, input.warehouse_id)) fail(403, "FORBIDDEN", "تبيع من مخزنك فقط", "You sell only from your warehouse");
+  if (R().warehouses[String(input.warehouse_id)]?.counter_sale === false) fail(403, "FEATURE_OFF", "البيع المباشر متوقف في هذا المخزن", "Counter sales are off in this warehouse");
   if (!db.tiers.some((t) => t.id === input.tier_id)) errors.tier_id = msg("اختر مستوى السعر", "Choose the price level");
   if (input.method !== "cash" && input.method !== "transfer") errors.method = msg("اختر طريقة الدفع", "Choose how he pays");
   const buyer_name = input.buyer_name?.trim().slice(0, 80) || undefined;
@@ -1412,7 +1440,7 @@ export function counterSale(db: Db, actor: DbUser, input: CounterSaleInput, now:
   const id = nextId(db, "order");
   const order: Order = {
     id,
-    number: `ORD-${pad(id)}`,
+    number: `${pre("order")}-${pad(id)}`,
     client_ref: input.client_ref,
     customer_id: customer.id,
     rep_id: 0,
@@ -1436,7 +1464,7 @@ export function counterSale(db: Db, actor: DbUser, input: CounterSaleInput, now:
   const payId = nextId(db, "payment");
   db.payments.push({
     id: payId,
-    number: `PAY-${pad(payId)}`,
+    number: `${pre("payment")}-${pad(payId)}`,
     client_ref: `${input.client_ref}-pay`,
     customer_id: customer.id,
     amount: inv.total,
@@ -1471,7 +1499,7 @@ export function allocate(db: Db, customerId: number, amount: number) {
 }
 
 export function createPayment(db: Db, actor: DbUser, input: NewPayment, now: Date): Payment {
-  need(actor, ["manager", "rep", "accountant"]);
+  can(actor, "record_payment");
   // Online payments are never typed in by hand: only the gateway's "success" records them.
   if (input.method === "online") fail(422, "VALIDATION", "الدفع الأونلاين يُسجَّل تلقائياً من بوابة الدفع", "Online payments are recorded by the payment gateway");
   // A rep collects from his own shops only (a delivery rep takes cash at the door through deliverOrder).
@@ -1490,7 +1518,7 @@ export function repHolding(db: Db, repId: number): number {
 /** The manager's cash limit per rep: a rep who takes cash while above it — the accountant and the manager are told
  *  (at most once a day per rep, so a busy day doesn't flood them). */
 function custodyCapCheck(db: Db, rep: DbUser, now: Date) {
-  const cap = R().custody_cap;
+  const cap = custodyCapOf(R(), rep.id);
   if (!(cap > 0)) return;
   const after = repHolding(db, rep.id);
   const today = dayOf(now);
@@ -1535,7 +1563,7 @@ export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, 
   const id = nextId(db, "payment");
   const p: Payment = {
     id,
-    number: `PAY-${pad(id)}`,
+    number: `${pre("payment")}-${pad(id)}`,
     client_ref: input.client_ref,
     customer_id: customer.id,
     amount: input.amount,
@@ -1581,8 +1609,7 @@ export function addPayment(db: Db, actor: DbUser, input: NewPayment, now: Date, 
 /** Reverse a payment, all of it or any part (amount missing = all that is left). It can be reversed again
  *  later until nothing is left. Each reverse is its own entry (a negative payment), never a deletion. */
 export function reversePayment(db: Db, actor: DbUser, id: number, reason: string, now: Date, amount?: number): Payment {
-  need(actor, ["manager", "accountant"]);
-  if (!R().reverse_roles.includes(actor.role)) fail(403, "FORBIDDEN", "عكس التسديد للمدير فقط", "Only the manager reverses payments");
+  can(actor, "reverse_payment");
   const p = db.payments.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "التسديد غير موجود", "Payment not found");
   // An old payment: only the manager (when he set a limit in days).
   const days = R().reverse_days;
@@ -1615,7 +1642,7 @@ export function reversePayment(db: Db, actor: DbUser, id: number, reason: string
   const n = db.payments.filter((x) => x.reversal_of === p.id).length + 1;
   const r: Payment = {
     id: rid,
-    number: `PAY-${pad(rid)}`,
+    number: `${pre("payment")}-${pad(rid)}`,
     client_ref: n === 1 ? `reverse-${p.id}` : `reverse-${p.id}-${n}`,
     customer_id: p.customer_id,
     amount: -amt,
@@ -1704,7 +1731,7 @@ export function createReturn(db: Db, actor: DbUser, input: NewReturn, now: Date)
   const id = nextId(db, "return");
   const ret: DbReturn = {
     id,
-    number: `RET-${pad(id)}`,
+    number: `${pre("return")}-${pad(id)}`,
     client_ref: input.client_ref,
     invoice_id: inv.id,
     customer_id: inv.customer_id,
@@ -1772,7 +1799,7 @@ export function createTransfer(db: Db, actor: DbUser, input: NewTransfer, now: D
   const id = nextId(draft, "transfer");
   const t: Transfer = {
     id,
-    number: `TRF-${pad(id, 5)}`,
+    number: `${pre("transfer")}-${pad(id, 5)}`,
     client_ref: input.client_ref,
     from_warehouse_id: input.from_warehouse_id,
     to_warehouse_id: input.to_warehouse_id,
@@ -1839,7 +1866,7 @@ export function receiveTransfer(db: Db, actor: DbUser, id: number, received: Rec
 }
 
 export function reviewTransfer(db: Db, actor: DbUser, id: number, now: Date): Transfer {
-  need(actor, ["manager"]);
+  can(actor, "review_transfer");
   const t = db.transfers.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "التحويل غير موجود", "Transfer not found");
   if (t.status !== "partial") fail(409, "BAD_STATE", "لا يوجد فرق لمراجعته", "Nothing to review");
   t.reviewed_by = person(actor);
@@ -1869,7 +1896,7 @@ export function createSupplyOrder(db: Db, actor: DbUser, input: NewSupplyOrder, 
   const id = nextId(db, "supply_order");
   const o: SupplyOrder = {
     id,
-    number: `SUP-${pad(id, 4)}`,
+    number: `${pre("supply")}-${pad(id, 4)}`,
     warehouse_id: wh.id,
     supplier: input.supplier.trim(),
     ...(input.supplier_phone?.trim() ? { supplier_phone: input.supplier_phone.trim() } : {}),
@@ -1985,7 +2012,7 @@ export function createStocktake(db: Db, actor: DbUser, warehouseId: number, now:
   if (!lines.length) fail(422, "VALIDATION", "لا توجد مواد في هذا الصنف", "No items in this category");
   const s: Stocktake = {
     id,
-    number: `CNT-${pad(id, 4)}`,
+    number: `${pre("stocktake")}-${pad(id, 4)}`,
     warehouse_id: warehouseId,
     ...(category ? { category } : {}),
     status: "open",
@@ -2016,7 +2043,7 @@ export function saveStocktake(db: Db, actor: DbUser, id: number, lines: Stocktak
 
 /** Closing sets the stock to what was counted. Every difference is saved with its reason, nothing is erased. */
 export function closeStocktake(db: Db, actor: DbUser, id: number, now: Date): Stocktake {
-  need(actor, ["manager"]);
+  can(actor, "close_stocktake");
   const s = db.stocktakes.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الجرد غير موجود", "Count not found");
   if (s.status !== "open") fail(409, "BAD_STATE", "هذا الجرد مغلق", "This count is closed");
   const errors: Record<string, string> = {};
@@ -2131,7 +2158,7 @@ export function commissionLines(db: Db, month: string, repId?: number): Commissi
 
 /** The accountant (or the manager) fixes today's rate: "$1 = 1,700 IQD". Set again the same day = changed. */
 export function setUsdRate(db: Db, actor: DbUser, rate: number, now: Date): UsdRate {
-  need(actor, ["accountant", "manager"]);
+  can(actor, "set_usd_rate");
   const r = Math.round(Number(rate));
   if (!(r >= 500 && r <= 5000)) fail(422, "VALIDATION", "سعر غير معقول: اكتب كم ديناراً يساوي الدولار الواحد", "Not a sensible rate: how many dinars is one dollar", { rate: msg("بين 500 و 5000", "Between 500 and 5000") });
   db.usd_rates ??= [];
@@ -2198,7 +2225,7 @@ export function commissionRows(db: Db, month: string): CommissionRow[] {
 }
 
 export function closeMonth(db: Db, actor: DbUser, month: string, now: Date) {
-  need(actor, ["manager"]);
+  can(actor, "close_month");
   if (db.closed_months[month]) fail(409, "MONTH_CLOSED", "هذا الشهر مغلق من قبل", "This month is already closed");
   if (month >= dayOf(now).slice(0, 7)) fail(409, "BAD_STATE", "لا يمكن إغلاق الشهر قبل انتهائه", "You can't close a month before it ends");
   const rows = commissionRows(db, month).map((r) => ({ ...r, closed: true }));
@@ -2299,7 +2326,7 @@ export function registerShop(db: Db, input: RegisterInput, now: Date) {
 /** A mistake on an invoice: take `amount` off what the shop owes on it (never more than is left of it
  *  after returns and earlier notes). Already paid → it becomes the shop's credit, to refund or to use. */
 export function creditInvoice(db: Db, actor: DbUser, invoiceId: number, amount: number, reason: string, now: Date): CreditNote {
-  need(actor, ["accountant", "manager"]);
+  can(actor, "credit_note");
   const inv = db.invoices.find((x) => x.id === invoiceId) ?? fail(404, "NOT_FOUND", "الفاتورة غير موجودة", "Invoice not found");
   const a = Math.round(Number(amount));
   const room = inv.total - inv.returned - (inv.credited ?? 0);
@@ -2308,7 +2335,7 @@ export function creditInvoice(db: Db, actor: DbUser, invoiceId: number, amount: 
   if (!reason.trim()) fail(422, "VALIDATION", "اكتب ما الخطأ", "Write what the mistake was", { reason: msg("السبب مطلوب", "Required") });
   db.credit_notes ??= [];
   const id = nextId(db, "credit_note");
-  const n: CreditNote = { id, number: `CN-${pad(id, 4)}`, invoice_id: inv.id, customer_id: inv.customer_id, amount: a, reason: reason.trim(), by: { ...person(actor), role: actor.role }, at: now.toISOString() };
+  const n: CreditNote = { id, number: `${pre("credit_note")}-${pad(id, 4)}`, invoice_id: inv.id, customer_id: inv.customer_id, amount: a, reason: reason.trim(), by: { ...person(actor), role: actor.role }, at: now.toISOString() };
   db.credit_notes.push(n);
   inv.credited = (inv.credited ?? 0) + a;
   const c = db.customers.find((x) => x.id === inv.customer_id);
@@ -2321,7 +2348,7 @@ export function creditInvoice(db: Db, actor: DbUser, invoiceId: number, amount: 
 
 /** Give money back to the shop, up to its credit. Online: back to the card of one of its online payments. */
 export function refundCustomer(db: Db, actor: DbUser, customerId: number, input: { amount: number; method: Refund["method"]; payment_id?: number; reason: string }, now: Date): Refund {
-  need(actor, ["accountant", "manager"]);
+  can(actor, "refund");
   const c = db.customers.find((x) => x.id === customerId) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
   const credit = -customerBalance(db, customerId);
   const a = Math.round(Number(input.amount));
@@ -2341,7 +2368,7 @@ export function refundCustomer(db: Db, actor: DbUser, customerId: number, input:
   const id = nextId(db, "refund");
   const r: Refund = {
     id,
-    number: `RF-${pad(id, 4)}`,
+    number: `${pre("refund")}-${pad(id, 4)}`,
     customer_id: customerId,
     amount: a,
     method: input.method,
@@ -2510,7 +2537,7 @@ export function approveShop(db: Db, actor: DbUser, customer: DbCustomer, now: Da
 
 /** The manager refused the sign-up: the shop stays off and its login is closed. Nothing is deleted. */
 export function rejectShop(db: Db, actor: DbUser, id: number, reason: string, now: Date) {
-  need(actor, ["manager"]);
+  can(actor, "approve_shop");
   const c = db.customers.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الزبون غير موجود", "Customer not found");
   if (!c.pending) fail(409, "BAD_STATE", "هذا المحل ليس بانتظار الموافقة", "This shop isn't waiting for approval");
   if (!reason.trim()) fail(422, "VALIDATION", "اكتب سبب الرفض", "Write the reason", { reason: msg("السبب مطلوب", "Reason is required") });
@@ -2730,6 +2757,7 @@ export function normalizeCode(raw: string) {
 /** At the warehouse: the delivery rep scans the shipment's QR, and the packages are "out" with him. */
 export function dispatchDelivery(db: Db, actor: DbUser, rawCode: string, now: Date): Order {
   need(actor, ["rep", "manager"]);
+  if (!isWorkDay(R(), now)) fail(409, "CLOSED_DAY", "اليوم عطلة في الشركة: لا تخرج شحنات", "Today is a day off: no shipments go out");
   const code = normalizeCode(rawCode);
   const o = db.orders.find((x) => x.delivery?.code === code) ?? fail(404, "NOT_FOUND", "رمز شحنة غير معروف", "Unknown shipment code");
   const d = o.delivery!;
@@ -2850,7 +2878,7 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
       const rsub = short.reduce((s, l) => s + l.total, 0);
       const rest: Order = {
         id: rid,
-        number: `ORD-${pad(rid)}`,
+        number: `${pre("order")}-${pad(rid)}`,
         client_ref: `rest-${o.id}`,
         customer_id: o.customer_id,
         rep_id: o.rep_id,
@@ -2935,7 +2963,7 @@ export function deliverOrder(db: Db, actor: DbUser, id: number, input: DeliverIn
 
 /** The manager checked what happened and opens a locked shipment again. */
 export function unlockDelivery(db: Db, actor: DbUser, id: number, now: Date): Order {
-  need(actor, ["manager"]);
+  can(actor, "unlock_delivery");
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (!o.delivery?.locked) fail(409, "BAD_STATE", "الشحنة ليست مقفلة", "The shipment isn't locked");
   Object.assign(o.delivery!, { locked: false, pin_attempts: 0 });
@@ -2995,7 +3023,7 @@ export function reportDeliveryProblem(db: Db, actor: DbUser, input: ProblemInput
 /** The shipment comes back to the warehouse (after a problem, or any shipment that is out): it is "ready"
  *  again, to go out later with a new QR scan. The PIN stays the same. */
 export function returnToWarehouse(db: Db, actor: DbUser, id: number, now: Date): Order {
-  need(actor, ["manager", "warehouse"]);
+  can(actor, "take_back_shipment");
   const o = db.orders.find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "الطلب غير موجود", "Order not found");
   if (actor.role === "warehouse" && !worksIn(actor, o.warehouse_id)) fail(403, "FORBIDDEN", "هذه الشحنة من مخزن آخر", "This shipment is from another warehouse");
   const d = o.delivery ?? fail(409, "BAD_STATE", "هذا الطلب ليس له شحنة", "This order has no shipment");
@@ -3240,7 +3268,8 @@ export function deleteMyAccount(db: Db, actor: DbUser, password: string, now: Da
 
 /** The manager deletes a login (not his own). Its name stays on every record it made. */
 export function deleteUser(db: Db, actor: DbUser, id: number, now: Date) {
-  need(actor, ["manager"]);
+  can(actor, "manage_users");
+  if (actor.role !== "manager" && db.users.find((x) => x.id === id)?.role === "manager") fail(403, "FORBIDDEN", "حسابات المدير يحذفها المدير فقط", "Only the manager deletes manager accounts");
   const u = db.users.find((x) => x.id === id && !x.deleted) ?? gone();
   if (u.id === actor.id) fail(409, "BAD_STATE", "لا تستطيع حذف حسابك", "You can't delete your own account");
   const why: string[] = [];
@@ -3300,7 +3329,7 @@ export function expensesOf(db: Db): Expense[] {
     db.expenses = rows.map((r, i) => ({
       ...r,
       id: i + 1,
-      number: `EXP-${String(i + 1).padStart(4, "0")}`,
+      number: `${pre("expense")}-${String(i + 1).padStart(4, "0")}`,
       status: "approved",
       created_by: by,
       created_at: `${r.date}T09:30:00.000Z`,
@@ -3331,11 +3360,11 @@ export function createExpense(db: Db, actor: DbUser, input: NewExpense, now: Dat
     errors.photo = msg("صورة غير صالحة أو كبيرة جداً", "Not a valid picture, or too big");
   if (Object.keys(errors).length) fail(422, "VALIDATION", "تحقق من الحقول", "Check the fields", errors);
   // Above the limit the manager says yes first (his own expenses don't wait).
-  const waits = actor.role !== "manager" && amount > expenseLimit(db);
+  const waits = actor.role !== "manager" && amount > expenseLimitOf(R(), actor, expenseLimit(db));
   const id = nextId(db, "expense");
   const e: Expense = {
     id,
-    number: `EXP-${String(id).padStart(4, "0")}`,
+    number: `${pre("expense")}-${String(id).padStart(4, "0")}`,
     date: input.date,
     category,
     amount,
@@ -3370,7 +3399,7 @@ export function createExpense(db: Db, actor: DbUser, input: NewExpense, now: Dat
 
 /** The manager's answer to an expense above the limit. */
 export function decideExpense(db: Db, actor: DbUser, id: number, ok: boolean, reason: string, now: Date): Expense {
-  need(actor, ["manager"]);
+  can(actor, "approve_expense");
   const e = expensesOf(db).find((x) => x.id === id) ?? fail(404, "NOT_FOUND", "السند غير موجود", "Not found");
   if (e.status !== "pending") fail(409, "BAD_STATE", "هذا السند لا ينتظر موافقة", "This expense isn't waiting");
   if (!ok && reason.trim().length < 3) fail(422, "VALIDATION", "اكتب سبب الرفض", "Write why", { reason: msg("اكتب سبب الرفض", "Write why") });

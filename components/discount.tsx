@@ -10,15 +10,22 @@ import { api } from "@/lib/api";
 import type { Order, Role } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { useRules } from "@/lib/use-rules";
+import { useMay, useRules } from "@/lib/use-rules";
+import { discountAlone } from "@/lib/api/advanced";
+import { useApp } from "@/components/shell";
 
-export const canDiscount = (role: Role) => role === "manager" || role === "rep" || role === "accountant";
+/** May the signed-in person give a discount (advanced settings → who may do what)? */
+export const useCanDiscount = () => useMay()("give_discount");
 
 /** The percent field with quick chips, and what it means (amount, needs approval or not). */
 export function DiscountPicker({ value, onChange, subtotal, role }: { value: number; onChange: (v: number) => void; subtotal: number; role: Role }) {
   const { tr, money } = useFmt();
-  // The manager's limits (advanced settings): what staff give alone, and the most anyone gives.
-  const { staff_discount_max: STAFF_DISCOUNT_MAX, discount_max: DISCOUNT_MAX } = useRules();
+  // The manager's limits (advanced settings): what this person gives alone (his own, his job's, everyone's),
+  // and the most anyone gives.
+  const rules = useRules();
+  const { user } = useApp();
+  const STAFF_DISCOUNT_MAX = discountAlone(rules, user);
+  const DISCOUNT_MAX = rules.discount_max;
   const needsOk = role !== "manager" && value > STAFF_DISCOUNT_MAX;
   return (
     <div className="space-y-2">

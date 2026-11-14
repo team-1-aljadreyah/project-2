@@ -16,6 +16,7 @@ import { suggestedClearance } from "@/lib/api/advanced";
 import { useRules } from "@/lib/use-rules";
 import { useLoad } from "@/lib/use-load";
 import { cn } from "@/lib/utils";
+import { useMay } from "@/lib/use-rules";
 
 /** "يوم واحد / يومين / 5 أيام / 21 يوماً". */
 const daysAr = (n: number) => (n === 1 ? "يوم واحد" : n === 2 ? "يومين" : n <= 10 ? `${n} أيام` : `${n} يوماً`);
@@ -25,11 +26,12 @@ export function ClearancePanel({ rows }: { rows: NearExpiryRow[] }) {
   const rules = useRules();
   const suggestClearance = (days: number) => suggestedClearance(rules.clearance, days);
   const toast = useToast();
-  const { user, itemById, lookups } = useApp();
+  const { itemById, lookups } = useApp();
   const list = useLoad(() => api.listClearances(), []);
   const [start, setStart] = useState<NearExpiryRow | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
-  const manager = user.role === "manager";
+  // Who starts a clearance: the manager's table (advanced settings → who may do what).
+  const manager = useMay()("start_clearance");
   const running = (list.data ?? []).filter((c) => c.status === "active");
   const has = (b: Batch) => running.some((c) => c.item.id === b.item_id && c.warehouse_id === b.warehouse_id);
   // Worth clearing: not expired (a day left at least), pieces left, not held, no clearance on it yet.

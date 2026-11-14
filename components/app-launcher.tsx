@@ -11,6 +11,7 @@ import { useFmt } from "@/lib/i18n";
 import { useSite } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { NAV, navFor } from "./nav";
+import { grantsOf } from "@/lib/api/advanced";
 
 const ICONS: Record<string, LucideIcon> = {
   grid: LayoutGrid,
@@ -48,22 +49,24 @@ export function AppIconPick({ value, color, onChange }: { value: string; color: 
 }
 
 /** The pages of an app this person may open (in the app's order). */
-function pagesFor(app: AppDef, user: User, denied: string[]) {
+function pagesFor(app: AppDef, user: User, denied: string[], grants: string[] = []) {
   return app.pages.filter((h) => {
     const n = NAV.find((x) => x.href === h);
-    return !!n && navFor(n, user) && !denied.includes(h);
+    return !!n && navFor(n, { ...user, grants }) && !denied.includes(h);
   });
 }
 
 export function AppLauncher({ user }: { user: User }) {
   const { tr } = useFmt();
   const site = useSite();
+  // Pages given by a right (advanced settings → who may do what).
+  const grants = grantsOf(site.live, user);
   const router = useAppRouter();
   const current = useCurrentApp(user);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const denied = deniedOf(site, user);
-  const apps = appsFor(site, user).filter((a) => pagesFor(a, user, denied).length > 0);
+  const apps = appsFor(site, user).filter((a) => pagesFor(a, user, denied, grants).length > 0);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
@@ -75,7 +78,7 @@ export function AppLauncher({ user }: { user: User }) {
   function pick(app: AppDef | null) {
     chooseApp(user.id, app?.id ?? "all");
     setOpen(false);
-    const first = app && pagesFor(app, user, denied)[0];
+    const first = app && pagesFor(app, user, denied, grants)[0];
     if (first) router.push(first);
   }
 
@@ -107,7 +110,7 @@ export function AppLauncher({ user }: { user: User }) {
                 <AppTile app={a} />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{tr(a.name, a.name_en || a.name)}</span>
-                  <span className="block truncate text-xs text-muted">{a.description || tr(`${pagesFor(a, user, denied).length} صفحات`, `${pagesFor(a, user, denied).length} pages`)}</span>
+                  <span className="block truncate text-xs text-muted">{a.description || tr(`${pagesFor(a, user, denied, grants).length} صفحات`, `${pagesFor(a, user, denied, grants).length} pages`)}</span>
                 </span>
               </button>
             ))}

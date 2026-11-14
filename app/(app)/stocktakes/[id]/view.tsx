@@ -13,11 +13,13 @@ import { useBrand } from "@/lib/site";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn, matches, useIdParam } from "@/lib/utils";
+import { useMay } from "@/lib/use-rules";
 
 export default function StocktakeView() {
   const id = useIdParam();
   const { tr, name, qty, dateTime } = useFmt();
-  const { user, lookups, itemById, reloadItems } = useApp();
+  const { lookups, itemById, reloadItems } = useApp();
+  const may = useMay();
   const toast = useToast();
   const st = useLoad(() => api.getStocktake(id), [id]);
   const [edits, setEdits] = useState<StocktakeLine[] | null>(null);
@@ -101,7 +103,7 @@ export default function StocktakeView() {
                 <Button loading={busy === "save"} onClick={() => save(false)}>
                   <Save className="size-4" /> {tr("حفظ العد", "Save count")}
                 </Button>
-                {user.role === "manager" && (
+                {may("close_stocktake") && (
                   <Button variant="action" loading={busy === "close"} onClick={() => save(true)}>
                     <CheckCircle2 className="size-4" /> {tr("إغلاق الجرد وتعديل المخزون", "Close and update stock")}
                   </Button>
@@ -114,7 +116,7 @@ export default function StocktakeView() {
       </div>
       <CountSheet s={s} lines={lines} kind={paper} />
       <div className="print:hidden">
-      {open && user.role !== "manager" && (
+      {open && !may("close_stocktake") && (
         <div className="mb-4">
           <Notice tone="primary">{tr("بعد انتهاء العد، يغلق المدير الجرد لتُعدَّل الكميات.", "When you finish counting, the manager closes the count to update the stock.")}</Notice>
         </div>

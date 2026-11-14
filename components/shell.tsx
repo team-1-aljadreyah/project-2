@@ -45,7 +45,7 @@ import { LanguageSwitch, ThemeToggle } from "./switches";
 import { Button, Empty, IconButton, Skeleton, Switch, useToast } from "./ui";
 import { usePublicRules } from "@/lib/use-rules";
 import { AnnouncementBar } from "@/components/advanced-rules";
-import type { Announcement } from "@/lib/api/advanced";
+import { grantsOf, type Announcement } from "@/lib/api/advanced";
 import type { Role } from "@/lib/api/types";
 
 interface AppData {
@@ -140,7 +140,7 @@ function Loaded({ user, children }: { user: User; children: ReactNode }) {
   }, [user, lookups.data, items.data, items.reload, lookups.reload]);
 
   const denied = useDenied(user);
-  const allowed = canOpen(user.role, path, user.rep_kinds, denied);
+  const allowed = canOpen(user.role, path, user.rep_kinds, denied, grantsOf(live, user));
   // Finer permissions from the person's profile: see-only, and no exporting.
   const profile = profileOf(useSite(), user);
   const toastDenied = useToast();
@@ -217,7 +217,7 @@ function useNav(user: User, all = false) {
   const denied = deniedOf(site, user);
   const app = useCurrentApp(user);
   const list = customNav(
-    NAV.filter((n) => navFor(n, user) && !denied.includes(n.href)),
+    NAV.filter((n) => navFor(n, { ...user, grants: grantsOf(site.live, user) }) && !denied.includes(n.href)),
     site.nav,
     user.role === "manager",
   );

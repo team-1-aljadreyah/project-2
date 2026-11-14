@@ -3,6 +3,7 @@
 // rules) and by the pages (what they show and allow). Only what the manager changed is saved; the rest follows
 // these defaults. These are the backend's rules (docs/backend.md → «الإعدادات المتقدمة»).
 import type { DoorPayMethod, NotificationType, Role, Settings } from "./types";
+import { ACTIONS, STAFF_ROLES, rolesFor, type ActionKey, type PersonRule } from "./permissions";
 
 export type FeatureKey = "self_signup" | "online_pay" | "ratings" | "notify_me" | "clearance" | "offline" | "support_chat" | "reorder";
 
@@ -14,6 +15,20 @@ export interface Announcement {
   tone: "info" | "warning";
   /** It disappears by itself after this moment (ISO). None = until removed. */
   until?: string;
+}
+
+/** The kinds of numbered records (their prefix: ORD-000123). */
+export type NumberKind = "order" | "invoice" | "payment" | "return" | "receipt" | "transfer" | "supply" | "expense" | "credit_note" | "refund" | "stocktake" | "handover";
+export const DEFAULT_PREFIXES: Record<NumberKind, string> = { order: "ORD", invoice: "INV", payment: "PAY", return: "RET", receipt: "RCV", transfer: "TRF", supply: "SUP", expense: "EXP", credit_note: "CN", refund: "RF", stocktake: "CNT", handover: "HND" };
+
+/** One warehouse's own rules (missing = as the company's). */
+export interface WarehouseRule {
+  /** Its own reservation hours for an unapproved order. */
+  reservation_hours?: number;
+  /** Shop owners may order from it in their app (false: their orders go to another warehouse). */
+  shop_orders?: boolean;
+  /** The keeper sells to walk-in buyers there («بيع مباشر»). */
+  counter_sale?: boolean;
 }
 
 export interface AdvancedRules {
@@ -75,6 +90,26 @@ export interface AdvancedRules {
   login_lock_minutes: number;
   /** The shortest password allowed (new ones and changes). */
   password_min: number;
+  // ---- Who may do what ----
+  /** The jobs that may do each action (missing = as before: ACTIONS' defaults). The manager always may. */
+  permissions: Partial<Record<ActionKey, Role[]>>;
+  /** One person's own rules: discount, cash limit, expense limit, actions given or taken (by user id). */
+  people: Record<string, PersonRule>;
+  /** The discount each job gives alone (missing = staff_discount_max). */
+  discount_by_role: Partial<Record<Role, number>>;
+  /** An expense above this (by the job that records it) waits for the manager (missing = the settings' limit). */
+  expense_by_role: Partial<Record<Role, number>>;
+  // ---- Working time and delivery dates ----
+  /** The company's working days and hours, and holidays. Off = no working-time rules (as before). */
+  work: { on: boolean; days: number[]; from: string; to: string; holidays: { date: string; name: string }[] };
+  /** When an order is delivered: before the cut-off the same day, after it the next delivery day; the delivery
+   *  days of each area (missing area = every working day). Off = no expected date (as before). */
+  delivery_plan: { on: boolean; cutoff: string; days_by_area: Record<string, number[]> };
+  // ---- Warehouses, numbers and names ----
+  /** Each warehouse's own rules (by id). */
+  warehouses: Record<string, WarehouseRule>;
+  /** The record numbers' prefixes, the currency's name, and a line printed under every invoice. */
+  names: { prefixes: Partial<Record<NumberKind, string>>; currency_ar: string; currency_en: string; invoice_footer: string };
   // ---- Bigger tools ----
   features: Record<FeatureKey, boolean>;
   /** Who receives each kind of notification (missing = as the site always did, DEFAULT_NOTIFY). */
@@ -112,6 +147,14 @@ export const DEFAULT_RULES: AdvancedRules = {
   login_lock_after: 0,
   login_lock_minutes: 15,
   password_min: 6,
+  permissions: {},
+  people: {},
+  discount_by_role: {},
+  expense_by_role: {},
+  work: { on: false, days: [6, 0, 1, 2, 3, 4], from: "08:00", to: "18:00", holidays: [] },
+  delivery_plan: { on: false, cutoff: "14:00", days_by_area: {} },
+  warehouses: {},
+  names: { prefixes: {}, currency_ar: "د.ع", currency_en: "IQD", invoice_footer: "" },
   features: { self_signup: true, online_pay: true, ratings: true, notify_me: true, clearance: true, offline: true, support_chat: true, reorder: true },
   notify_matrix: {},
   announcement: null,
@@ -132,7 +175,87 @@ export function rulesOf(s?: Pick<Settings, "advanced" | "auto_confirm_rep_orders
     maintenance: { ...DEFAULT_RULES.maintenance, ...a.maintenance },
     notify_matrix: { ...a.notify_matrix },
     announcement: a.announcement === undefined ? null : a.announcement,
+    // «who reverses» was its own setting before the table: it is the table's row now.
+    permissions: { ...(a.reverse_roles && !a.permissions?.reverse_payment ? { reverse_payment: a.reverse_roles } : {}), ...a.permissions },
+    people: { ...a.people },
+    discount_by_role: { ...a.discount_by_role },
+    expense_by_role: { ...a.expense_by_role },
+    work: { ...DEFAULT_RULES.work, ...a.work },
+    delivery_plan: { ...DEFAULT_RULES.delivery_plan, ...a.delivery_plan },
+    warehouses: { ...a.warehouses },
+    names: { ...DEFAULT_RULES.names, ...a.names, prefixes: { ...a.names?.prefixes } },
   };
+}
+
+/** A record kind's prefix now (the manager's, else the default). */
+export const prefixOf = (r: AdvancedRules, k: NumberKind) => r.names.prefixes[k] || DEFAULT_PREFIXES[k];
+
+/** The discount this person gives alone: his own, else his job's, else everyone's. */
+export function discountAlone(r: AdvancedRules, u: { id: number; role: Role }): number {
+  return r.people[String(u.id)]?.discount_max ?? r.discount_by_role[u.role] ?? r.staff_discount_max;
+}
+
+/** The cash a rep may hold before the alert: his own, else everyone's. */
+export const custodyCapOf = (r: AdvancedRules, repId: number) => r.people[String(repId)]?.custody_cap ?? r.custody_cap;
+
+/** An expense recorded by this person waits for the manager above: his own, else his job's, else the settings'. */
+export function expenseLimitOf(r: AdvancedRules, u: { id: number; role: Role }, base: number): number {
+  return r.people[String(u.id)]?.expense_limit ?? r.expense_by_role[u.role] ?? base;
+}
+
+// ---- working time ----
+const hm = (t: string) => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** A working day: one of the working days and not a holiday (always, while working time is off). */
+export function isWorkDay(r: AdvancedRules, d: Date): boolean {
+  if (!r.work.on) return true;
+  return r.work.days.includes(d.getDay()) && !r.work.holidays.some((h) => h.date === ymd(d));
+}
+
+/** Inside working time now (always, while it is off). */
+export function inWorkTime(r: AdvancedRules, d: Date): boolean {
+  if (!r.work.on) return true;
+  const m = d.getHours() * 60 + d.getMinutes();
+  return isWorkDay(r, d) && m >= hm(r.work.from) && m < hm(r.work.to);
+}
+
+/** The next moment working time starts (or now, inside it). */
+export function nextWorkStart(r: AdvancedRules, d: Date): Date {
+  if (inWorkTime(r, d)) return d;
+  const x = new Date(d);
+  const [fh, fm] = r.work.from.split(":").map(Number);
+  // Today, before opening.
+  if (isWorkDay(r, x) && x.getHours() * 60 + x.getMinutes() < hm(r.work.from)) {
+    x.setHours(fh, fm, 0, 0);
+    return x;
+  }
+  for (let i = 1; i <= 60; i++) {
+    const y = new Date(d);
+    y.setDate(d.getDate() + i);
+    if (isWorkDay(r, y)) {
+      y.setHours(fh, fm, 0, 0);
+      return y;
+    }
+  }
+  return d;
+}
+
+/** The day an order sent now for this area is expected to arrive (null while the plan is off). */
+export function expectedDelivery(r: AdvancedRules, area: string, d: Date): string | null {
+  if (!r.delivery_plan.on) return null;
+  const areaDays = r.delivery_plan.days_by_area[area];
+  const ok = (x: Date) => isWorkDay(r, x) && (!areaDays?.length || areaDays.includes(x.getDay()));
+  const beforeCut = !r.delivery_plan.cutoff || d.getHours() * 60 + d.getMinutes() < hm(r.delivery_plan.cutoff);
+  for (let i = beforeCut ? 0 : 1; i <= 30; i++) {
+    const y = new Date(d);
+    y.setDate(d.getDate() + i);
+    if (ok(y)) return ymd(y);
+  }
+  return null;
 }
 
 /** The clearance discount the site suggests for an item with this many days left. */
@@ -225,6 +348,37 @@ export function checkRules(r: AdvancedRules, tierIds: number[]): Record<string, 
     if (a.until && Number.isNaN(Date.parse(a.until))) m("announcement.until", "تاريخ غير صحيح");
   }
   if (r.maintenance.on && !r.maintenance.message.trim()) m("maintenance.message", "اكتب رسالة لأصحاب المحلات");
+  // Who may do what
+  const keys = ACTIONS.map((x) => x.key) as string[];
+  for (const [k, roles] of Object.entries(r.permissions)) {
+    if (!keys.includes(k) || !Array.isArray(roles) || roles.some((x) => !STAFF_ROLES.includes(x))) m(`permissions.${k}`, "وظائف غير صحيحة");
+  }
+  for (const [id, p] of Object.entries(r.people)) {
+    if (p.discount_max !== undefined && !between(p.discount_max, 0, r.discount_max)) m(`people.${id}.discount_max`, "من 0 إلى أعلى خصم");
+    if (p.custody_cap !== undefined && !whole(p.custody_cap, 0, 1_000_000_000)) m(`people.${id}.custody_cap`, "مبلغ صحيح بالدينار");
+    if (p.expense_limit !== undefined && !whole(p.expense_limit, 0, 1_000_000_000)) m(`people.${id}.expense_limit`, "مبلغ صحيح بالدينار");
+    if ([...(p.allow ?? []), ...(p.deny ?? [])].some((k) => !keys.includes(k))) m(`people.${id}.actions`, "إجراء غير معروف");
+  }
+  for (const [role, v] of Object.entries(r.discount_by_role)) if (!between(v, 0, r.discount_max)) m(`discount_by_role.${role}`, "من 0 إلى أعلى خصم");
+  for (const [role, v] of Object.entries(r.expense_by_role)) if (!whole(v, 0, 1_000_000_000)) m(`expense_by_role.${role}`, "مبلغ صحيح بالدينار");
+  // Working time and delivery dates
+  const time = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+  const w = r.work;
+  if (!Array.isArray(w.days) || w.days.some((x) => !whole(x, 0, 6))) m("work.days", "أيام غير صحيحة");
+  else if (w.on && !w.days.length) m("work.days", "اختر يوم عمل واحداً على الأقل");
+  if (!time(w.from) || !time(w.to) || hm(w.from) >= hm(w.to)) m("work.hours", "البداية قبل النهاية (00:00 – 23:59)");
+  if (!Array.isArray(w.holidays) || w.holidays.some((h) => !/^\d{4}-\d{2}-\d{2}$/.test(h.date) || !h.name?.trim())) m("work.holidays", "كل عطلة بتاريخ واسم");
+  const dp = r.delivery_plan;
+  if (dp.cutoff && !time(dp.cutoff)) m("delivery_plan.cutoff", "وقت بصيغة 14:00");
+  for (const [area, days] of Object.entries(dp.days_by_area)) if (!Array.isArray(days) || days.some((x) => !whole(x, 0, 6))) m(`delivery_plan.days_by_area.${area}`, "أيام غير صحيحة");
+  // Warehouses, numbers and names
+  for (const [id, x] of Object.entries(r.warehouses)) if (x.reservation_hours !== undefined && !whole(x.reservation_hours, 1, 72)) m(`warehouses.${id}.reservation_hours`, "من 1 إلى 72 ساعة");
+  const pre = Object.entries(r.names.prefixes);
+  for (const [k, v] of pre) if (!/^[A-Z]{1,6}$/.test(v ?? "")) m(`names.prefixes.${k}`, "من 1 إلى 6 أحرف إنجليزية كبيرة");
+  const all = (Object.keys(DEFAULT_PREFIXES) as NumberKind[]).map((k) => prefixOf(r, k));
+  if (new Set(all).size !== all.length) m("names.prefixes", "لكل نوع بادئة مختلفة");
+  if (!r.names.currency_ar.trim() || r.names.currency_ar.length > 10 || !r.names.currency_en.trim() || r.names.currency_en.length > 10) m("names.currency", "اسم العملة (حتى 10 أحرف)");
+  if (r.names.invoice_footer.length > 200) m("names.invoice_footer", "حتى 200 حرف");
   return e;
 }
 
@@ -245,5 +399,29 @@ export interface PublicRules {
   maintenance: AdvancedRules["maintenance"];
   announcement: Announcement | null;
   password_min: number;
+  /** The currency's name and the invoice's line (every page that shows money or prints). */
+  names: Pick<AdvancedRules["names"], "currency_ar" | "currency_en" | "invoice_footer">;
+  /** Who opens the users page besides the manager (the right «إضافة المستخدمين وإيقافهم»): the menu needs it. */
+  users_page: { roles: Role[]; allow: number[]; deny: number[] };
 }
-export const publicRules = (r: AdvancedRules): PublicRules => ({ self_signup: r.features.self_signup, features: r.features, maintenance: r.maintenance, announcement: r.announcement, password_min: r.password_min });
+export const publicRules = (r: AdvancedRules): PublicRules => ({
+  self_signup: r.features.self_signup,
+  features: r.features,
+  maintenance: r.maintenance,
+  announcement: r.announcement,
+  password_min: r.password_min,
+  names: { currency_ar: r.names.currency_ar, currency_en: r.names.currency_en, invoice_footer: r.names.invoice_footer },
+  users_page: {
+    roles: rolesFor(r.permissions, "manage_users"),
+    allow: Object.entries(r.people).filter(([, p]) => p.allow?.includes("manage_users")).map(([id]) => Number(id)),
+    deny: Object.entries(r.people).filter(([, p]) => p.deny?.includes("manage_users")).map(([id]) => Number(id)),
+  },
+});
+
+/** Pages a person opens beyond his job (granted by a right): today the users page. */
+export function grantsOf(live: PublicRules | undefined, u: { id: number; role: Role } | null | undefined): string[] {
+  if (!live?.users_page || !u || u.role === "manager" || u.role === "shop") return [];
+  const g = live.users_page;
+  const may = !g.deny.includes(u.id) && (g.allow.includes(u.id) || g.roles.includes(u.role));
+  return may ? ["/users"] : [];
+}

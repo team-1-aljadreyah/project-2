@@ -444,6 +444,10 @@ export interface Order {
   /** Prepared from two warehouses: the driver / vehicle a keeper chose, used when the last part is ready. */
   carrier_pick?: CarrierPick;
   reserved_until?: string;
+  /** Sent outside the company's working time (advanced settings): when it will be looked at (ISO). */
+  after_hours?: string;
+  /** The day it is expected to arrive (advanced settings → cut-off and delivery days), yyyy-mm-dd. */
+  expected_on?: string;
   note?: string;
   cancel_reason?: string;
   approved_by?: Person;

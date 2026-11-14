@@ -15,6 +15,7 @@ import { api, ApiError } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { useIdParam } from "@/lib/utils";
+import { useMay } from "@/lib/use-rules";
 
 export default function PaymentView() {
   const id = useIdParam();
@@ -22,6 +23,7 @@ export default function PaymentView() {
   const { tr, dateTime, money } = fmt;
   const brand = useBrand();
   const { user, itemById } = useApp();
+  const may = useMay();
   const toast = useToast();
   const pay = useLoad(() => api.getPayment(id), [id]);
   const p = pay.data;
@@ -35,7 +37,7 @@ export default function PaymentView() {
 
   if (pay.state.status === "loading") return <LoadingRows />;
   if (pay.state.status === "error" || !p) return <ErrorBox error={pay.state.status === "error" ? pay.state.error : null} onRetry={pay.reload} />;
-  const canReverse = (user.role === "manager" || user.role === "accountant") && !p.reversed && !p.reversal_of;
+  const canReverse = may("reverse_payment") && !p.reversed && !p.reversal_of;
   const left = p.amount - (p.reversed_amount ?? 0);
 
   return (

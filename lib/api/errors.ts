@@ -19,6 +19,7 @@ export type ErrorCode =
   | "SIGNUP_CLOSED"
   | "FEATURE_OFF"
   | "LOCKED"
+  | "CLOSED_DAY"
   | "NETWORK";
 
 export class ApiError extends Error {
