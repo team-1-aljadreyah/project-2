@@ -4,7 +4,7 @@
 // the categories as tiles, and the brands row. Our look (the brand panel, the orange, the clay tiles), not a copy.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CreditCard, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, CreditCard, RotateCcw, Sparkles } from "lucide-react";
 import { Art, ACCENTS } from "@/components/product-art";
 import type { Item, ShopBanner } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -38,10 +38,16 @@ export function Banners({ slides, catIndex }: { slides: Slide[]; catIndex: (c: s
   function go(i: number) {
     const el = box.current?.children[i] as HTMLElement | undefined;
     if (el && box.current) box.current.scrollTo({ left: el.offsetLeft - box.current.offsetLeft - (box.current.clientWidth - el.clientWidth) / 2, behavior: "smooth" });
+    // The first and the last can't come to the middle (the strip stops at its edge): the dot follows the choice.
+    setAt(i);
   }
   const onScroll = () => {
     const b = box.current;
     if (!b) return;
+    // At an end of the strip (scrollLeft is negative right-to-left): the first or the last one.
+    const far = Math.abs(b.scrollLeft);
+    if (far <= 2) return setAt(0);
+    if (far >= b.scrollWidth - b.clientWidth - 2) return setAt(b.children.length - 1);
     const mid = b.scrollLeft + b.clientWidth / 2;
     let best = 0;
     [...b.children].forEach((c, i) => {
@@ -54,12 +60,21 @@ export function Banners({ slides, catIndex }: { slides: Slide[]; catIndex: (c: s
   const Fwd = lang === "ar" ? ArrowLeft : ArrowRight;
   return (
     <section aria-label={tr("العروض", "Offers")} className="mt-4" onPointerEnter={() => setPaused(true)} onPointerLeave={() => setPaused(false)} onTouchStart={() => setPaused(true)}>
-      <div ref={box} onScroll={onScroll} className="-mx-3 sm:-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1 sm:px-5 [scrollbar-width:none]">
-        {slides.map((s, i) => (
-          <div key={i} className="w-[88%] shrink-0 snap-center sm:w-[70%] lg:w-[48%]">
-            <SlideCard s={s} catIndex={catIndex} Fwd={Fwd} />
-          </div>
-        ))}
+      <div className="group relative">
+        <div ref={box} onScroll={onScroll} className="-mx-3 sm:-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-1 sm:px-5 [scrollbar-width:none]">
+          {slides.map((s, i) => (
+            <div key={i} className="w-[88%] shrink-0 snap-center sm:w-[70%] lg:w-[48%]">
+              <SlideCard s={s} catIndex={catIndex} Fwd={Fwd} />
+            </div>
+          ))}
+        </div>
+        {/* On a computer (no swiping): the previous and the next, on each side. They go round at the ends. */}
+        {slides.length > 1 && (
+          <>
+            <ArrowButton side="start" label={tr("العرض السابق", "Previous offer")} onClick={() => go((at - 1 + slides.length) % slides.length)} />
+            <ArrowButton side="end" label={tr("العرض التالي", "Next offer")} onClick={() => go((at + 1) % slides.length)} />
+          </>
+        )}
       </div>
       {slides.length > 1 && (
         <div className="mt-2 flex justify-center gap-1.5">
@@ -71,6 +86,26 @@ export function Banners({ slides, catIndex }: { slides: Slide[]; catIndex: (c: s
         </div>
       )}
     </section>
+  );
+}
+
+/** A round arrow on one side of the banners, shown on computers (phones swipe). It points the way it moves. */
+function ArrowButton({ side, label, onClick }: { side: "start" | "end"; label: string; onClick: () => void }) {
+  const { lang } = useFmt();
+  // "start" is the right side in Arabic: there the previous one points right.
+  const Icon = (side === "start") === (lang === "ar") ? ChevronRight : ChevronLeft;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        "absolute top-1/2 z-10 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/95 text-text shadow-lg backdrop-blur transition hover:scale-105 hover:border-action hover:text-action active:scale-95 md:flex",
+        side === "start" ? "-start-2" : "-end-2",
+      )}
+    >
+      <Icon className="size-5" />
+    </button>
   );
 }
 

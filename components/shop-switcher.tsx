@@ -3,6 +3,7 @@
 // A shop owner can own several shops. The top bar shows the shop he is working on now; pressed, it lists
 // all his shops (switch with one tap) and "add another shop". A new shop waits for the manager's approval,
 // like a sign-up: its page shows "waiting" until then. Orders, the statement and the chat follow the chosen shop.
+import { ComboBox } from "@/components/combo-box";
 import { useEffect, useRef, useState } from "react";
 import { useAppRouter } from "@/lib/app-path";
 import { Check, ChevronDown, Clock, Plus, Store } from "lucide-react";
@@ -155,12 +156,7 @@ function AddShop({ onClose, onAdded }: { onClose: () => void; onAdded: () => voi
           <Input id="ns-name" value={f.shop_name} onChange={(e) => set({ shop_name: e.target.value })} invalid={!!errors.shop_name} />
         </Field>
         <Field label={tr("المنطقة", "Area")} error={errors.area} htmlFor="ns-area">
-          <Input id="ns-area" list="ns-areas" value={f.area} onChange={(e) => set({ area: e.target.value })} placeholder={tr("اختر أو اكتب", "Choose or type")} invalid={!!errors.area} />
-          <datalist id="ns-areas">
-            {AREAS.map((a) => (
-              <option key={a} value={a} />
-            ))}
-          </datalist>
+          <ComboBox id="ns-area" value={f.area} onChange={(v) => set({ area: v })} options={AREAS} placeholder={tr("اختر أو اكتب", "Choose or type")} invalid={!!errors.area} />
         </Field>
         <div>
           <p className="mb-1.5 text-sm font-medium">

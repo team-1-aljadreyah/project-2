@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-label="تونة 160 غم">
+<defs>
+<radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffca28" stop-opacity="0.22"/></radialGradient>
+<linearGradient id="shine" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0.18"/><stop offset="0.22" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.2"/></linearGradient>
+</defs>
+<rect width="640" height="640" fill="#fbfaf7"/><rect width="640" height="640" fill="url(#bg)"/>
+<ellipse cx="320" cy="560" rx="200" ry="26" fill="#000" opacity="0.12"/>
+<rect x="155.0" y="300" width="330" height="170" fill="#1565c0"/><ellipse cx="320" cy="470" rx="165.0" ry="22" fill="#11529d"/><rect x="155.0" y="300" width="330" height="170" fill="url(#shine)"/><ellipse cx="320" cy="300" rx="165.0" ry="22" fill="#cfd8dc" stroke="#11529d" stroke-width="3"/><rect x="200.0" y="328.0" width="240" height="130" rx="18" fill="#166dcf"/><rect x="200.0" y="328.0" width="240" height="31.2" rx="18" fill="#ffca28"/><rect x="200.0" y="343.6" width="240" height="15.6" fill="#ffca28"/><text x="320" y="349.45" font-size="15.6" font-weight="700" fill="#1d1d1f" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">سفرة</text><text x="320" y="396.9" font-size="26" font-weight="800" fill="#ffffff" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">تونة</text><rect x="265.0" y="422.9" width="110" height="24.7" rx="12.219999999999999" fill="#ffca28"/><text x="320" y="440.84" font-size="15.6" font-weight="700" fill="#1d1d1f" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">160 غم</text>
+</svg>

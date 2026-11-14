@@ -1,5 +1,6 @@
 "use client";
 
+import { ComboBox } from "@/components/combo-box";
 import { useUnsaved } from "@/lib/unsaved";
 import { CustomInputs, missingRequired, saveCustom, useFields } from "@/components/custom-fields";
 
@@ -127,20 +128,10 @@ export function ItemForm({ open, onClose, item, onSaved, onDeleted }: { open: bo
           <Input dir="ltr" value={f.name_en} onChange={(e) => set({ name_en: e.target.value })} />
         </Field>
         <Field label={tr("الصنف", "Category")}>
-          <Input list="cats" value={f.category} onChange={(e) => set({ category: e.target.value })} />
-          <datalist id="cats">
-            {lookups.categories.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
+          <ComboBox value={f.category} onChange={(v) => set({ category: v })} options={lookups.categories} aria-label={tr("الصنف", "Category")} />
         </Field>
         <Field label={tr("العلامة التجارية", "Brand")} error={err.brand} hint={tr("تظهر للمحلات في صف العلامات وفي البحث", "Shops see it in the brands row and in search")}>
-          <Input list="brands" value={f.brand ?? ""} onChange={(e) => set({ brand: e.target.value })} invalid={!!err.brand} />
-          <datalist id="brands">
-            {[...new Set(items.map((i) => i.brand).filter(Boolean))].map((b) => (
-              <option key={b} value={b} />
-            ))}
-          </datalist>
+          <ComboBox value={f.brand ?? ""} onChange={(v) => set({ brand: v })} options={items.map((i) => i.brand).filter((b): b is string => !!b)} invalid={!!err.brand} aria-label={tr("العلامة التجارية", "Brand")} />
         </Field>
         <Field label={tr("الباركود", "Barcode")}>
           <Input dir="ltr" inputMode="numeric" value={f.barcode} onChange={(e) => set({ barcode: e.target.value })} />
@@ -149,20 +140,10 @@ export function ItemForm({ open, onClose, item, onSaved, onDeleted }: { open: bo
         <div className="grid gap-3 rounded-xl border border-line bg-card-2/50 p-3 sm:col-span-2 sm:grid-cols-3">
           <p className="text-sm font-semibold sm:col-span-3">{tr("وحدات البيع", "Selling units")}</p>
           <Field label={tr("الوحدة الصغيرة", "The single")} error={err.piece_name} hint={tr("قطعة، كيس، علبة، قنينة…", "piece, bag, can, bottle…")}>
-            <Input list="piece-names" aria-label={tr("الوحدة الصغيرة", "The single")} value={f.piece_name} onChange={(e) => set({ piece_name: e.target.value })} invalid={!!err.piece_name} />
-            <datalist id="piece-names">
-              {PIECE_NAMES.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
+            <ComboBox aria-label={tr("الوحدة الصغيرة", "The single")} value={f.piece_name ?? ""} onChange={(v) => set({ piece_name: v })} options={PIECE_NAMES} invalid={!!err.piece_name} />
           </Field>
           <Field label={tr("الوحدة الكبيرة", "The big pack")} error={err.pack_name} hint={tr("كارتون، شوال، صندوق، ربطة…", "carton, sack, box, bundle…")}>
-            <Input list="pack-names" aria-label={tr("الوحدة الكبيرة", "The big pack")} value={f.pack_name} onChange={(e) => set({ pack_name: e.target.value })} invalid={!!err.pack_name} disabled={single} />
-            <datalist id="pack-names">
-              {PACK_NAMES.map((n) => (
-                <option key={n} value={n} />
-              ))}
-            </datalist>
+            <ComboBox aria-label={tr("الوحدة الكبيرة", "The big pack")} value={f.pack_name ?? ""} onChange={(v) => set({ pack_name: v })} options={PACK_NAMES} invalid={!!err.pack_name} disabled={single} />
           </Field>
           <Field label={tr(`كم ${piece} في ال${pack}؟`, `${piece} in a ${pack}`)} error={err.pieces_per_carton} hint={tr("1 = لا وحدة كبيرة", "1 = no big pack")}>
             <NumberInput value={f.pieces_per_carton} onChange={(v) => set({ pieces_per_carton: v === "" ? 0 : v })} invalid={!!err.pieces_per_carton} />

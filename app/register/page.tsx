@@ -1,6 +1,7 @@
 "use client";
 
 // A shop owner makes an account by himself. The shop waits for the manager's approval before the first order.
+import { ComboBox } from "@/components/combo-box";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -143,12 +144,7 @@ export default function RegisterPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <IconField icon={MapPin} label={tr("المنطقة", "Area")} htmlFor="area" error={err.area}>
-                    <input id="area" list="areas" value={f.area} onChange={(e) => set({ area: e.target.value })} placeholder={tr("اختر أو اكتب", "Choose or type")} className={iconInput} />
-                    <datalist id="areas">
-                      {AREAS.map((a) => (
-                        <option key={a} value={a} />
-                      ))}
-                    </datalist>
+                    <ComboBox id="area" value={f.area} onChange={(v) => set({ area: v })} options={AREAS} placeholder={tr("اختر أو اكتب", "Choose or type")} plainClassName={iconInput} />
                   </IconField>
                 </div>
 
