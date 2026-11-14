@@ -226,8 +226,8 @@ export default function HallPage() {
           )}
         </Card>
 
-        {/* The hall */}
-        <Card className="min-w-0 overflow-hidden">
+        {/* The hall (the live map is for the screen only: not printed) */}
+        <Card className="min-w-0 overflow-hidden print:hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
             <Chip label={tr("طلبات تنتظر", "Waiting")} value={num(missions.length)} />
             <Chip label={tr("سطور للتجهيز", "Lines to pick")} value={num(linesToPick)} />
