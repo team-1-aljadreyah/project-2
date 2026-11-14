@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-label="شوكولاتة 40 غم">
+<defs>
+<radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffd54f" stop-opacity="0.22"/></radialGradient>
+<linearGradient id="shine" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0.18"/><stop offset="0.22" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.2"/></linearGradient>
+</defs>
+<rect width="640" height="640" fill="#fbfaf7"/><rect width="640" height="640" fill="url(#bg)"/>
+<ellipse cx="320" cy="560" rx="200" ry="26" fill="#000" opacity="0.12"/>
+<path d="M110 270 l20 -10 l-10 15 l10 15 l-10 15 l10 15 l-10 15 l10 15 l-10 15 l10 15 l-20 -10 Z" fill="#4c342d"/><path d="M530 270 l-20 -10 l10 15 l-10 15 l10 15 l-10 15 l10 15 l-10 15 l10 15 l-10 15 l20 -10 Z" fill="#4c342d"/><rect x="125" y="262" width="390" height="130" rx="10" fill="#5d4037"/><rect x="125" y="262" width="390" height="130" rx="10" fill="url(#shine)"/><text x="320" y="320" font-size="42" font-weight="800" fill="#ffd54f" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">شوكولاتة</text><text x="320" y="362" font-size="22" font-weight="700" fill="#ffffff" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">مقرمش · 40 غم</text><rect x="200" y="410" width="240" height="70" rx="14" fill="#6d4c41"/><rect x="208" y="418" width="50" height="54" rx="8" fill="#795548"/><rect x="266" y="418" width="50" height="54" rx="8" fill="#795548"/><rect x="324" y="418" width="50" height="54" rx="8" fill="#795548"/><rect x="382" y="418" width="50" height="54" rx="8" fill="#795548"/>
+</svg>

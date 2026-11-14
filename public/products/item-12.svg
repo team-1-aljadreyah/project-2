@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-label="شاي أسود 500 غم">
+<defs>
+<radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ffd54f" stop-opacity="0.22"/></radialGradient>
+<linearGradient id="shine" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0.18"/><stop offset="0.22" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.2"/></linearGradient>
+</defs>
+<rect width="640" height="640" fill="#fbfaf7"/><rect width="640" height="640" fill="url(#bg)"/>
+<ellipse cx="320" cy="560" rx="200" ry="26" fill="#000" opacity="0.12"/>
+<path d="M180 190 l40 -40 h240 l-40 40 Z" fill="#c51e1e"/><path d="M420 190 l40 -40 v340 l-40 40 Z" fill="#961616"/><rect x="180" y="190" width="240" height="340" fill="#b71c1c"/><rect x="195.0" y="245.0" width="210" height="240" rx="18" fill="#b71c1c"/><rect x="195.0" y="245.0" width="210" height="57.599999999999994" rx="18" fill="#ffd54f"/><rect x="195.0" y="273.8" width="210" height="28.799999999999997" fill="#ffd54f"/><text x="300" y="284.6" font-size="19.2" font-weight="700" fill="#1d1d1f" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">بيت الشاي</text><text x="300" y="369.8" font-size="32" font-weight="800" fill="#ffffff" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">شاي أسود</text><rect x="245.0" y="441.8" width="110" height="30.4" rx="15.04" fill="#ffd54f"/><text x="300" y="463.88" font-size="19.2" font-weight="700" fill="#1d1d1f" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">500 غم</text>
+</svg>

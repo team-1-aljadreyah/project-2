@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-label="جبن مثلثات 8 قطع">
+<defs>
+<radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#1565c0" stop-opacity="0.22"/></radialGradient>
+<linearGradient id="shine" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0.18"/><stop offset="0.22" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.2"/></linearGradient>
+</defs>
+<rect width="640" height="640" fill="#fbfaf7"/><rect width="640" height="640" fill="url(#bg)"/>
+<ellipse cx="320" cy="560" rx="200" ry="26" fill="#000" opacity="0.12"/>
+<ellipse cx="320" cy="430" rx="190" ry="70" fill="#d15b36"/><rect x="130" y="330" width="380" height="100" fill="#ff7043"/><ellipse cx="320" cy="330" rx="190" ry="70" fill="#ff7848"/><ellipse cx="320" cy="330" rx="140" ry="46" fill="#ffffff"/><text x="320" y="330" font-size="32" font-weight="800" fill="#1565c0" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">جبن مثلثات</text><text x="320" y="360" font-size="18" font-weight="700" fill="#555" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">ألبان النخيل · 8 قطع</text><path d="M230 520 l60 -12 l-22 -48 Z" fill="#fff3c4" stroke="#e0c068" stroke-width="3"/><path d="M300 520 l60 -12 l-22 -48 Z" fill="#fff3c4" stroke="#e0c068" stroke-width="3"/><path d="M370 520 l60 -12 l-22 -48 Z" fill="#fff3c4" stroke="#e0c068" stroke-width="3"/>
+</svg>

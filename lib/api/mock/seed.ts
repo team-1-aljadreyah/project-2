@@ -141,6 +141,8 @@ export function makeSeed(now = new Date()): Db {
       name_en,
       category,
       barcode: `6260${String(1000000 + i * 7919).slice(-7)}`,
+      // Its picture: drawn for the demo (public/products), a package of its kind with its name and brand.
+      image: `/products/item-${i + 1}.svg`,
       pieces_per_carton: ppc,
       min_stock: ppc * (i % 5 === 0 ? 40 : 15),
       commission_percent: commission,

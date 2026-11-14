@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640" role="img" aria-label="لبن 1 لتر">
+<defs>
+<radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#2e7d32" stop-opacity="0.22"/></radialGradient>
+<linearGradient id="shine" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0.18"/><stop offset="0.22" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.2"/></linearGradient>
+</defs>
+<rect width="640" height="640" fill="#fbfaf7"/><rect width="640" height="640" fill="url(#bg)"/>
+<ellipse cx="320" cy="560" rx="200" ry="26" fill="#000" opacity="0.12"/>
+<path d="M210 210 l110 -70 l110 70 Z" fill="#eaeaea" stroke="#d1d1d1" stroke-width="3"/><rect x="300" y="120" width="40" height="26" rx="5" fill="#2e7d32"/><rect x="210" y="210" width="220" height="320" fill="#ffffff" stroke="#d1d1d1" stroke-width="3"/><rect x="222.0" y="250.0" width="196" height="250" rx="18" fill="#ffffff"/><rect x="222.0" y="250.0" width="196" height="60.0" rx="18" fill="#2e7d32"/><rect x="222.0" y="280.0" width="196" height="30.0" fill="#2e7d32"/><text x="320" y="291.25" font-size="18.0" font-weight="700" fill="#ffffff" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">ألبان النخيل</text><text x="320" y="379.5" font-size="30" font-weight="800" fill="#1d1d1f" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">لبن</text><rect x="265.0" y="459.5" width="110" height="28.5" rx="14.1" fill="#2e7d32"/><text x="320" y="480.2" font-size="18.0" font-weight="700" fill="#ffffff" text-anchor="middle" direction="rtl" font-family="Tahoma, 'Segoe UI', 'Noto Sans Arabic', Arial, sans-serif">1 لتر</text>
+</svg>
