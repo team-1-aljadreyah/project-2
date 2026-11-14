@@ -104,9 +104,13 @@ export function HallPlan({
             <text x={r.x + 28} y={r.y + 23.5} textAnchor="middle" className={cn("text-[13px] font-bold", on ? "fill-[var(--on-action)]" : "fill-[var(--on-primary)]")}>
               {r.zone.code}
             </text>
-            <text x={r.x + r.w - 10} y={r.y + 24} textAnchor="end" className="fill-text text-[16px] font-bold">
-              {r.zone.category}
-            </text>
+            {/* The section's name stays inside its box, after the code badge: a long one ends with «…»
+                (the full name is in the box's title, on hover). SVG text has no width limit, so it is HTML here. */}
+            <foreignObject x={r.x + 54} y={r.y + 7} width={Math.max(0, r.w - 62)} height="24">
+              <div dir="rtl" className="truncate text-end text-[16px] leading-6 font-bold text-text">
+                {r.zone.category}
+              </div>
+            </foreignObject>
             {Array.from({ length: total }, (_, i) => {
               const cell = r.zone.cells[i];
               const x = r.x + 10 + (i % SLOT_COLS) * (slotW + 4);
