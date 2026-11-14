@@ -6,10 +6,12 @@
 import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Check, CheckCircle2, ClipboardList, Clock, Lock, Loader2, Package, Truck } from "lucide-react";
 import { useState } from "react";
+import { CarrierFields } from "@/components/carrier-pick";
 import type { MapCell } from "@/components/map/data";
 import { statusLabel } from "@/components/map/zones";
 import { Button, Segmented, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
+import type { CarrierPick } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { Mission, Urgency } from "./data";
@@ -144,6 +146,8 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
   const all = m.lines.length > 0 && done === m.lines.length;
   const pct = m.lines.length ? done / m.lines.length : 0;
   const [busy, setBusy] = useState(false);
+  // Who takes it out (chosen here while picking; none = the usual driver and his vehicle).
+  const [carrier, setCarrier] = useState<CarrierPick>({ vehicle_id: null });
 
   const left =
     m.urgency === "blocked"
@@ -163,7 +167,11 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
     try {
       // In the hall he picked everything from his own shelves: every line from his warehouse.
       // (To split an order with the other warehouse, he uses the order page.)
-      await api.prepareOrder(m.order.id, Object.fromEntries(m.order.lines.map((l) => [l.item_id, l.warehouse_id ?? m.order.warehouse_id])));
+      await api.prepareOrder(
+        m.order.id,
+        Object.fromEntries(m.order.lines.map((l) => [l.item_id, l.warehouse_id ?? m.order.warehouse_id])),
+        { ...(carrier.rep_id ? { rep_id: carrier.rep_id } : {}), ...(carrier.vehicle_id ? { vehicle_id: carrier.vehicle_id } : {}) },
+      );
       clearPicked(m.order.id);
       onConfirmed?.(m.order.id);
       toast("success", tr(`تم تجهيز ${m.order.number}: الفاتورة تصدر عند التسليم`, `${m.order.number} prepared: the invoice comes at delivery`));
@@ -267,10 +275,19 @@ function MissionCard({ m, i, open, onToggle, onConfirmed }: { m: Mission; i: num
                   <Lock className="size-3.5" /> {tr("يتجاوز سقف الدين: يُجهَّز بعد موافقة المدير", "Over the debt limit: prepare after the manager approves")}
                 </p>
               ) : (
+                <>
+                {/* Who takes it out: the driver and the vehicle (optional; none = the usual one) */}
+                <div className="mt-1 rounded-xl border border-line p-2.5">
+                  <p className="mb-1.5 flex items-center gap-1 text-xs font-bold">
+                    <Truck className="size-3.5 text-action" /> {tr("التوصيل", "Delivery")}
+                  </p>
+                  <CarrierFields value={carrier} onChange={setCarrier} order={m.order} stack />
+                </div>
                 <Button variant="action" className="mt-1 w-full" disabled={!all || busy} onClick={confirm}>
                   {busy ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
                   {all ? tr("تثبيت وإصدار فاتورة", "Confirm and invoice") : tr(`أكمل التجهيز (${done}/${m.lines.length})`, `Finish picking (${done}/${m.lines.length})`)}
                 </Button>
+                </>
               )}
               <Button variant="ghost" size="sm" className="w-full text-muted" href={`/orders/${m.order.id}`}>
                 {tr("فتح صفحة الطلب", "Open the order's page")}

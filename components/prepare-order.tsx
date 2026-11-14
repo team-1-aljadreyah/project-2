@@ -4,10 +4,11 @@
 // The system suggests the one with enough free stock and the oldest expiry (so old goods leave first).
 // One order can come from both warehouses; the shop still gets one invoice, at delivery.
 import { useState } from "react";
-import { PackageCheck, Sparkles } from "lucide-react";
+import { PackageCheck, Sparkles, Truck } from "lucide-react";
+import { CarrierFields } from "@/components/carrier-pick";
 import { Button, Dialog, LoadingRows, Select, errorText, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { Order } from "@/lib/api/types";
+import type { CarrierPick, Order } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
 import { cn, piecesOf } from "@/lib/utils";
@@ -20,6 +21,8 @@ export function PrepareOrder({ order, onClose, onDone }: { order: Order; onClose
   const plan = useLoad(() => api.prepPlan(order.id), [order.id]);
   const [pick, setPick] = useState<Record<number, number>>({});
   const [busy, setBusy] = useState(false);
+  // Who takes it out: the driver and the vehicle (both optional; none = the usual one).
+  const [carrier, setCarrier] = useState<CarrierPick>({ vehicle_id: order.carrier_pick?.vehicle_id ?? null, rep_id: order.carrier_pick?.rep_id });
   const chosen = (itemId: number, suggested: number | null) => pick[itemId] ?? suggested ?? order.warehouse_id;
 
   async function save() {
@@ -27,7 +30,7 @@ export function PrepareOrder({ order, onClose, onDone }: { order: Order; onClose
     setBusy(true);
     try {
       const map = Object.fromEntries(plan.data.map((l) => [l.item_id, chosen(l.item_id, l.suggested_warehouse_id)]));
-      await api.prepareOrder(order.id, map);
+      await api.prepareOrder(order.id, map, { ...(carrier.rep_id ? { rep_id: carrier.rep_id } : {}), ...(carrier.vehicle_id ? { vehicle_id: carrier.vehicle_id } : {}) });
       const after = await api.getOrder(order.id).catch(() => null);
       toast(
         "success",
@@ -60,6 +63,13 @@ export function PrepareOrder({ order, onClose, onDone }: { order: Order; onClose
         <Sparkles className="size-4 shrink-0 text-action" />
         {tr("اقترح النظام المخزن الذي فيه الأقدم صلاحية والكمية كافية. يمكنك تغييره لكل مادة. ما تختاره من المخزن الآخر يجهّزه أمينه هو، لا أنت.", "The system suggests the warehouse with the oldest expiry and enough stock. What you put on the other warehouse is prepared by its own keeper, not you.")}
       </p>
+      {/* Who takes it out */}
+      <div className="mb-4 rounded-2xl border border-line p-3">
+        <p className="mb-2 flex items-center gap-1.5 text-sm font-bold">
+          <Truck className="size-4 text-action" /> {tr("التوصيل", "Delivery")}
+        </p>
+        <CarrierFields value={carrier} onChange={setCarrier} order={order} />
+      </div>
       {!plan.data ? (
         <LoadingRows rows={3} />
       ) : (

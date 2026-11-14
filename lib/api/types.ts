@@ -97,7 +97,16 @@ export type VehicleInput = Omit<Vehicle, "id">;
 /** One vehicle's part of an order: which lines (and how much of each) it carries. */
 export interface ShipmentLoad {
   vehicle_id: number;
+  /** Who drives it (a delivery rep). None = the vehicle's own driver. */
+  driver_id?: number;
   lines: { item_id: number; unit: Unit; qty: number }[];
+}
+
+/** The keeper's choice of who takes a shipment out: the delivery rep, and the vehicle (optional; none = no vehicle
+ *  set). None of them = the usual (the order's own rep if he delivers, else the least busy, with his vehicle). */
+export interface CarrierPick {
+  rep_id?: number;
+  vehicle_id?: number | null;
 }
 
 /** A temporary cover: another keeper works in this warehouse too, until `until`. */
@@ -431,6 +440,8 @@ export interface Order {
   /** Prepared from more than one warehouse: each warehouse's keeper prepares his own part. The shipment
    *  label is made when every part is ready. A keeper never prepares the other warehouse's part. */
   prep_parts?: { warehouse_id: number; prepared_by?: Person; at?: string }[];
+  /** Prepared from two warehouses: the driver / vehicle a keeper chose, used when the last part is ready. */
+  carrier_pick?: CarrierPick;
   reserved_until?: string;
   note?: string;
   cancel_reason?: string;

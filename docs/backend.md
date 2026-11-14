@@ -98,6 +98,16 @@ The server must filter and hide, not only the pages:
   The «افتح في» buttons (Google Maps / Waze / Apple Maps / Android's geo: chooser) need nothing from the server.
 - **The rep's phone on a shipment** (`delivery.out_phone`): saved when he scans it out (`POST /deliveries/dispatch`),
   so the shop owner's tracker can show «اتصل بالمندوب» while it is on the way.
+- **The keeper picks the driver and the vehicle.** `POST /orders/:id/prepare {warehouses, rep_id?, vehicle_id?}`:
+  both optional. `rep_id` = an active rep who delivers (422 on `rep_id` otherwise); `vehicle_id` = an active
+  vehicle (422 on `vehicle_id`). A vehicle with no rep chosen brings its own driver; a rep with no vehicle gets his
+  own vehicle (if he has one); neither = as before (the order's rep if he delivers, else the least busy, and his
+  vehicle). Prepared from two warehouses: a choice given before the last part is kept on the order
+  (`carrier_pick`) and used when the label is made. A chosen driver is told («شحنة لك: …»). After preparing,
+  until the shipment is loaded (and not split): `POST /orders/:id/delivery/carrier {rep_id, vehicle_id | null}`
+  (manager; keeper / staff of that warehouse): the rep is required, `vehicle_id: null` = no vehicle; a new rep is
+  told; both go to the activity log. Splitting across vehicles (`POST /orders/:id/shipments`): each load may carry
+  `driver_id` (a delivery rep); none = the vehicle's own driver.
 - **Map names**: the map draws Arabic street, area and place names from OpenFreeMap's tiles and fonts (no key);
   the Arabic text plugin is served by the site itself (`public/vendor/mapbox-gl-rtl-text.min.js`, BSD licence).
 - **Item units** (`pack_name`, `piece_name`, `sells` on the item; none = كارتون / قطعة, both sold): the two levels
@@ -334,10 +344,10 @@ The shapes are in `lib/api/types.ts` (the same names in JSON): `User`, `Customer
 tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`, `Order` (`lines`,
 `delivery`, `discount`, `shipments`, `custom`), `Invoice`, `Payment` (`allocations`), `Return`, `CreditNote`,
 `Refund`, `Receipt`, `SupplyOrder`, `Transfer`, `Stocktake`, `Expense`, `AppNotification`, `AuditEntry`,
-`ChatMessage`, `RepTarget`, `DaySummary`, `DayNumbers`, `ReorderDue`, `LateShop`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
+`ChatMessage`, `RepTarget`, `CarrierPick`, `DaySummary`, `DayNumbers`, `ReorderDue`, `LateShop`, `ScheduledPrice`, `PriceHistory`, `Clearance`, `ItemClearance`, `StockWait`, `CashHandover`, `CustodyRow`, `CustodyLog`, `Visit`, `VisitsReport`, `Settings`, `SiteCustom` (with `profiles`, `apps`, `fields`, `rules`), `Health`, `RuleRun`.
 
 ## 10. Every endpoint
-<!-- 165 endpoints, generated from lib/api/http.ts -->
+<!-- 166 endpoints, generated from lib/api/http.ts -->
 
 ### Login and own account
 
@@ -484,7 +494,8 @@ tier, `stock.by_warehouse`), `Batch`, `Warehouse` (`layout`, `cover`), `Vehicle`
 | `myReorder` | GET | `/reorder/due` |  | `ReorderDue[]` | «قارب ينفد عندك؟» The shop owner's items he usually orders again about now (from his own orders). |
 | `lateShops` | GET | `/reorder/late-shops` |  | `LateShop[]` | Shops later than usual with their next order (a rep: his own; manager, accountant: all). |
 | `prepPlan` | GET | `/orders/:id/prep-plan` | `id: number` | `PrepLine[]` | For the keeper: free stock per warehouse for each line, and the suggested warehouse. |
-| `prepareOrder` | POST | `/orders/:id/prepare` | `id: number, warehouses: Record<number, number>` | `Order` | The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. |
+| `prepareOrder` | POST | `/orders/:id/prepare` | `id: number, warehouses: Record<number, number>, carrier?: CarrierPick` | `Order` | The keeper prepared it; warehouses = { item_id: warehouse_id }. Makes the shipment label. carrier: the delivery rep and the vehicle the keeper chose (optional; none = the usual). |
+| `setCarrier` | POST | `/orders/:id/delivery/carrier` | `id: number, carrier: CarrierPick` | `Order` | Change who takes a prepared shipment out (before it is loaded): the delivery rep, and the vehicle or none. |
 | `approveOrder` | POST | `/orders/:id/approve` | `id: number` | `Order` |  |
 | `updateOrder` | PATCH | `/orders/:id` | `id: number, input: OrderEdit` | `Order` | The shop owner changes his order before it is confirmed. |
 | `setOrderDiscount` | POST | `/orders/:id/discount` | `id: number, percent: number` | `Order` | 0 removes it. Rep / keeper above 3%: the order waits for the manager. |
