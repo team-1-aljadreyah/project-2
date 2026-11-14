@@ -21,12 +21,12 @@ import {
   receiveTransfer,
   customerBalance,
   dayOf,
-  registerShop,
   sellableQty,
   sweep,
 } from "./rules";
 import { weekDayOf } from "./visits";
 import { schedulePrice } from "./price-schedule";
+import { addShowcase } from "./seed-showcase";
 import type { NoOrderReason, Visit, WeekDay } from "../types";
 
 export const DEMO_PASSWORD = "123456";
@@ -415,14 +415,7 @@ export function makeSeed(now = new Date()): Db {
   const shopUser = users.find((u) => u.id === 8) as DbUser;
   safe(() => createOrder(db, shopUser, { client_ref: cref(), customer_id: 1, warehouse_id: 1, lines: [{ item_id: 2, unit: "carton", qty: 4 }, { item_id: 15, unit: "carton", qty: 1 }, { item_id: 7, unit: "carton", qty: 2 }] }, t(0, 10)));
 
-  // 8) A shop signed up on the website an hour ago and waits for the manager to approve it.
-  safe(() =>
-    registerShop(
-      db,
-      { shop_name: "ماركت النخيل", owner_name: "علي جواد", phone: "07812345615", area: "حي الغدير", address: "قرب جامع الغدير", password: DEMO_PASSWORD },
-      t(1, 5),
-    ),
-  );
+  // 8) A shop that signed up on the website: in the showcase (seed-showcase.ts), with its address and pin.
 
   // Deliveries: orders confirmed before today were already delivered (before this feature: no photo).
   // Today's stay "ready" at the warehouse, and the oldest one of today is already out with its delivery rep.
@@ -722,6 +715,10 @@ export function makeSeed(now = new Date()): Db {
   // «تغيير الأسعار من تاريخ»: sugar goes up 8% in three days (the supplier's new price); the shops that buy it
   // were told this morning.
   safe(() => schedulePrice(db, manager, { item_ids: [3], start: dayOf(addDays(now, 3)), percent: 8, note: "سعر المورد الجديد" }, new Date(Math.min(at(0, 8, 0).getTime(), now.getTime() - 3_600_000))));
+
+  // The presentation's showcase: one case of everything the site can do (seed-showcase.ts).
+  const show = addShowcase(db, now, { at, cref });
+  if (show.skipped.length && typeof console !== "undefined") console.warn(`[demo] skipped: ${show.skipped.join(" | ")}`);
 
   // Make sure item 26 (date syrup) shows as slow-moving, and run the alerts once.
   sweep(db, now);
