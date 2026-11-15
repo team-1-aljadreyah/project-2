@@ -73,7 +73,7 @@ export function checkStockAlerts(db: Db, now: Date) {
 
 /** What the shops are waiting for: most shops first (manager, accountant, keepers, staff). */
 export function stockWaitlist(db: Db, a: DbUser): StockWait[] {
-  need(a, ["manager", "accountant", "warehouse", "staff"]);
+  need(a, ["manager", "accountant", "warehouse"]);
   const by = new Map<number, StockWait>();
   for (const x of db.stock_alerts ?? []) {
     const it = db.items.find((i) => i.id === x.item_id);

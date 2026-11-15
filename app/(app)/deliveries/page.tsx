@@ -17,6 +17,7 @@ import { ProblemNote, ReportProblem } from "@/components/delivery/problem";
 import { TripPanel, buildTrip, saveTrip, useTrip } from "@/components/delivery/trip";
 import { QrScanner } from "@/components/delivery/scanner";
 import { DeliveryChip, LoadButton } from "@/components/delivery/status";
+import { MyCustody } from "@/components/custody";
 import { useApp } from "@/components/shell";
 import { inWarehouse, useWarehouseFilter } from "@/components/warehouse-filter";
 import { Button, Dialog, Empty, ErrorBox, Input, LoadingRows, Money, Notice, NumberInput, PageHeader, Segmented, Stepper, errorText, useToast, Pager, usePages } from "@/components/ui";
@@ -116,6 +117,9 @@ export default function DeliveriesPage() {
           <Notice tone="warning">{tr("اليوم عطلة في الشركة: لا تخرج شحنات من المخزن.", "Today is a day off: no shipments go out.")}</Notice>
         </div>
       )}
+
+      {/* The cash he took at the door («عهدتي»), when he holds some or a handover waits. */}
+      {isRep && <MyCustody compact className="mb-4" />}
 
       {isRep && (
         <motion.button

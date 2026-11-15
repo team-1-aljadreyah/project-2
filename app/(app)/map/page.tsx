@@ -13,6 +13,7 @@ import { MapStats } from "@/components/map/stats";
 import { ZoneDetail } from "@/components/map/zone-detail";
 import { ZonesView } from "@/components/map/zones";
 import { useApp } from "@/components/shell";
+import { useBlocked } from "@/lib/access";
 import { useWarehouseFilter } from "@/components/warehouse-filter";
 import { LayoutEditor, canArrange } from "@/components/warehouse-layout";
 import { Button, ErrorBox, PageHeader, Skeleton } from "@/components/ui";
@@ -61,10 +62,14 @@ export default function MapPage() {
   const { tr, name, lang } = useFmt();
   const { user, lookups, items } = useApp();
   const wide = useWide();
+  // A profile without «الطلبات» or «الفواتير»: the map is drawn without them (the server refuses them).
+  const blocked = useBlocked(user);
+  const noOrders = blocked("/orders");
+  const noInvoices = blocked("/invoices");
   const shelf = useLoad(() => api.shelfStock(), []);
   const batches = useLoad(() => api.listBatches(), []);
-  const orders = useLoad(() => api.listOrders(), []);
-  const invoices = useLoad(() => api.listInvoices(), []);
+  const orders = useLoad(() => (noOrders ? Promise.resolve([]) : api.listOrders()), [noOrders]);
+  const invoices = useLoad(() => (noInvoices ? Promise.resolve([]) : api.listInvoices()), [noInvoices]);
 
   const whM = useWarehouseFilter();
   const [level, setLevel] = useState<Level>(() => (whM ? { name: "warehouse", id: whM } : { name: "site" }));

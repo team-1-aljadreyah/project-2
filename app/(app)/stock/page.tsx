@@ -5,6 +5,7 @@ import { useRemembered } from "@/lib/remember";
 import { useState } from "react";
 import { AlertTriangle, ArrowLeftRight, Boxes, ClipboardCheck, HandCoins, PackagePlus, PackageX, Wand2 } from "lucide-react";
 import { useApp } from "@/components/shell";
+import { useBlocked } from "@/lib/access";
 import { hasWarehouseFilter, setWarehouseFilter, useMyWarehouses, useWarehouseFilter } from "@/components/warehouse-filter";
 import { BatchStatusBadge } from "@/components/status";
 import { StockWaitlist } from "@/components/stock-waitlist";
@@ -30,10 +31,16 @@ export default function StockPage() {
   const setWh = (v: number | "") => (hasWarehouseFilter(user) ? setWarehouseFilter(v || null) : setOwnWh(v));
   const [q, setQ] = useRemembered("stock:q", "");
   const [onlyLow, setOnlyLow] = useState(false);
+  // A profile without «التقارير» (the near-expiry list is a report) or «الطلبات»: those parts are left out.
+  const blocked = useBlocked(user);
+  const noExpiry = blocked("/reports");
+  const noOrders = blocked("/orders");
+  const days = lookups.settings.near_expiry_days;
   const shelf = useLoad(() => api.shelfStock(), []);
-  const expiry = useLoad(() => api.nearExpiry(lookups.settings.near_expiry_days), [lookups.settings.near_expiry_days]);
+  const expiry = useLoad(() => (noExpiry ? Promise.resolve([]) : api.nearExpiry(days)), [days, noExpiry]);
   const damaged = useLoad(() => api.listDamaged(), []);
-  const orders = useLoad(() => api.listOrders(), []);
+  const orders = useLoad(() => (noOrders ? Promise.resolve([]) : api.listOrders()), [noOrders]);
+  const view: Tab = noExpiry && tab === "expiry" ? "stock" : tab;
   const toIssue = (orders.data ?? []).filter((o) => o.status === "approved" && !o.delivery && !o.shipments?.length && (!wh || o.warehouse_id === wh)).length;
 
   const sum = (r: ShelfRow, k: "on_shelf" | "sellable" | "reserved" | "expired") => r.by_warehouse.filter((w) => !wh || w.warehouse_id === wh).reduce((s, w) => s + w[k], 0);
@@ -140,39 +147,43 @@ export default function StockPage() {
             setOnlyLow(true);
           }}
         />
-        <Stat
-          label={tr("دفعات قريبة الانتهاء", "Expiring batches")}
-          value={exp.filter((r) => r.days_left >= 0).length}
-          tone="warning"
-          icon={<AlertTriangle className="size-4" />}
-          onClick={() => setTab("expiry")}
-        />
-        <Stat
-          label={tr("دفعات منتهية (لا تُباع)", "Expired batches")}
-          value={exp.filter((r) => r.days_left < 0).length}
-          tone="danger"
-          icon={<PackageX className="size-4" />}
-          onClick={() => setTab("expiry")}
-        />
-        <Stat label={tr("طلبات تنتظر التجهيز", "Orders to issue")} value={toIssue} icon={<Boxes className="size-4" />} href="/orders" />
+        {!noExpiry && (
+          <>
+            <Stat
+              label={tr("دفعات قريبة الانتهاء", "Expiring batches")}
+              value={exp.filter((r) => r.days_left >= 0).length}
+              tone="warning"
+              icon={<AlertTriangle className="size-4" />}
+              onClick={() => setTab("expiry")}
+            />
+            <Stat
+              label={tr("دفعات منتهية (لا تُباع)", "Expired batches")}
+              value={exp.filter((r) => r.days_left < 0).length}
+              tone="danger"
+              icon={<PackageX className="size-4" />}
+              onClick={() => setTab("expiry")}
+            />
+          </>
+        )}
+        {!noOrders && <Stat label={tr("طلبات تنتظر التجهيز", "Orders to issue")} value={toIssue} icon={<Boxes className="size-4" />} href="/orders" />}
       </div>
-      {/* What the shop owners are waiting for («أعلمني عند التوفر»). */}
-      <StockWaitlist />
+      {/* What the shop owners are waiting for («أعلمني عند التوفر»): for who buys and keeps the stock. */}
+      {(user.role === "manager" || user.role === "accountant" || user.role === "warehouse") && <StockWaitlist />}
       {/* Near-expiry batches to sell at a discount, and the running clearances («عروض التصريف»). */}
-      {tab === "expiry" && <ClearancePanel rows={exp} />}
+      {view === "expiry" && <ClearancePanel rows={exp} />}
       <Card>
         <div className="flex flex-col gap-3 border-b border-line p-3 xl:flex-row xl:items-center xl:justify-between">
           <Segmented
-            value={tab}
+            value={view}
             onChange={setTab}
             options={[
               { value: "stock", label: tr("الكميات", "Quantities") },
-              { value: "expiry", label: tr("الصلاحية", "Expiry"), count: exp.length },
+              ...(noExpiry ? [] : [{ value: "expiry" as const, label: tr("الصلاحية", "Expiry"), count: exp.length }]),
               { value: "damaged", label: tr("التالف والنقص", "Damaged"), count: dmg.length },
             ]}
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {tab === "stock" && (
+            {view === "stock" && (
               <label className="flex items-center gap-2 text-sm text-muted">
                 <input type="checkbox" checked={onlyLow} onChange={(e) => setOnlyLow(e.target.checked)} className="size-4 accent-[var(--primary)]" />
                 {tr("تحت الحد الأدنى فقط", "Below minimum only")}
@@ -186,14 +197,14 @@ export default function StockPage() {
                 </option>
               ))}
             </Select>
-            {tab === "stock" && <SearchBox value={q} onChange={setQ} placeholder={tr("ابحث عن مادة", "Search item")} className="sm:w-56" />}
+            {view === "stock" && <SearchBox value={q} onChange={setQ} placeholder={tr("ابحث عن مادة", "Search item")} className="sm:w-56" />}
           </div>
         </div>
         {shelf.state.status === "loading" ? (
           <LoadingRows />
         ) : shelf.state.status === "error" ? (
           <ErrorBox error={shelf.state.error} onRetry={shelf.reload} />
-        ) : tab === "stock" ? (
+        ) : view === "stock" ? (
           <DataTable
             rows={rows}
             columns={stockCols}
@@ -221,7 +232,7 @@ export default function StockPage() {
             }}
             empty={<Empty title={tr("لا توجد مواد", "No items")} />}
           />
-        ) : tab === "expiry" ? (
+        ) : view === "expiry" ? (
           <DataTable
             rows={exp}
             columns={expCols}

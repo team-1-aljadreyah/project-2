@@ -6,6 +6,7 @@
 // eyes to hide, and dashed outlines around every text that can be edited in place.
 import { useSyncExternalStore } from "react";
 import { api } from "./api";
+import { getToken, onSessionChange } from "./auth";
 import { DEFAULT_SITE, fullSite } from "./api/site-defaults";
 import type { Label, SiteCustom } from "./api/types";
 import { onDataChange } from "./live";
@@ -51,14 +52,30 @@ function set(next: SiteCustom) {
   subs.forEach((f) => f());
 }
 
-function load() {
-  api
+// The last request, and for which login (so the login's own ask below doesn't ask twice).
+let last: { token: string | null; done: Promise<void> } | null = null;
+
+function load(): Promise<void> {
+  const done = api
     .site()
     .then((s) => {
       const next = fullSite(s);
       if (JSON.stringify(next) !== JSON.stringify(site)) set(next);
     })
     .catch(() => {});
+  last = { token: getToken(), done };
+  return done;
+}
+
+/**
+ * The site's settings for this login, and give them back (at most `wait` ms, then the copy there is). The
+ * server gives the permission profiles (the pages taken away from a person) only to a signed-in person, so
+ * the login waits for them before opening the first page: else that page and the menu wouldn't know them.
+ * Signing in already asked (a change of person loads again): then its answer is awaited, not asked twice.
+ */
+export function reloadSite(wait = 3000): Promise<SiteCustom> {
+  const done = last && last.token === getToken() ? last.done : load();
+  return Promise.race([done.then(() => site), new Promise<SiteCustom>((r) => setTimeout(() => r(site), wait))]);
 }
 
 function subscribe(fn: () => void) {
@@ -72,6 +89,7 @@ function subscribe(fn: () => void) {
     } catch {}
     load();
     onDataChange(load);
+    onSessionChange(load);
   }
   return () => {
     subs.delete(fn);
