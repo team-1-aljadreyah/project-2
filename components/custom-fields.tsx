@@ -109,7 +109,14 @@ export function CustomFieldsCard({ object, id, values, onSaved }: { object: Cust
   const [edit, setEdit] = useState<Values | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  if (!fields.length) return null;
+  // Someone who can't change any of them sees only the fields that hold a value — and no card when none do
+  // (an empty «-» told the keeper nothing). Whoever may edit still sees them all, to fill them in.
+  const hasValue = (f: (typeof fields)[number]) => {
+    const v = values?.[f.id];
+    return v !== undefined && v !== null && v !== "";
+  };
+  const shown = editable.length ? fields : fields.filter(hasValue);
+  if (!shown.length) return null;
   async function save() {
     if (!edit) return;
     setBusy(true);
@@ -160,7 +167,7 @@ export function CustomFieldsCard({ object, id, values, onSaved }: { object: Cust
         </div>
       ) : (
         <dl className="grid gap-x-8 p-4 sm:grid-cols-2">
-          {fields.map((f) => (
+          {shown.map((f) => (
             <div key={f.id} className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-0 sm:[&:nth-last-child(2)]:border-0">
               <dt className="text-sm text-muted">{fieldLabel(f, tr)}</dt>
               <dd className="text-end text-sm font-medium">{showValue(f, values?.[f.id], fmt)}</dd>
