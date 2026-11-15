@@ -75,7 +75,8 @@ export function buildMissions({
     }
     // Walk the hall from the receiving side to the loading dock, column by column, so the path never goes back.
     // (Lines with no place on the map come last.)
-    const walk = (l: MissionLine) => (l.zone ? walkOrder(l.zone.index) : Number.MAX_SAFE_INTEGER);
+    const cols = gridOf(view.zones.length).cols;
+    const walk = (l: MissionLine) => (l.zone ? walkOrder(l.zone.index, cols) : Number.MAX_SAFE_INTEGER);
     lines.sort((a, b) => walk(a) - walk(b) || (a.cell?.code ?? "").localeCompare(b.cell?.code ?? ""));
     const stops = [...new Map(lines.filter((l) => l.zone).map((l) => [l.zone!.code, l.zone!])).values()];
 
@@ -108,8 +109,15 @@ export function buildMissions({
 export const PLAN = { w: 1000, h: 600, dockIn: { x: 30, w: 80 }, dockOut: { x: 890, w: 80 }, top: 60, bottom: 540 };
 const COLS = 4;
 
+/** The grid of racks: always at least two rows (one row stretched each rack to the full height: tall bars
+ *  on a warehouse of four zones), at most 4 per row, as many columns as needed. */
+export function gridOf(zones: number): { rows: number; cols: number } {
+  const rows = Math.max(2, Math.ceil(zones / COLS));
+  return { rows, cols: Math.max(1, Math.min(COLS, Math.ceil(zones / rows))) };
+}
+
 /** A zone's place in the walk: its column first (left → right), then its row. */
-export const walkOrder = (zoneIndex: number) => (zoneIndex % COLS) * 100 + Math.floor(zoneIndex / COLS);
+export const walkOrder = (zoneIndex: number, cols = COLS) => (zoneIndex % cols) * 100 + Math.floor(zoneIndex / cols);
 const RACK_W = 150;
 const STEP_X = 180; // rack width + vertical aisle
 const AISLE_H = 70; // the main aisle between two rows of racks
@@ -126,15 +134,16 @@ export interface RackBox {
   mainY: number;
 }
 
-/** Places the zones on the floor: 4 per row, rows separated by a main aisle. */
+/** Places the zones on the floor (gridOf: two rows at least), centred between the docks, rows separated by a main aisle. */
 export function layoutRacks(zones: MapZone[]): { racks: RackBox[]; mains: number[] } {
-  const rows = Math.max(1, Math.ceil(zones.length / COLS));
+  const { rows, cols } = gridOf(zones.length);
+  const left = 150 + ((COLS - cols) * STEP_X) / 2;
   const rowH = (PLAN.bottom - PLAN.top - (rows - 1) * AISLE_H) / rows;
   const mains = Array.from({ length: Math.max(1, rows - 1) }, (_, r) => (rows === 1 ? PLAN.bottom - 20 : PLAN.top + (r + 1) * rowH + r * AISLE_H + AISLE_H / 2));
   const racks = zones.map((zone, i) => {
-    const col = i % COLS;
-    const row = Math.floor(i / COLS);
-    const x = 150 + col * STEP_X;
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = left + col * STEP_X;
     const y = PLAN.top + row * (rowH + AISLE_H);
     // Rows above a main aisle use the aisle below them; the last row uses the aisle above it.
     const mainY = mains[Math.min(row, mains.length - 1)];
