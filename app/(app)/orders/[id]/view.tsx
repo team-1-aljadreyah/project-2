@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 import { Ban, CheckCircle2, Clock, FileText, PackageCheck, Pencil, ShieldCheck } from "lucide-react";
 import { useApp } from "@/components/shell";
 import { OrderStatusBadge, SourceBadge } from "@/components/status";
-import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, RefLink, Textarea, useToast } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, Dialog, ErrorBox, errorText, Field, KV, LimitBar, LoadingRows, Money, Notice, PageHeader, RefLink, Textarea, useMayOpen, useToast } from "@/components/ui";
 import { api } from "@/lib/api";
 import { worksIn, type Batch, type Gateway, type OrderStatus } from "@/lib/api/types";
 import { useFmt } from "@/lib/i18n";
@@ -31,6 +31,7 @@ import { piecesOf, useIdParam } from "@/lib/utils";
 import { useMay, useRules } from "@/lib/use-rules";
 
 export default function OrderView() {
+  const mayOpen = useMayOpen();
   const id = useIdParam();
   const fmt = useFmt();
   const { tr, dateTime, date, money, qty, name, unit: un } = fmt;
@@ -410,7 +411,7 @@ export default function OrderView() {
                 </>
               )}
             </div>
-            {c && user.role !== "shop" && user.role !== "warehouse" && user.role !== "staff" && (
+            {c && mayOpen(`/customers/${c.id}`) && (
               <Button className="mt-3 w-full" href={`/customers/${c.id}`}>
                 {tr("ملف الزبون", "Customer file")}
               </Button>

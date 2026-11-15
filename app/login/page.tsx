@@ -1,6 +1,6 @@
 "use client";
 
-import { useSite } from "@/lib/site";
+import { reloadSite } from "@/lib/site";
 import { deniedOf } from "@/lib/access";
 
 // The login page, after the "Login Page Illustration - Online Payment" shot Yasser chose:
@@ -41,7 +41,6 @@ const DEMO: { phone: string; role: Role; name: string; icon: LucideIcon; tag?: [
 const DEMO_PASSWORD = "123456";
 
 export default function LoginPage() {
-  const site = useSite();
   const { tr, lang } = useFmt();
   const live = usePublicRules();
   const router = useRouter();
@@ -89,9 +88,12 @@ export default function LoginPage() {
       const s = await api.login(p, pw);
       loggingIn.current = true;
       setSession(s);
+      // The site's settings again, now with the person's profile (the pages taken away from them), so the first
+      // page and the menu know it from the start.
+      const fresh = await reloadSite();
       // Back to the page you wanted before logging in, if your role may open it; otherwise your home page.
       const next = takeNext();
-      router.replace(next && canOpen(s.user.role, splitAppPath(next).path, s.user.rep_kinds, deniedOf(site, s.user)) ? next : homeOf(s.user.role, s.user.rep_kinds));
+      router.replace(next && canOpen(s.user.role, splitAppPath(next).path, s.user.rep_kinds, deniedOf(fresh, s.user)) ? next : homeOf(s.user.role, s.user.rep_kinds));
       // Next keeps this page's state for when you come back (after logging out). So leave it clean:
       // not "busy" (that disabled every button with a spinner forever) and without the password.
       setBusy(null);

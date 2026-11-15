@@ -184,13 +184,20 @@ export default function PaymentView() {
                 setBusy(true);
                 setAmountErr(null);
                 try {
-                  await api.reversePayment(p.id, reason, amount);
-                  toast(
-                    "success",
-                    amount < left
-                      ? tr(`عُكس ${money(amount)} من التسديد، وعاد على الزبون دينه`, `${money(amount)} reversed; that much is owed again`)
-                      : tr("تم العكس، وعاد الدين على الزبون", "Reversed. The debt is back on the customer"),
-                  );
+                  const r = await api.reversePayment(p.id, reason, amount);
+                  // What the server really reversed (its reverse entry is negative). A server without partial
+                  // reversing reverses the whole payment: say so, never «reversed part» when it wasn't.
+                  const done = Math.abs(r?.amount ?? amount);
+                  if (amount < left && done > amount) {
+                    toast("danger", tr(`الخادم عكس التسديد كله (${money(done)}) لا ${money(amount)} فقط: العكس الجزئي غير مدعوم فيه بعد`, `The server reversed the whole payment (${money(done)}), not just ${money(amount)}: partial reversing isn't supported there yet`));
+                  } else {
+                    toast(
+                      "success",
+                      done < left
+                        ? tr(`عُكس ${money(done)} من التسديد، وعاد على الزبون دينه`, `${money(done)} reversed; that much is owed again`)
+                        : tr("تم العكس، وعاد الدين على الزبون", "Reversed. The debt is back on the customer"),
+                    );
+                  }
                   setOpen(false);
                   setReason("");
                   pay.reload();

@@ -32,7 +32,7 @@ function useAgeText() {
 
 // ---------- The rep ----------
 
-export function MyCustody({ compact }: { compact?: boolean }) {
+export function MyCustody({ compact, className }: { compact?: boolean; className?: string }) {
   const { tr, money } = useFmt();
   const toast = useToast();
   const age = useAgeText();
@@ -40,7 +40,8 @@ export function MyCustody({ compact }: { compact?: boolean }) {
   const [giving, setGiving] = useState(false);
   const [busy, setBusy] = useState(false);
   const row = r.data?.[0];
-  if (!row) return compact ? null : <LoadingRows rows={2} />;
+  if (r.state.status === "error") return compact ? null : <ErrorBox error={r.state.error} onRetry={r.reload} />;
+  if (!row) return compact ? null : r.state.status === "ready" ? <Empty title={tr("لا نقد معك", "No cash with you")} /> : <LoadingRows rows={2} />;
   if (compact && !row.holding && !row.pending) return null;
   const old = daysSince(row.oldest_at) >= 2;
   const cancel = async (h: CashHandover) => {
@@ -55,7 +56,7 @@ export function MyCustody({ compact }: { compact?: boolean }) {
     }
   };
   return (
-    <Card className="p-4">
+    <Card className={cn("p-4", className)}>
       <div className="flex items-start justify-between gap-3">
         <Link href="/custody" className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-sm text-muted">

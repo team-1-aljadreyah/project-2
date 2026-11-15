@@ -18,7 +18,7 @@ import { AddressCard } from "@/components/address-form";
 import { cn } from "@/lib/utils";
 import { OtpDialog } from "@/components/otp";
 import { usePublicRules } from "@/lib/use-rules";
-import { useBrand } from "@/lib/site";
+import { reloadSite, useBrand } from "@/lib/site";
 
 // Areas of Karbala the company already delivers to (you can still type another one).
 const AREAS = ["حي الحسين", "سيف سعد", "حي العباس", "الإسكان", "حي الغدير", "باب بغداد", "حي الأسرة", "البلدية", "حي الموظفين", "حي النقيب", "عون", "حي رمضان", "المعملجي"];
@@ -119,6 +119,7 @@ function RegisterForm({ passwordMin }: { passwordMin: number }) {
       void _c;
       const s = await api.register({ ...input, phone: cleanPhone, ...(otpToken ? { otp_token: otpToken } : {}) });
       setSession(s);
+      await reloadSite();
       router.replace(takeNext() ?? "/shop");
       // Next keeps this page's state for later: leave it empty and not "busy", or after logging out
       // the form would come back filled in with every button disabled.

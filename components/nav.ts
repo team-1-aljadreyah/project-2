@@ -100,7 +100,7 @@ export const NAV: NavItem[] = [
   { href: "/account", ar: "حسابي", en: "My account", icon: UserRound, roles: ["shop"], group: "money", mobile: ["shop"] },
   { href: "/payments", ar: "التسديدات", en: "Payments", icon: Wallet, roles: ["manager", "accountant", "rep"], group: "money", mobile: ["rep", "manager", "accountant"] },
   // «العهدة»: the cash the reps hold, handed to the accountant.
-  { href: "/custody", ar: "العهدة", en: "Cash custody", icon: Coins, roles: ["manager", "accountant", "rep"], group: "money", kind: "sales" },
+  { href: "/custody", ar: "العهدة", en: "Cash custody", icon: Coins, roles: ["manager", "accountant", "rep"], group: "money" },
   { href: "/expenses", ar: "الصرفيات", en: "Expenses", icon: Banknote, roles: ["accountant", "manager"], group: "money", mobile: ["accountant"] },
   { href: "/commissions", ar: "العمولات", en: "Commission", icon: Percent, roles: ["manager", "accountant", "rep"], group: "money", kind: "sales" },
   { href: "/stock", ar: "المخزون", en: "Stock", icon: Boxes, roles: ["manager", "warehouse", "accountant", "staff"], group: "stock", mobile: ["warehouse"] },
@@ -157,7 +157,7 @@ const EXTRA: { prefix: string; roles: Role[] }[] = [
   { prefix: "/payments/", roles: ["manager", "accountant", "rep"] },
   // An item's own page shows its batches, which reps and shops don't get (the items list has no link for them either).
   { prefix: "/items/", roles: ["manager", "warehouse", "accountant", "staff"] },
-  { prefix: "/notifications", roles: ["manager", "warehouse", "rep", "accountant", "shop"] },
+  { prefix: "/notifications", roles: ["manager", "warehouse", "rep", "accountant", "shop", "staff"] },
   // «قوائمي»: inside the shop owner's «طلبياتي».
   { prefix: "/lists", roles: ["shop"] },
   { prefix: "/invoices/", roles: ["manager", "accountant", "rep", "shop", "warehouse"] },

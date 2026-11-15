@@ -112,6 +112,17 @@ function subscribe(l: () => void) {
   };
 }
 
+/** Someone signed in or out (here, or in another tab on the real server): `fn` runs once per change of person. */
+export function onSessionChange(fn: () => void) {
+  let who = read()?.user.id ?? null;
+  return subscribe(() => {
+    const now = read()?.user.id ?? null;
+    if (now === who) return;
+    who = now;
+    fn();
+  });
+}
+
 /** undefined = still reading (first paint), null = logged out. */
 export function useSession(): Session | null | undefined {
   return useSyncExternalStore(subscribe, read, () => undefined);

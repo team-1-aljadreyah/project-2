@@ -16,11 +16,29 @@ export function profileOf(site: SiteCustom, user: Pick<User, "role" | "profile_i
   return p && p.role === user.role ? p : undefined;
 }
 
-/** The pages this person can't open (their profile's). */
-export const deniedOf = (site: SiteCustom, user: Pick<User, "role" | "profile_id"> | null | undefined) => profileOf(site, user)?.denied ?? [];
+// A page made of another page's data goes with it: the server refuses the data behind a page taken away (403),
+// so «التوصيل» (the orders that have a delivery) can't open without «الطلبات».
+const MADE_FROM: Record<string, string> = { "/deliveries": "/orders" };
+
+/** The pages this person can't open (their profile's, and the pages made of their data). */
+export function deniedOf(site: SiteCustom, user: Pick<User, "role" | "profile_id"> | null | undefined): string[] {
+  const denied = profileOf(site, user)?.denied ?? [];
+  const made = Object.entries(MADE_FROM).filter(([page, from]) => denied.includes(from) && !denied.includes(page));
+  return made.length ? [...denied, ...made.map(([page]) => page)] : denied;
+}
 
 export function useDenied(user: Pick<User, "role" | "profile_id"> | null | undefined) {
   return deniedOf(useSite(), user);
+}
+
+/**
+ * Is this part taken away from the person (its page is in their profile's «denied»)? The server refuses the
+ * endpoints behind it (403), so a page that shows a bit of it (the staff's home: orders to prepare; the stock
+ * page: near-expiry batches from the reports) leaves that bit out instead of asking.
+ */
+export function useBlocked(user: Pick<User, "role" | "profile_id"> | null | undefined) {
+  const denied = useDenied(user);
+  return (page: string) => denied.includes(page);
 }
 
 /** The apps this person may switch to: for their job, or for their profile. */

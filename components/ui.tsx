@@ -462,14 +462,23 @@ export function errorText(e: unknown, tr: (a: string, b: string) => string) {
 
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const { tr } = useFmt();
+  const router = useAppRouter();
+  // A refusal (403) or a thing that isn't there (404) gives the same answer again: the way back, not «try again».
+  const final = error instanceof ApiError && (error.status === 403 || error.status === 404);
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
       <XCircle className="size-8 text-danger" aria-hidden />
       <p className="text-sm text-muted">{errorText(error, tr)}</p>
-      {onRetry && (
-        <Button size="sm" onClick={onRetry}>
-          {tr("إعادة المحاولة", "Try again")}
+      {final ? (
+        <Button size="sm" onClick={() => (window.history.length > 1 ? router.back() : router.replace("/"))}>
+          {tr("رجوع", "Go back")}
         </Button>
+      ) : (
+        onRetry && (
+          <Button size="sm" onClick={onRetry}>
+            {tr("إعادة المحاولة", "Try again")}
+          </Button>
+        )
       )}
     </div>
   );

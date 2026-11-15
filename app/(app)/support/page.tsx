@@ -7,7 +7,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Headset, MessagesSquare, Store } from "lucide-react";
 import { Bubbles, SendBox } from "@/components/support/messages";
-import { Card, Empty, ErrorBox, LoadingRows, PageHeader, Pager, usePages } from "@/components/ui";
+import { Card, Empty, ErrorBox, LoadingRows, PageHeader, Pager, useMayOpen, usePages } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
 import { useLoad } from "@/lib/use-load";
@@ -103,6 +103,7 @@ function Inbox() {
 
 function Conversation({ customerId, name, area, onBack, onSent }: { customerId: number; name: string; area: string; onBack: () => void; onSent: () => void }) {
   const { tr, lang } = useFmt();
+  const mayOpen = useMayOpen();
   const msgs = useLoad(() => api.getChat(customerId), [customerId]);
   const Back = lang === "ar" ? ArrowRight : ArrowLeft;
   const count = msgs.data?.length ?? 0;
@@ -128,9 +129,11 @@ function Conversation({ customerId, name, area, onBack, onSent }: { customerId: 
           <p className="truncate font-bold">{name}</p>
           <p className="text-xs text-muted">{area}</p>
         </div>
-        <Link href={`/customers/${customerId}`} className="flex items-center gap-1 rounded-lg border border-line-strong px-2.5 py-1.5 text-xs font-semibold hover:bg-card-2">
-          <Store className="size-3.5" /> {tr("ملف المحل", "Shop file")}
-        </Link>
+        {mayOpen(`/customers/${customerId}`) && (
+          <Link href={`/customers/${customerId}`} className="flex items-center gap-1 rounded-lg border border-line-strong px-2.5 py-1.5 text-xs font-semibold hover:bg-card-2">
+            <Store className="size-3.5" /> {tr("ملف المحل", "Shop file")}
+          </Link>
+        )}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">{msgs.data ? <Bubbles messages={msgs.data} mine="staff" /> : <LoadingRows />}</div>
       <SendBox

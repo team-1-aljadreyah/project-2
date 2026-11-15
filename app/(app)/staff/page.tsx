@@ -10,6 +10,7 @@ import { motion } from "motion/react";
 import { AlertTriangle, ArrowUpLeft, ArrowUpRight, ClipboardList, Headset, PackageCheck, Truck, Warehouse } from "lucide-react";
 import { DeliveryChip, LoadButton } from "@/components/delivery/status";
 import { useApp } from "@/components/shell";
+import { useBlocked } from "@/lib/access";
 import { Button, Card, RefLink, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useFmt } from "@/lib/i18n";
@@ -22,11 +23,16 @@ const rise = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } };
 export default function StaffHome() {
   const { tr, ago, name, num, lang } = useFmt();
   const { user, lookups, items } = useApp();
+  // A profile without «الطلبات» or «التقارير»: those parts are left out (the server refuses them).
+  const blocked = useBlocked(user);
+  const noOrders = blocked("/orders");
+  const noReports = blocked("/reports");
   const threads = useLoad(() => api.chatThreads(), []);
-  const orders = useLoad(() => api.listOrders(), []);
+  const orders = useLoad(() => (noOrders ? Promise.resolve([]) : api.listOrders()), [noOrders]);
   useRealtime(["orders"], () => orders.reload());
   const customers = useLoad(() => api.listCustomers(), []);
-  const expiring = useLoad(() => api.nearExpiry(lookups.settings.near_expiry_days), [lookups.settings.near_expiry_days]);
+  const days = lookups.settings.near_expiry_days;
+  const expiring = useLoad(() => (noReports ? Promise.resolve([]) : api.nearExpiry(days)), [days, noReports]);
   const Arrow = lang === "ar" ? ArrowUpLeft : ArrowUpRight;
   const wh = lookups.warehouses.find((w) => w.id === user.warehouse_id);
   const cust = new Map((customers.data ?? []).map((c) => [c.id, c]));
@@ -51,7 +57,10 @@ export default function StaffHome() {
       .filter((i) => i.active && (i.stock.by_warehouse.find((w) => w.warehouse_id === user.warehouse_id)?.qty ?? 0) < i.min_stock / 2)
       .map((i) => ({ key: `l${i.id}`, id: i.id, item: i.name, text: tr("مخزون قليل", "Low stock"), bad: false })),
   ].slice(0, 6);
-  const loading = !threads.data || !orders.data;
+  // Still loading (an answer that failed is not "loading" forever: it shows «-»).
+  const waitingFor = (l: { data?: unknown; state: { status: string } }) => !l.data && l.state.status === "loading";
+  const chatsLoading = waitingFor(threads);
+  const loading = waitingFor(orders);
 
   return (
     <motion.div initial="hidden" animate="show" transition={{ staggerChildren: 0.06 }} className="space-y-5">
@@ -76,7 +85,7 @@ export default function StaffHome() {
             <div>
               <p className="text-sm opacity-80">{tr("محادثات الدعم", "Support chats")}</p>
               <p className="text-2xl font-bold">
-                {loading ? "…" : waitingChats.length ? tr(`${num(waitingChats.length)} تنتظر ردك`, `${num(waitingChats.length)} waiting for you`) : tr("لا شيء ينتظر", "Nothing waiting")}
+                {chatsLoading ? "…" : !threads.data ? "-" : waitingChats.length ? tr(`${num(waitingChats.length)} تنتظر ردك`, `${num(waitingChats.length)} waiting for you`) : tr("لا شيء ينتظر", "Nothing waiting")}
               </p>
             </div>
           </div>
@@ -101,85 +110,93 @@ export default function StaffHome() {
 
       {/* The numbers of their warehouse today */}
       <motion.div variants={rise} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile icon={ClipboardList} label={tr("طلبات تنتظر التجهيز", "Orders to prepare")} value={toPrepare.length} href="/orders" loading={loading} />
-        <Tile icon={PackageCheck} label={tr("شحنات جاهزة للتسليم", "Shipments ready")} value={ready.length} href="/deliveries" loading={loading} tone="action" />
-        <Tile icon={Truck} label={tr("في الطريق", "On the way")} value={onWay.length} href="/deliveries" loading={loading} />
-        <Tile icon={AlertTriangle} label={tr("تنبيهات المخزون", "Stock alerts")} value={stockAlerts.length} href="/stock" loading={!expiring.data} tone={stockAlerts.length ? "danger" : undefined} />
+        {!noOrders && (
+          <>
+            <Tile icon={ClipboardList} label={tr("طلبات تنتظر التجهيز", "Orders to prepare")} value={orders.data ? toPrepare.length : undefined} href="/orders" loading={loading} />
+            <Tile icon={PackageCheck} label={tr("شحنات جاهزة للتسليم", "Shipments ready")} value={orders.data ? ready.length : undefined} href="/deliveries" loading={loading} tone="action" />
+            <Tile icon={Truck} label={tr("في الطريق", "On the way")} value={orders.data ? onWay.length : undefined} href="/deliveries" loading={loading} />
+          </>
+        )}
+        <Tile icon={AlertTriangle} label={tr("تنبيهات المخزون", "Stock alerts")} value={stockAlerts.length} href="/stock" loading={waitingFor(expiring)} tone={stockAlerts.length ? "danger" : undefined} />
       </motion.div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* 2. Shipments to hand out: the right package to the right delivery rep */}
-        <motion.div variants={rise}>
-          <Card className="p-4">
-            <h2 className="mb-1 font-bold">{tr("شحنات جاهزة لمندوبي التوصيل", "Shipments ready for the delivery reps")}</h2>
-            <p className="mb-3 text-xs text-muted">
-              {tr(
-                "حمّل كل شحنة في سيارة مندوبها واضغط «حمّلتها». يُبلَّغ المندوب، فيمسح ملصقها ويختار جولته.",
-                "Load each shipment into its rep's van and press “Loaded”. The rep is told, scans its label and picks his trip.",
-              )}
-            </p>
-            {loading ? (
-              <Skeleton className="h-32" />
-            ) : !ready.length ? (
-              <p className="py-6 text-center text-sm text-muted">{tr("لا توجد شحنات جاهزة الآن", "No shipments ready now")}</p>
-            ) : (
-              <ul className="space-y-2">
-                {ready.map((o) => (
-                  <li key={o.id} className="box-row flex flex-wrap items-center gap-3 rounded-2xl border border-line p-3">
-                    <PackageCheck className="size-5 shrink-0 text-action" />
-                    <span className="min-w-0 flex-1">
-                      <Link href={`/orders/${o.id}`} className="box-link-main block truncate text-sm font-semibold">
-                        {cust.get(o.customer_id)?.name}
-                      </Link>
-                      <span className="block text-xs text-muted">
-                        <span className="num" dir="ltr">
-                          {o.number}
-                        </span>{" "}
-                        · {tr("مندوب التوصيل", "Delivery rep")}: <b>{o.delivery?.rep?.name ?? repName(o.rep_id)}</b>
-                      </span>
-                    </span>
-                    <DeliveryChip d={o.delivery!} tr={tr} />
-                    <LoadButton order={o} role={user.role} onDone={orders.reload} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </motion.div>
-
-        <div className="space-y-5">
-          {/* 3. Orders to prepare */}
+        {!noOrders && (
           <motion.div variants={rise}>
             <Card className="p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-bold">{tr("طلبات تنتظر التجهيز", "Orders to prepare")}</h2>
-                <Button size="sm" variant="ghost" href="/orders">
-                  {tr("الكل", "All")} <Arrow className="size-3.5" />
-                </Button>
-              </div>
+              <h2 className="mb-1 font-bold">{tr("شحنات جاهزة لمندوبي التوصيل", "Shipments ready for the delivery reps")}</h2>
+              <p className="mb-3 text-xs text-muted">
+                {tr(
+                  "حمّل كل شحنة في سيارة مندوبها واضغط «حمّلتها». يُبلَّغ المندوب، فيمسح ملصقها ويختار جولته.",
+                  "Load each shipment into its rep's van and press “Loaded”. The rep is told, scans its label and picks his trip.",
+                )}
+              </p>
               {loading ? (
-                <Skeleton className="h-24" />
-              ) : !toPrepare.length ? (
-                <p className="py-4 text-center text-sm text-muted">{tr("كل الطلبات مجهزة", "Everything is prepared")}</p>
+                <Skeleton className="h-32" />
+              ) : !ready.length ? (
+                <p className="py-6 text-center text-sm text-muted">{tr("لا توجد شحنات جاهزة الآن", "No shipments ready now")}</p>
               ) : (
-                <ul className="divide-y divide-line">
-                  {toPrepare.slice(0, 5).map((o) => (
-                    <li key={o.id}>
-                      <Link href={`/orders/${o.id}`} className="-mx-2 flex items-center justify-between gap-2 rounded-xl px-2 py-2.5 transition-colors hover:bg-card-2 active:bg-primary-soft">
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold">{cust.get(o.customer_id)?.name}</span>
-                          <span className="num text-xs text-muted" dir="ltr">
+                <ul className="space-y-2">
+                  {ready.map((o) => (
+                    <li key={o.id} className="box-row flex flex-wrap items-center gap-3 rounded-2xl border border-line p-3">
+                      <PackageCheck className="size-5 shrink-0 text-action" />
+                      <span className="min-w-0 flex-1">
+                        <Link href={`/orders/${o.id}`} className="box-link-main block truncate text-sm font-semibold">
+                          {cust.get(o.customer_id)?.name}
+                        </Link>
+                        <span className="block text-xs text-muted">
+                          <span className="num" dir="ltr">
                             {o.number}
-                          </span>
+                          </span>{" "}
+                          · {tr("مندوب التوصيل", "Delivery rep")}: <b>{o.delivery?.rep?.name ?? repName(o.rep_id)}</b>
                         </span>
-                        <span className="shrink-0 text-xs text-faint">{ago(o.created_at)}</span>
-                      </Link>
+                      </span>
+                      <DeliveryChip d={o.delivery!} tr={tr} />
+                      <LoadButton order={o} role={user.role} onDone={orders.reload} />
                     </li>
                   ))}
                 </ul>
               )}
             </Card>
           </motion.div>
+        )}
+
+        <div className="space-y-5">
+          {/* 3. Orders to prepare */}
+          {!noOrders && (
+            <motion.div variants={rise}>
+              <Card className="p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-bold">{tr("طلبات تنتظر التجهيز", "Orders to prepare")}</h2>
+                  <Button size="sm" variant="ghost" href="/orders">
+                    {tr("الكل", "All")} <Arrow className="size-3.5" />
+                  </Button>
+                </div>
+                {loading ? (
+                  <Skeleton className="h-24" />
+                ) : !toPrepare.length ? (
+                  <p className="py-4 text-center text-sm text-muted">{tr("كل الطلبات مجهزة", "Everything is prepared")}</p>
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {toPrepare.slice(0, 5).map((o) => (
+                      <li key={o.id}>
+                        <Link href={`/orders/${o.id}`} className="-mx-2 flex items-center justify-between gap-2 rounded-xl px-2 py-2.5 transition-colors hover:bg-card-2 active:bg-primary-soft">
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold">{cust.get(o.customer_id)?.name}</span>
+                            <span className="num text-xs text-muted" dir="ltr">
+                              {o.number}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-xs text-faint">{ago(o.created_at)}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            </motion.div>
+          )}
 
           {/* Stock alerts of their warehouse */}
           <motion.div variants={rise}>
@@ -208,7 +225,7 @@ export default function StaffHome() {
   );
 }
 
-function Tile({ icon: Icon, label, value, href, loading, tone }: { icon: typeof Truck; label: string; value: number; href: string; loading: boolean; tone?: "action" | "danger" }) {
+function Tile({ icon: Icon, label, value, href, loading, tone }: { icon: typeof Truck; label: string; value: number | undefined; href: string; loading: boolean; tone?: "action" | "danger" }) {
   const { num } = useFmt();
   return (
     <Link href={href} className="rounded-2xl border border-line bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-md">
@@ -220,7 +237,7 @@ function Tile({ icon: Icon, label, value, href, loading, tone }: { icon: typeof 
       >
         <Icon className="size-4" />
       </span>
-      <p className="num mt-3 text-2xl font-bold">{loading ? "…" : num(value)}</p>
+      <p className="num mt-3 text-2xl font-bold">{loading ? "…" : value === undefined ? "-" : num(value)}</p>
       <p className="text-xs text-muted">{label}</p>
     </Link>
   );
