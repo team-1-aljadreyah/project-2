@@ -122,10 +122,14 @@ body {
   white-space: nowrap;
 }
 
-/* Visible keyboard focus everywhere. */
-:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+/* Visible keyboard focus everywhere. In the base layer, so a field that draws its own focus (a coloured border,
+   a glow: `outline-none`) can drop it — outside a layer it beat every class and drew a black box inside the
+   shop's search field. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 }
 
 /* Thin scrollbars on desktop. In the base layer, so a class like [scrollbar-width:none] can still hide one. */
